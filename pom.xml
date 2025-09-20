@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.telamin.fluxtion</groupId>
     <artifactId>fluxtion-parent</artifactId>
-    <version>0.9.0-SNAPSHOT</version>
+    <version>0.9.4-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>telamin :: fluxtion-master</name>
 
@@ -18,6 +16,17 @@
         <project.scm.id>github</project.scm.id>
     </properties>
 
+    <url>https://github.com/telaminai/fluxtion</url>
+    <description>
+        A library to simplify data stream programming
+    </description>
+    <licenses>
+        <license>
+            <distribution>repo</distribution>
+            <name>GNU AFFERO GENERAL PUBLIC LICENSE, Version 3.0</name>
+            <url>https://www.gnu.org/licenses/agpl-3.0.en.html</url>
+        </license>
+    </licenses>
 
     <modules>
         <module>fluxtion-runtime</module>
@@ -35,7 +44,8 @@
         <connection>scm:git:https://github.com/telaminai/fluxtion.git</connection>
         <developerConnection>scm:git:https://github.com/telaminai/fluxtion.git</developerConnection>
         <url>https://github.com/telaminai/fluxtion.git</url>
-    </scm>
+      <tag>HEAD</tag>
+  </scm>
 
     <build>
         <plugins>
