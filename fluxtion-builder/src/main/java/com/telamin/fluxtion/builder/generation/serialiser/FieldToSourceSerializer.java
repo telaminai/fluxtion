@@ -1,0 +1,34 @@
+/*
+ * Copyright: © 2025.  Gregory Higgins <greg.higgins@v12technology.com> - All Rights Reserved
+ * This source code is protected under international copyright law.  All rights
+ * reserved and protected by the copyright holders.
+ * This file is confidential and only available to authorized individuals with the
+ * permission of the copyright holders.  If you encounter this file and do not have
+ * permission, please contact the copyright holders and delete this file.
+ */
+
+package com.telamin.fluxtion.builder.generation.serialiser;
+
+import java.util.ServiceLoader;
+
+/**
+ * Loads a FieldToSourceSerializer using the {@link ServiceLoader} support provided
+ * by Java platform. New factories can be added to Fluxtion using the extension
+ * mechanism described in {@link ServiceLoader} documentation.
+ */
+public interface FieldToSourceSerializer<T> {
+
+    int DEFAULT_PRIORITY = 500;
+
+    boolean typeSupported(Class<?> type);
+
+    String mapToSource(FieldContext<T> fieldContext);
+
+    default String language() {
+        return "java";
+    }
+
+    default int priority() {
+        return DEFAULT_PRIORITY;
+    }
+}
