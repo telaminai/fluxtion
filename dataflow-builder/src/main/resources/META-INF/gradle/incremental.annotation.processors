@@ -1,0 +1,6 @@
+com.fluxtion.dataflow.builder.annotationprocessor.generation.ValidateEventHandlerAnnotations,isolating
+com.fluxtion.dataflow.builder.annotationprocessor.generation.ValidateOnTriggerAnnotations,isolating
+com.fluxtion.dataflow.builder.annotationprocessor.generation.ValidateOnParentUpdateHandlerAnnotations,isolating
+com.fluxtion.dataflow.builder.annotationprocessor.generation.ValidateLifecycleAnnotations,isolating
+com.fluxtion.dataflow.builder.annotationprocessor.generation.ValidateExportFunctionAnnotations,isolating
+com.fluxtion.dataflow.builder.annotationprocessor.generation.ValidateServiceListenerAnnotations
