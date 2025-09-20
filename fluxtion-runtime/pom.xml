@@ -10,7 +10,10 @@
     <artifactId>fluxtion-runtime</artifactId>
     <name>telamin :: fluxtion-runtime</name>
 
-    <url>https://github.com/telaminai/fluxtion-dataflow/tree/main/dataflow-runtime</url>
+    <url>https://github.com/telaminai/fluxtion</url>
+    <description>
+        the runtime library for executing Fluxtion data stream
+    </description>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
@@ -19,7 +22,6 @@
         <agrona.version>2.0.1</agrona.version>
         <log4j2.version>2.24.3</log4j2.version>
     </properties>
-
     <licenses>
         <license>
             <distribution>repo</distribution>

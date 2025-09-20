@@ -16,6 +16,17 @@
         <project.scm.id>github</project.scm.id>
     </properties>
 
+    <url>https://github.com/telaminai/fluxtion</url>
+    <description>
+        A library to simplify data stream programming
+    </description>
+    <licenses>
+        <license>
+            <distribution>repo</distribution>
+            <name>GNU AFFERO GENERAL PUBLIC LICENSE, Version 3.0</name>
+            <url>https://www.gnu.org/licenses/agpl-3.0.en.html</url>
+        </license>
+    </licenses>
 
     <modules>
         <module>fluxtion-runtime</module>

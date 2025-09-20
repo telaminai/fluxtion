@@ -9,7 +9,11 @@
 
     <artifactId>fluxtion-builder</artifactId>
     <name>telamin :: fluxtion-builder</name>
-    <url>https://github.com/telaminai/fluxtion-dataflow/tree/main/dataflow-builder</url>
+
+    <url>https://github.com/telaminai/fluxtion</url>
+    <description>
+        the runtime library for building Fluxtion data streams
+    </description>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
