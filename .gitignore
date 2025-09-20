@@ -37,3 +37,4 @@ build/
 ### Mac OS ###
 .DS_Store
 /dataflow-runtime/dependency-reduced-pom.xml
+/fluxtion-runtime/dependency-reduced-pom.xml
