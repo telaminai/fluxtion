@@ -7,8 +7,9 @@
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>dataflow-runtime</artifactId>
-    <name>fluxtion :: dataflow-runtime</name>
+    <artifactId>fluxtion-runtime</artifactId>
+    <name>telamin :: fluxtion-runtime</name>
+
     <url>https://github.com/telaminai/fluxtion-dataflow/tree/main/dataflow-runtime</url>
 
     <properties>
