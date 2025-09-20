@@ -21,8 +21,8 @@
 
 
     <modules>
-        <module>dataflow-runtime</module>
-        <module>dataflow-builder</module>
+        <module>fluxtion-runtime</module>
+        <module>fluxtion-builder</module>
     </modules>
 
     <developers>
