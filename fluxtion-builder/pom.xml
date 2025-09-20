@@ -4,7 +4,7 @@
     <parent>
         <groupId>com.telamin.fluxtion</groupId>
         <artifactId>fluxtion-parent</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>0.9.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>fluxtion-builder</artifactId>
@@ -47,7 +47,7 @@
         <dependency>
             <groupId>com.telamin.fluxtion</groupId>
             <artifactId>fluxtion-runtime</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
