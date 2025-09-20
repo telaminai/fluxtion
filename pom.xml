@@ -14,7 +14,6 @@
         <maven.compiler.source>23</maven.compiler.source>
         <maven.compiler.target>23</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
         <maven.compiler.proc>full</maven.compiler.proc>
         <project.scm.id>github</project.scm.id>
     </properties>
@@ -36,16 +35,10 @@
         <connection>scm:git:https://github.com/telaminai/fluxtion.git</connection>
         <developerConnection>scm:git:https://github.com/telaminai/fluxtion.git</developerConnection>
         <url>https://github.com/telaminai/fluxtion.git</url>
-        <tag>v1.8</tag>
     </scm>
 
     <build>
         <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>${maven-compiler-plugin.version}</version>
-            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-release-plugin</artifactId>
