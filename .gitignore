@@ -38,3 +38,6 @@ build/
 .DS_Store
 /dataflow-runtime/dependency-reduced-pom.xml
 /fluxtion-runtime/dependency-reduced-pom.xml
+/.venv/bin/
+/.venv/include/
+/.venv/lib/
