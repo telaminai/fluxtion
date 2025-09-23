@@ -41,6 +41,47 @@ clear dependencies and excellent performance.
 - [For engineers](home/intro-engineers.md)
 - [For managers](home/intro-managers.md)
 
+## Quickstart
+
+Install the builder (which depends on the runtime) and try a 2‑minute example.
+
+Maven (pom.xml):
+
+```xml
+<dependency>
+  <groupId>com.telamin.fluxtion</groupId>
+  <artifactId>fluxtion-builder</artifactId>
+  <version>0.9.3</version>
+</dependency>
+```
+
+Gradle (Kotlin DSL):
+
+```kotlin
+implementation("com.telamin.fluxtion:fluxtion-builder:0.9.3")
+```
+
+Hello world (Java 21):
+
+```java
+import com.telamin.fluxtion.runtime.DataFlow;
+
+public class HelloFluxtion {
+    public static void main(String[] args) {
+        DataFlow dataFlow = DataFlowBuilder
+                .subscribe(String.class)           // accept String events
+                .map(String::toUpperCase)          // transform
+                .console("msg:{}")
+                .build();// print to console
+
+        dataFlow.onEvent("hello");  // prints: msg:HELLO
+        dataFlow.onEvent("world");  // prints: msg:WORLD
+    }
+}
+```
+
+Run locally: see [Run the docs site locally](run_local_guide.md) and use your IDE to run the main above.
+
 ## Reference
 
 - [DataFlow fundamentals](home/dataflow-fundamentals.md)
