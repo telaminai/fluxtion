@@ -1,8 +1,8 @@
 site_name: Fluxtion stream processing
-site_description: High-performance, event-driven server framework
-site_url: https://telaminai.github.io/mongoose/
-repo_url: https://github.com/telaminai/mongoose
-repo_name: telaminai/mongoose
+site_description: Data stream processing library for Java
+site_url: https://telaminai.github.io/fluxtion/
+repo_url: hhttps://github.com/telaminai/fluxtion
+repo_name: telaminai/fluxtion
 edit_uri: edit/main/docs/
 
 theme:
@@ -62,7 +62,7 @@ extra:
   example_root: https://github.com/telaminai/mongoose-examples/tree/main
   fluxtion_src_runtime: https://github.com/telaminai/mongoose-examples/tree/main
   fluxtion_example_src: https://github.com/telaminai/mongoose-examples/tree/main
-  mongoose_version: 1.0.6
+  fluxtion_version: 0.9.3
   release_date: "2024-09-13"
 
 nav:
