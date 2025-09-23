@@ -71,11 +71,11 @@ nav:
       - fundamentals: home/dataflow-fundamentals.md
   - Reference guide:
       - Quick reference: reference/reference-documentation.md
-      - DSL Dataflow api:
+      - DSL Dataflow:
           - DSL introduction: reference/functional/overview-functional.md
-          - DataFlow: reference/functional/dataflow-functional-dsl.md
-          - DataFlow groupBy: reference/functional/dataflow-functional-groupby-dsl.md
-      - Imperative Dataflow api:
+          - DSL api: reference/functional/dataflow-functional-dsl.md
+          - DSL groupBy api: reference/functional/dataflow-functional-groupby-dsl.md
+      - Imperative Dataflow:
           - Binding user classes: reference/imperative/agent_integration.md
           - Lifecycle callbacks: reference/imperative/lifecycle-callbacks.md
       - Combine DSL and imperative: reference/connecting-dsl-imperative.md
