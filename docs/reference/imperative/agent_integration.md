@@ -1,36 +1,16 @@
----
-title: Agent integration
-parent: Reference
-has_children: false
-nav_order: 30
-published: true
-layout: default
----
-
-# Agent integration
-{: .no_toc }
----
+# Imperative DataFlow programming ---
 
 This section documents how user agents modelled as java classes or pure functions are integrated into a DataFlow
 
-{: .no_toc }
-<details open markdown="block">
-  <summary>
-    Table of contents
-  </summary>
-  {: .text-delta }
-- TOC
-{:toc}
-</details>
 
-# Event handling primer
-User classes bound into an [EventProcessor](https://github.com/v12technology/fluxtion/tree/{{site.fluxtion_version}}/runtime/src/main/java/com/fluxtion/runtime/EventProcessor.java) register for event callbacks with annotations. The generated EventProcessor
-implements the [StaticEventProcessor]({{site.fluxtion_src_runtime}}/StaticEventProcessor.java), with the onEvent method acting as
+## Event handling primer
+User classes bound into an [EventProcessor]({{fluxtion_src_runtime}}/runtime/src/main/java/com/fluxtion/runtime/EventProcessor.java) register for event callbacks with annotations. The generated EventProcessor
+implements the [StaticEventProcessor]({{fluxtion_src_runtime}}/StaticEventProcessor.java), with the onEvent method acting as
 a bridge between external event streams and bound processing logic. User code reads the event streams calling onEvent
 with each new event received, the event processor then notifies annotated callback methods according to the [dispatch rules](../fluxtion-explored#event-dispatch-rules).
 
-# Examples
-The source project for the examples can be found [here]({{site.reference_examples}}/runtime-execution/src/main/java/com/fluxtion/example/reference/execution)
+## Examples
+The source project for the examples can be found [here]({{fluxtion_example_src}}/runtime-execution/src/main/java/com/fluxtion/example/reference/execution)
 
 To process an event stream correctly the following requirements must be met:
 
@@ -41,7 +21,7 @@ To process an event stream correctly the following requirements must be met:
 Sends an incoming even to the EventProcessor to trigger a new stream calculation. Any method annotated with 
 `@OnEvent` receives the event from the event processor
 
-{% highlight java %}
+```java
 public static class MyNode {
     @OnEventHandler
     public boolean handleStringEvent(String stringToProcess) {
@@ -55,18 +35,18 @@ public static void main(String[] args) {
     processor.init();
     processor.onEvent("TEST");
 }
-{% endhighlight %}
+```
 
 Output
-{% highlight console %}
+```console
 received:TEST
-{% endhighlight %}
+```
 
 ## Handle multiple event types
 An event handler class can handle multiple event types. Add as many handler methods as required and annotate each method
 with an `@OnEvent` annotation.
 
-{% highlight java %}
+```java
 public static class MyNode {
     @OnEventHandler
     public boolean handleStringEvent(String stringToProcess) {
@@ -87,20 +67,20 @@ public static void main(String[] args) {
     processor.onEvent("TEST");
     processor.onEvent(16);
 }
-{% endhighlight %}
+```
 
 Output
-{% highlight console %}
+```console
 String received:TEST
 Int received:16
-{% endhighlight %}
+```
 
 ## Filtering events
-User events can implement [Event]({{site.fluxtion_src_runtime}}/event/Event.java), which provides an optional filtering 
+User events can implement [Event]({{fluxtion_src_runtime}}/event/Event.java), which provides an optional filtering 
 field. Event handlers can specify the filter value, so they only see events with matching filters
 
 
-{% highlight java %}
+```java
 public static class MyNode {
     @OnEventHandler(filterString = "CLEAR_SIGNAL")
     public boolean allClear(Signal<String> signalToProcess) {
@@ -130,10 +110,10 @@ public static void main(String[] args) {
     System.out.println();
     processor.onEvent(new Signal<>("HEARTBEAT_SIGNAL", "heartbeat message"));
 }
-{% endhighlight %}
+```
 
 Output
-{% highlight console %}
+```console
 alertSignal [Signal: {filterString: ALERT_SIGNAL, value: power failure}]
 anySignal [Signal: {filterString: ALERT_SIGNAL, value: power failure}]
 
@@ -141,14 +121,14 @@ allClear [Signal: {filterString: CLEAR_SIGNAL, value: power restored}]
 anySignal [Signal: {filterString: CLEAR_SIGNAL, value: power restored}]
 
 anySignal [Signal: {filterString: HEARTBEAT_SIGNAL, value: heartbeat message}]
-{% endhighlight %}
+```
 
 ## Filter variables
 The filter value on the event handler method can be extracted from an instance field in the class. Annotate the event
 handler method with an attribute that points to the filter variable `@OnEventHandler(filterVariable = "[class variable]")`
 
 
-{% highlight java %}
+```java
 public static class MyNode {
     private final String name;
 
@@ -172,13 +152,13 @@ public static void main(String[] args) {
     processor.publishIntSignal("B", 45);
     processor.publishIntSignal("C", 100);
 }
-{% endhighlight %}
+```
 
 Output
-{% highlight console %}
+```console
 MyNode-A::handleIntSignal - 22
 MyNode-B::handleIntSignal - 45
-{% endhighlight %}
+```
 
 ## Handling unknown event types
 An unknown event handler can be registered at runtime with the event processor, to catch any event types that are not handled
@@ -186,7 +166,7 @@ by the processor. Register the unKnownEventHandler with:
 
 `[processor].setUnKnownEventHandler(Consumer<T> consumer)`
 
-{% highlight java %}
+```java
 public class UnknownEventHandling {
 
     public static void main(String[] args) {
@@ -207,19 +187,19 @@ public class UnknownEventHandling {
         }
     }
 }
-{% endhighlight %}
+```
 
 Output
-{% highlight console %}
+```console
 received:TEST
 Unregistered event type -> java.util.Collections$EmptyList
-{% endhighlight %}
+```
 
 ## Triggering children
 Event notification is propagated to child instances of event handlers. The notification is sent to any method that is
 annotated with an `@OnTrigger` annotation. Trigger propagation is in topological order.
 
-{% highlight java %}
+```java
 public static class MyNode {
     @OnEventHandler
     public boolean handleStringEvent(String stringToProcess) {
@@ -259,23 +239,23 @@ public static void main(String[] args) {
     System.out.println();   
     processor.onEvent(200);
 }
-{% endhighlight %}
+```
 
 Output
-{% highlight console %}
+```console
 received:test
 Child:triggered
 
 received:200
 Child:triggered
-{% endhighlight %}
+```
 
 ## Conditional triggering children
 Event notification is propagated to child instances of event handlers if the event handler method returns a true value. 
 A false return value will cause the event processor to swallow the triggering notification.
 
 
-{% highlight java %}
+```java
 public static class MyNode {
     @OnEventHandler
     public boolean handleStringEvent(String stringToProcess) {
@@ -318,10 +298,10 @@ public static void main(String[] args) {
     System.out.println();   
     processor.onEvent(50);
 }
-{% endhighlight %}
+```
 
 Output
-{% highlight console %}
+```console
 received:test
 Child:triggered
 
@@ -329,7 +309,7 @@ conditional propagate:true
 Child:triggered
 
 conditional propagate:false
-{% endhighlight %}
+```
 
 ## Identify triggering parent
 It is possible to identify the parent that has triggered a change by adding an `@OnParentUpdate` annotation to a child 
@@ -338,7 +318,7 @@ granular detail of which parent has changed, whereas OnTrigger callbacks signify
 
 The OnParent callbacks are guaranteed to be received before the OnTrigger callback.
 
-{% highlight java %}
+```java
 public static class MyNode {
     @OnEventHandler
     public boolean handleStringEvent(String stringToProcess) {
@@ -397,10 +377,10 @@ public static void main(String[] args) {
     System.out.println();
     processor.onEvent(50);
 }
-{% endhighlight %}
+```
 
 Output
-{% highlight console %}
+```console
 MyNode2 event received:test
 2 - myNode2 updated
 MyNode event received:test
@@ -412,14 +392,14 @@ MyNode2 conditional propagate:true
 Child:triggered
 
 MyNode2 conditional propagate:false
-{% endhighlight %}
+```
 
 ## Identifying parent by name
 When a child has multiple parents of the same type then name resolution can be used to identify the parent that has 
 triggered the update. Add the variable name to the `@OnParentyUpdate` annotation to enforce name and type resolution.
 The OnParent callback is invoked according to the same rules as conditional triggering. 
 
-{% highlight java %}
+```java
 public static class MyNode {
     private final String name;
 
@@ -471,10 +451,10 @@ public static void main(String[] args) {
     System.out.println();
     processor.onEvent("B");
 }
-{% endhighlight %}
+```
 
 Output
-{% highlight console %}
+```console
 A event received:test
 B event received:test
 
@@ -493,14 +473,14 @@ A event received:B
 B event received:B
 Parent B updated
 Child:triggered
-{% endhighlight %}
+```
 
 ## After event callback
 Register for a post event method callback with the `@AfterEvent` annotation. The callback will be executed whenever
 any event is sent to the event processor. Unlike the `@AfterTrigger` which is only called if the containing instance has
 been triggered.
 
-{% highlight java %}
+```java
 public static class MyNode {
     @Initialise
     public void init(){
@@ -527,10 +507,10 @@ public static void main(String[] args) {
     System.out.println();
     processor.onEvent(23);
 }
-{% endhighlight %}
+```
 
 Output
-{% highlight console %}
+```console
 MyNode::init
 MyNode::afterEvent
 
@@ -538,13 +518,13 @@ MyNode::handleStringEvent received:TEST
 MyNode::afterEvent
 
 MyNode::afterEvent
-{% endhighlight %}
+```
 
 ## After trigger callback
 Register for a post trigger method callback with the `@AfterTrigger` annotation. The callback will only be executed if 
 this class has been triggered on tby an incoming event. Unlike the `@AfterEvent` which is always called on any event.
 
-{% highlight java %}
+```java
 public static class MyNode {
     @Initialise
     public void init(){
@@ -571,15 +551,15 @@ public static void main(String[] args) {
     System.out.println();
     processor.onEvent(23);
 }
-{% endhighlight %}
+```
 
 Output
-{% highlight console %}
+```console
 MyNode::init
 
 MyNode::handleStringEvent received:TEST
 MyNode::afterTrigger
-{% endhighlight %}
+```
 
 ## Push trigger
 Invert the trigger order so the instance holding the reference receives the event notification before the reference target 
@@ -588,7 +568,7 @@ and can push data into the target. Annotate the reference to be a push target wi
 The normal order is to trigger the target first, which can perform internal calculations if required. Then the instance 
 holding the reference is triggered so it can pull calculated data from the target reference.
 
-{% highlight java %}
+```java
 public static class MyNode {
     @PushReference
     private final PushTarget pushTarget;
@@ -627,10 +607,10 @@ public static void main(String[] args) {
     System.out.println();
     processor.onEvent("PUSH - test 2");
 }
-{% endhighlight %}
+```
 
 Output
-{% highlight console %}
+```console
 MyNode::handleStringEvent PUSH - test 1
 PushTarget::onTrigger ->  myValue:'PUSH - test 1'
 
@@ -638,13 +618,13 @@ MyNode::handleStringEvent ignore me - XXXXX
 
 MyNode::handleStringEvent PUSH - test 2
 PushTarget::onTrigger ->  myValue:'PUSH - test 2'
-{% endhighlight %}
+```
 
 ## No propagate event handler
 An event handler method can prevent its method triggering a notification by setting the propagate attribute to false 
 on any event handler annotation, `@OnEventHandler(propagate = false)`
 
-{% highlight java %}
+```java
 public static class MyNode {
     @OnEventHandler
     public boolean handleStringEvent(String stringToProcess) {
@@ -680,21 +660,21 @@ public static void main(String[] args) {
     System.out.println();
     processor.onEvent(200);
 }
-{% endhighlight %}
+```
 
 Output
-{% highlight console %}
+```console
 MyNode::handleStringEvent received:test
 Child:triggered
 
 MyNode::handleIntEvent received:200
-{% endhighlight %}
+```
 
 ## No trigger reference
 A child can isolate itself from a parent's event notification by marking the reference with a `@NoTriggerReference`
 annotation. This will stop the onTrigger method from firing even when the parent has triggered.
 
-{% highlight java %}
+```java
 public static class MyNode {
     @OnEventHandler
     public boolean handleStringEvent(String stringToProcess) {
@@ -737,21 +717,21 @@ public static void main(String[] args) {
     System.out.println();
     processor.onEvent(200);
 }
-{% endhighlight %}
+```
 
 Output
-{% highlight console %}
+```console
 MyNode::handleStringEvent received:test
 Child:triggered
 
 MyNode2::handleIntEvent received:200
-{% endhighlight %}
+```
 
 ## Override trigger reference
 A child can force only a single parent to fire its trigger, all other parents will be treated as if they were annotated with 
 `@NoTriggerReference` and removed from the event notification triggers for this class.
 
-{% highlight java %}
+```java
 public static class MyNode {
     @OnEventHandler
     public boolean handleStringEvent(String stringToProcess) {
@@ -794,22 +774,22 @@ public static void main(String[] args) {
     System.out.println();
     processor.onEvent(200);
 }
-{% endhighlight %}
+```
 
 Output
-{% highlight console %}
+```console
 MyNode::handleStringEvent received:test
 
 MyNode2::handleIntEvent received:200
 Child:triggered
-{% endhighlight %}
+```
 
 
 ## Non-dirty triggering
 The condition that causes a trigger callback to fire can be inverted so that an indication of no change from the parent
 will cause the trigger to fire.
 
-{% highlight java %}
+```java
 public static class MyNode {
     @OnEventHandler
     public boolean handleStringEvent(int intToProcess) {
@@ -858,16 +838,16 @@ public static void main(String[] args) {
     System.out.println();
     processor.onEvent(50);
 }
-{% endhighlight %}
+```
 
 Output
-{% highlight console %}
+```console
 conditional propagate:true
 Child:triggered
 
 conditional propagate:false
 NonDirtyChild:triggered
-{% endhighlight %}
+```
 
 ## Collection support
 Collections or arrays of references are supported, if any element in the collection fires a change notification the 
@@ -876,7 +856,7 @@ parent's updating.
 
 Parent change identity can be tracked using the `@OnParentUpdate` annotation.
 
-{% highlight java %}
+```java
 public static class MyNode {
     @FilterId
     private final String filter;
@@ -927,10 +907,10 @@ public static void main(String[] args) {
     processor.publishIntSignal("A", 12);
     processor.publishIntSignal("C", 200);
 }
-{% endhighlight %}
+```
 
 Output
-{% highlight console %}
+```console
 MyNode-A::handleIntSignal - 10
 parentUpdated 'a_1'
 MyNode-A::handleIntSignal - 10
@@ -946,7 +926,7 @@ parentUpdated 'a_1'
 MyNode-A::handleIntSignal - 12
 parentUpdated 'a_2'
 Child::triggered updateCount:2
-{% endhighlight %}
+```
 
 
 ## Forking concurrent trigger methods
@@ -956,7 +936,7 @@ be propagated to their children.
 
 To for a trigger callback use `@OnTrigger(parallelExecution = true)` annotation on the callback method.
 
-{% highlight java %}
+```java
 public static class MyNode {
     @OnEventHandler
     public boolean handleStringEvent(String stringToProcess) {
@@ -1021,10 +1001,10 @@ public static void main(String[] args) {
     System.out.printf("duration: %d milliseconds%n", Duration.between(start, Instant.now()).toMillis());
 }
 
-{% endhighlight %}
+```
 
 Output
-{% highlight console %}
+```console
 main MyNode::handleStringEvent
 ForkJoinPool.commonPool-worker-1 ForkedChild[0]::triggered - sleep:135
 ForkJoinPool.commonPool-worker-2 ForkedChild[1]::triggered - sleep:85
@@ -1039,13 +1019,13 @@ ForkJoinPool.commonPool-worker-4 ForkedChild[3]::complete
 main ResultJoiner:complete
 
 duration: 184 milliseconds
-{% endhighlight %}
+```
 
 ## Batch support
 Batch callbacks are supported through the BatchHandler interface that the generated EventHandler implements. Any methods 
 that are annotated with, `@OnBatchPause` or `@OnBatchEnd` will receive calls from the matching BatchHandler method. 
 
-{% highlight java %}
+```java
 public static class MyNode {
     @OnEventHandler
     public boolean handleStringEvent(String stringToProcess) {
@@ -1075,12 +1055,12 @@ public static void main(String[] args) {
     batchHandler.batchPause();
     batchHandler.batchEnd();
 }
-{% endhighlight %}
+```
 
 Output
-{% highlight console %}
+```console
 MyNode event received:test
 MyNode::batchPause
 MyNode::batchEnd
-{% endhighlight %}
+```
 

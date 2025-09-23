@@ -60,8 +60,8 @@ extra:
   # Define variables here
   source_root: https://github.com/telaminai/mongoose/tree/main/src
   example_root: https://github.com/telaminai/mongoose-examples/tree/main
-  fluxtion_src_runtime: https://github.com/telaminai/mongoose-examples/tree/main
-  fluxtion_example_src: https://github.com/telaminai/mongoose-examples/tree/main
+  fluxtion_src_runtime: https://github.com/telaminai/fluxtion/tree/main
+  fluxtion_example_src: https://github.com/telaminai/fluxtion-examples/tree/main
   fluxtion_version: 0.9.3
   release_date: "2024-09-13"
 
@@ -71,8 +71,11 @@ nav:
       - fundamentals: home/dataflow-fundamentals.md
   - Reference guide:
       - Quick reference: reference/reference-documentation.md
-      - DSL stream api:
+      - DSL Dataflow api:
           - DSL introduction: reference/functional/overview-functional.md
           - DataFlow: reference/functional/dataflow-functional-dsl.md
           - DataFlow groupBy: reference/functional/dataflow-functional-groupby-dsl.md
-      - Combine functional and imperative: reference/connecting-dsl-imperative.md
+      - Imperative Dataflow api:
+          - Binding user classes: reference/imperative/agent_integration.md
+          - Lifecycle callbacks: reference/imperative/lifecycle-callbacks.md
+      - Combine DSL and imperative: reference/connecting-dsl-imperative.md

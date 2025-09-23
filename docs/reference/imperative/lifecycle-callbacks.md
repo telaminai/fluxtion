@@ -1,33 +1,14 @@
----
-title: Lifecycle callback
-parent: Reference
-has_children: false
-nav_order: 40
-published: true
-layout: default
----
-
 # Lifecycle callbacks
-{: .no_toc }
 ---
 
 The section documents the lifecycle api and its behaviour. 
 
-Classes bound into an [EventProcessor](https://github.com/v12technology/fluxtion/tree/{{site.fluxtion_version}}/runtime/src/main/java/com/fluxtion/runtime/EventProcessor.java) register for lifecycle callbacks with annotations on methods. 
-A [Lifecycle]({{site.fluxtion_src_runtime}}/lifecycle/Lifecycle.java) interface is implemented by the generated EventProcessor, lifecycle method calls are routed to 
+Classes bound into an [EventProcessor]({{fluxtion_src_runtime}}/runtime/src/main/java/com/fluxtion/runtime/EventProcessor.java) register for lifecycle callbacks with annotations on methods. 
+A [Lifecycle]({{fluxtion_src_runtime}}/lifecycle/Lifecycle.java) interface is implemented by the generated EventProcessor, lifecycle method calls are routed to 
 annotated callback methods.
 
-The source project for the examples can be found [here]({{site.reference_examples}}/runtime-execution/src/main/java/com/fluxtion/example/reference/lifecycle)
+The source project for the examples can be found [here]({{fluxtion_example_src}}/runtime-execution/src/main/java/com/fluxtion/example/reference/lifecycle)
 
-{: .no_toc }
-<details open markdown="block">
-  <summary>
-    Table of contents
-  </summary>
-  {: .text-delta }
-- TOC
-{:toc}
-</details>
 
 ## Lifecycle - init
 `EventProcessor#init` Calls init on any node in the graph that has registered for an init callback. The init calls
@@ -49,7 +30,7 @@ The stop calls are invoked reverse topological order.
 User nodes that are added to the processing graph can attach to the lifecycle callbacks by annotating methods with 
 the relevant annotations.
 
-{% highlight java %}
+```java
 public static class MyNode {
 
     @Initialise
@@ -80,13 +61,12 @@ public static void main(String[] args) {
     processor.stop();
     processor.tearDown();
 }
-{% endhighlight %}
+```
 
 Output
-{% highlight console %}
+```console
 Initialise
 Start
 Stop
 TearDown
-{% endhighlight %}
-
+```
