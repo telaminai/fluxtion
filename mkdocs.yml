@@ -68,7 +68,6 @@ extra:
 nav:
   - Home:
       - index: index.md
-      - introduction: home/introduction.md
       - why fluxtion: home/why-fluxtion.md
       - what is dataflow: home/what-is-dataflow.md
       - for engineers: home/intro-engineers.md

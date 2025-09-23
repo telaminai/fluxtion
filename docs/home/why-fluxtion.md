@@ -43,6 +43,6 @@ How it compares
 
 Next steps
 
-- Learn the basics: home/what-is-dataflow.md
-- See the fundamentals: home/dataflow-fundamentals.md
-- Pick your intro: home/intro-engineers.md or home/intro-managers.md
+- [Learn the basics](home/what-is-dataflow.md)
+- [See the fundamentals](home/dataflow-fundamentals.md)
+- Pick your intro: [for engineers](home/intro-engineers.md) or [for managers](home/intro-managers.md)
