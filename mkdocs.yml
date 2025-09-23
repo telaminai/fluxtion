@@ -1,7 +1,7 @@
 site_name: Fluxtion stream processing
 site_description: Data stream processing library for Java
 site_url: https://telaminai.github.io/fluxtion/
-repo_url: hhttps://github.com/telaminai/fluxtion
+repo_url: https://github.com/telaminai/fluxtion
 repo_name: telaminai/fluxtion
 edit_uri: edit/main/docs/
 
@@ -71,7 +71,7 @@ nav:
       - fundamentals: home/dataflow-fundamentals.md
   - Reference guide:
       - Quick reference: reference/reference-documentation.md
-      - functional streams:
+      - DSL stream api:
           - DSL introduction: reference/functional/overview-functional.md
           - DataFlow: reference/functional/dataflow-functional-dsl.md
           - DataFlow groupBy: reference/functional/dataflow-functional-groupby-dsl.md
