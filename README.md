@@ -38,8 +38,8 @@ public class HelloFluxtion {
         DataFlow dataFlow = DataFlowBuilder
                 .subscribe(String.class)           // accept String events
                 .map(String::toUpperCase)          // transform
-                .console("msg:{}")
-                .build();// print to console
+                .console("msg:{}")                 // print to console
+                .build();                          // build the DataFlow
 
         dataFlow.onEvent("hello");  // prints: msg:HELLO
         dataFlow.onEvent("world");  // prints: msg:WORLD

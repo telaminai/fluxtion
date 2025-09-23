@@ -18,29 +18,6 @@ clear dependencies and excellent performance.
 - Scales down and up: great for microservices, trading systems, IoT gateways, or embedded analytics.
 - Familiar Java: plain objects and methods; no special runtime server required.
 
-## Core building blocks
-
-- Events: any Java object submitted into the DataFlow.
-- Nodes: functions or stateful components wired together by dependencies.
-- Graph: a DAG computed by the builder that determines dispatch order.
-- Handlers and triggers: annotated methods that receive events or fire when dependencies update.
-
-## Where Fluxtion fits
-
-- Real‑time analytics and monitoring
-- Complex event processing and enrichment
-- Per‑key aggregations (counts, moving windows)
-- Signal generation and alerting
-- Incremental computation pipelines
-
-## Start here
-
-- [Introduction](home/introduction.md)
-- [Why Fluxtion](home/why-fluxtion.md)
-- [What is DataFlow](home/what-is-dataflow.md)
-- [For engineers](home/intro-engineers.md)
-- [For managers](home/intro-managers.md)
-
 ## Quickstart
 
 Install the builder (which depends on the runtime) and try a 2‑minute example.
@@ -71,8 +48,8 @@ public class HelloFluxtion {
         DataFlow dataFlow = DataFlowBuilder
                 .subscribe(String.class)           // accept String events
                 .map(String::toUpperCase)          // transform
-                .console("msg:{}")
-                .build();// print to console
+                .console("msg:{}")                 // print to console
+                .build();                          // build the DataFlow
 
         dataFlow.onEvent("hello");  // prints: msg:HELLO
         dataFlow.onEvent("world");  // prints: msg:WORLD
@@ -81,6 +58,29 @@ public class HelloFluxtion {
 ```
 
 Run locally: see [Run the docs site locally](run_local_guide.md) and use your IDE to run the main above.
+
+## Core building blocks
+
+- Events: any Java object submitted into the DataFlow.
+- Nodes: functions or stateful components wired together by dependencies.
+- Graph: a DAG computed by the builder that determines dispatch order.
+- Handlers and triggers: annotated methods that receive events or fire when dependencies update.
+
+## Where Fluxtion fits
+
+- Real‑time analytics and monitoring
+- Complex event processing and enrichment
+- Per‑key aggregations (counts, moving windows)
+- Signal generation and alerting
+- Incremental computation pipelines
+
+## Start here
+
+- [Introduction](home/introduction.md)
+- [Why Fluxtion](home/why-fluxtion.md)
+- [What is DataFlow](home/what-is-dataflow.md)
+- [For engineers](home/intro-engineers.md)
+- [For managers](home/intro-managers.md)
 
 ## Reference
 
