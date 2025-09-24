@@ -73,6 +73,8 @@ nav:
       - for engineers: home/intro-engineers.md
       - for managers: home/intro-managers.md
       - fundamentals: home/dataflow-fundamentals.md
+  - Getting started:
+      - 1 minute tutorial: getting-started/quickstart.md
   - Reference guide:
       - Quick reference: reference/reference-documentation.md
       - DSL Dataflow:
