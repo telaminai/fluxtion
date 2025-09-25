@@ -89,10 +89,10 @@ public class TutorialPart3 {
 
         DataFlow flow = DataFlowBuilder
                 .subscribe(SensorReading.class)
-                .filter(r -> r.value() >= 0)         // basic guard
+                .filter(r -> r.value() >= 0)     // basic guard
                 .peek(r -> System.out.println("reading=" + r))
-                .push(device::onReading)         // feed imperative node
-                .mapFromSupplier(device::status) // access value from imperative node
+                .push(device::onReading)         // feed user node
+                .mapFromSupplier(device::status) // access value from user node
                 .sink("deviceStatus")
                 .build();
 
