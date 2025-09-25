@@ -78,6 +78,8 @@ nav:
   - Getting started:
       - 1 minute tutorial: getting-started/quickstart.md
       - tutorial part‑1: getting-started/tutorial-part-1.md
+      - tutorial part‑2: getting-started/tutorial-part-2.md
+      - tutorial part‑3: getting-started/tutorial-part-3.md
   - Reference guide:
       - Quick reference: reference/reference-documentation.md
       - DSL Dataflow:

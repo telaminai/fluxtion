@@ -569,7 +569,8 @@ public class EventStreamBuildTest extends MultipleSepTargetInProcessTest {
     public void slidingWindowTest() {
         sep(c -> subscribe(String.class)
                 .map(EventStreamBuildTest::valueOfInt)
-                .slidingAggregate(IntSumFlowFunction::new, 100, 4).id("sum"));
+                .slidingAggregate(IntSumFlowFunction::new, 100, 4)
+                .console().id("sum"));
         addClock();
         onEvent("10");
         onEvent("10");

@@ -26,6 +26,7 @@ public class IntAverageFlowFunction extends AbstractIntFlowFunction<IntAverageFl
     @Override
     public int aggregateInt(int input) {
         value = (int) avg.aggregateDouble(input);
+        System.out.println("IntAverageFlowFunction: aggregateInt: " + value + "");
         return getAsInt();
     }
 }
