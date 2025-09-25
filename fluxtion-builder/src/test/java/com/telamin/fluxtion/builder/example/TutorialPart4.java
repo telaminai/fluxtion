@@ -2,7 +2,6 @@ package com.telamin.fluxtion.builder.example;
 
 import com.sun.net.httpserver.HttpServer;
 import com.telamin.fluxtion.builder.DataFlowBuilder;
-import com.telamin.fluxtion.builder.flowfunction.FlowBuilder;
 import com.telamin.fluxtion.runtime.DataFlow;
 import com.telamin.fluxtion.runtime.flowfunction.aggregate.function.primitive.IntAverageFlowFunction;
 import org.slf4j.Logger;
@@ -34,28 +33,12 @@ public class TutorialPart4 {
 
         // Build a DataFlow computing rolling average latency
         // 5s window, 1s buckets
-//        FlowBuilder<Integer> sliding5SecondAvg = DataFlowBuilder
-//                .subscribe(Request.class)
-//                .map(Request::latencyMs)
-//                .slidingAggregate(IntAverageFlowFunction::new, 1000, 5);
-//
-//        // send to sink avg latency
-//        sliding5SecondAvg.sink("avgLatency");
-
-//        sliding5SecondAvg
-//                .map(x-> {
-//                    System.out.println("avg latency:" + x);
-//                    return x;
-//                })
-//                .console("current avg latency: {}ms");
-
-        // send to sink alerts
         DataFlow flow = DataFlowBuilder
                 .subscribe(Request.class)
                 .map(Request::latencyMs)
                 .slidingAggregate(IntAverageFlowFunction::new, 1000, 5)
+                .sink("avgLatency")
                 .map(avg -> avg > 250 ? "ALERT: high avg latency " + avg + "ms" : "data:" + avg + "ms")
-//                .filter(msg -> msg != null)
                 .sink("alerts")
                 .build();
 
@@ -68,8 +51,6 @@ public class TutorialPart4 {
             alertsOut.incrementAndGet();
             LOG.warn("{}", msg);
         });
-
-        flow.start();
 
         // Start a tiny HTTP server (health + metrics)
         HttpServer server = httpServer(8080, eventsIn, alertsOut, avgLatency);

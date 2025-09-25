@@ -16,16 +16,25 @@ public class LongAverageFlowFunction extends AbstractLongFlowFunction<LongAverag
     @Override
     public void combine(LongAverageFlowFunction add) {
         avg.combine(add.avg);
+        value = (long) avg.aggregateDouble(value);
     }
 
     @Override
     public void deduct(LongAverageFlowFunction add) {
         avg.deduct(add.avg);
+        value = (long) avg.aggregateDouble(value);
     }
 
     @Override
     public long aggregateLong(long input) {
         value = (long) avg.aggregateDouble(input);
+        return getAsLong();
+    }
+
+    @Override
+    public long resetLong() {
+        avg.resetDouble();
+        value = (long) avg.getAsDouble();
         return getAsLong();
     }
 }

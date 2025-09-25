@@ -28,11 +28,13 @@ Option A — Run with JBang (single file demo)
 //COMPILE_OPTIONS -proc:full
 //JAVA 21
 
-import com.telamin.fluxtion.builder.DataFlowBuilder;
-import com.telamin.fluxtion.runtime.DataFlow;
-import com.telamin.fluxtion.runtime.flowfunction.helpers.Aggregates;
-
 import com.sun.net.httpserver.HttpServer;
+import com.telamin.fluxtion.builder.DataFlowBuilder;
+import com.telamin.fluxtion.builder.flowfunction.FlowBuilder;
+import com.telamin.fluxtion.runtime.DataFlow;
+import com.telamin.fluxtion.runtime.flowfunction.aggregate.function.primitive.IntAverageFlowFunction;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -43,9 +45,6 @@ import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class TutorialPart4 {
     private static final Logger LOG = LoggerFactory.getLogger(TutorialPart4.class);
@@ -61,16 +60,14 @@ public class TutorialPart4 {
         AtomicLong alertsOut = new AtomicLong();
         AtomicLong avgLatency = new AtomicLong();
 
-        // Build a DataFlow computing rolling average latency and emitting alerts
+        // Build a DataFlow computing rolling average latency
+        // 5s window, 1s buckets
         DataFlow flow = DataFlowBuilder
                 .subscribe(Request.class)
                 .map(Request::latencyMs)
-                .sliding(Aggregates.intAverageFactory(), 1000, 5) // 5s window, 1s buckets
-                .tee(avg -> avg
-                        .sink("avgLatency")
-                )
-                .map(avg -> avg > 250 ? "ALERT: high avg latency " + avg + "ms" : null)
-                .filter(msg -> msg != null)
+                .slidingAggregate(IntAverageFlowFunction::new, 1000, 5)
+                .sink("avgLatency")
+                .map(avg -> avg > 250 ? "ALERT: high avg latency " + avg + "ms" : "data:" + avg + "ms")
                 .sink("alerts")
                 .build();
 
