@@ -11,14 +11,11 @@ import java.util.concurrent.TimeUnit;
 
 public class GroupByExample {
 
-
-
     record CarTracker(String make, double speed) { }
     static String[] makes = new String[]{"BMW", "Ford", "Honda", "Jeep", "VW"};
 
     //Calculates the average speed by manufacturer in a sliding window of 2 seconds with a 500 millisecond bucket size
     public static void main(String[] args) {
-//    public void main() {ç
         System.out.println("building DataFlow::avgSpeedByMake...");
         //build the DataFlow
         DataFlow avgSpeedByMake = DataFlowBuilder.subscribe(CarTracker.class)
