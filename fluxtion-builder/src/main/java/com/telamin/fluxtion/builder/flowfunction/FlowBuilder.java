@@ -24,11 +24,8 @@ import com.telamin.fluxtion.runtime.flowfunction.function.MapFlowFunction.MapRef
 import com.telamin.fluxtion.runtime.flowfunction.function.MergeFlowFunction;
 import com.telamin.fluxtion.runtime.flowfunction.groupby.GroupBy;
 import com.telamin.fluxtion.runtime.flowfunction.groupby.GroupByFlowFunctionWrapper;
-import com.telamin.fluxtion.runtime.flowfunction.helpers.Aggregates;
-import com.telamin.fluxtion.runtime.flowfunction.helpers.Collectors;
-import com.telamin.fluxtion.runtime.flowfunction.helpers.DefaultValue;
+import com.telamin.fluxtion.runtime.flowfunction.helpers.*;
 import com.telamin.fluxtion.runtime.flowfunction.helpers.DefaultValue.DefaultValueFromSupplier;
-import com.telamin.fluxtion.runtime.flowfunction.helpers.Mappers;
 import com.telamin.fluxtion.runtime.partition.LambdaReflection.SerializableBiFunction;
 import com.telamin.fluxtion.runtime.partition.LambdaReflection.SerializableFunction;
 import com.telamin.fluxtion.runtime.partition.LambdaReflection.SerializableSupplier;
@@ -436,6 +433,19 @@ public class FlowBuilder<T> extends AbstractFlowBuilder<T, FlowBuilder<T>> imple
 
     public <I, Z extends FlowBuilder<I>> Z mapOnNotify(I target) {
         return super.mapOnNotifyBase(target);
+    }
+
+
+    /**
+     * Creates a new flow that maps input values using a supplier node. The supplier node is created with the provided
+     * SerializableSupplier and its get method is used as the mapping function.
+     *
+     * @param nodeSupplier a serializable supplier that provides values for the mapping
+     * @param <R>          the type of values produced by the supplier
+     * @return a new FlowBuilder that produces values from the supplier
+     */
+    public <R> FlowBuilder<R> mapFromSupplier(SerializableSupplier<R> nodeSupplier){
+        return map(new SupplierNode<>(nodeSupplier)::get);
     }
 
     /*

@@ -91,9 +91,8 @@ public class TutorialPart3 {
                 .subscribe(SensorReading.class)
                 .filter(r -> r.value() >= 0)         // basic guard
                 .peek(r -> System.out.println("reading=" + r))
-                .push(device::onReading)        // feed imperative node
-                .mapOnNotify(device)            // make device state available to downstream
-                .map(DeviceState::status)       // access value from imperative node
+                .push(device::onReading)         // feed imperative node
+                .mapFromSupplier(device::status) // access value from imperative node
                 .sink("deviceStatus")
                 .build();
 
