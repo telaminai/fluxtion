@@ -28,14 +28,14 @@ Maven (pom.xml):
 <dependency>
   <groupId>com.telamin.fluxtion</groupId>
   <artifactId>fluxtion-builder</artifactId>
-  <version>0.9.3</version>
+  <version>{{fluxtion_version}}</version>
 </dependency>
 ```
 
 Gradle (Kotlin DSL):
 
 ```kotlin
-implementation("com.telamin.fluxtion:fluxtion-builder:0.9.3")
+implementation("com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}")
 ```
 
 Hello world (Java 21):

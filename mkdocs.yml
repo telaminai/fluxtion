@@ -62,7 +62,7 @@ extra:
   example_root: https://github.com/telaminai/mongoose-examples/tree/main
   fluxtion_src_runtime: https://github.com/telaminai/fluxtion/tree/main
   fluxtion_example_src: https://github.com/telaminai/fluxtion-examples/tree/main
-  fluxtion_version: 0.9.3
+  fluxtion_version: 0.9.5
   release_date: "2024-09-13"
 
 nav:
