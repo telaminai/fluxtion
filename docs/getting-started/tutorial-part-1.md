@@ -17,7 +17,7 @@ Option A — Run with JBang (fastest path)
 2. Run: jbang TutorialPart1.java
 
 ```java
-//DEPS com.telamin.fluxtion:fluxtion-builder:0.9.4
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
 //COMPILE_OPTIONS -proc:full
 //JAVA 21
 

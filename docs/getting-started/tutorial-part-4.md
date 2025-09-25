@@ -23,7 +23,7 @@ Option A — Run with JBang (single file demo)
 2) Run: jbang TutorialPart4.java
 
 ```java
-//DEPS com.telamin.fluxtion:fluxtion-builder:0.9.4
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
 //DEPS org.slf4j:slf4j-simple:2.0.16
 //COMPILE_OPTIONS -proc:full
 //JAVA 21
