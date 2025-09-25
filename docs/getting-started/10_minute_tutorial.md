@@ -1,11 +1,4 @@
----
-title: 10 minute tutorial
-parent: DataFlow
-nav_order: 40
-published: true
-layout: default
----
-# DataFlow agentic 10 minute tutorial
+# DataFlow 10 minute tutorial
 ---
 
 A 10 minute tutorial demonstrating agentic DataFlow integration. Jbang is used to minimise setup for quick start,  
@@ -22,13 +15,13 @@ To run the example directly from github without installation uses jbang trusted 
 remote code does not run automatically**
 ### 1. Open terminal window
 ### 2. Execute GitHub example with jbang:
-{% highlight shell %}
+```console
 jbang https://github.com/telaminai/dataflow-examples/blob/main/getstarted/src/main/java/com/fluxtion/dataflow/examples/frontpage/multijoin/MultiFeedJoinExample.java
-{% endhighlight %}
+```
 
 Console output:
 
-{% highlight bash %}
+```console
 [jbang] Resolving dependencies...
 [jbang]    com.fluxtion.dataflow:dataflow-builder:1.0.0
 [jbang]    org.projectlombok:lombok:1.18.36
@@ -66,7 +59,7 @@ Alarms to clear[]
 Current alarms[server_GOOG, server_TKM, server_MSFT]
 ------------------------------------
 
-{% endhighlight %}
+```
 
 ## Develop locally
 
@@ -74,13 +67,13 @@ Current alarms[server_GOOG, server_TKM, server_MSFT]
 Open a new terminal or command shell to execute the example
 
 Linux/OSX/Windows/AIX Bash:
-{% highlight bash %} vi MultiFeedJoinExample.java {% endhighlight %}
+```console vi MultiFeedJoinExample.java ```
 Windows Powershell:
-{% highlight bash %} notepad.exe MultiFeedJoinExample.java {% endhighlight %}
+```console notepad.exe MultiFeedJoinExample.java ```
 
 Copy the example into editor and save
-{% highlight java %}
 
+```java
 public class MultiFeedJoinExample {
     public static void main(String[] args) {
         //stream of realtime machine temperatures grouped by machineId
@@ -143,14 +136,14 @@ public class MultiFeedJoinExample {
     }
 }
 
-{% endhighlight %}
+```
 
 ### 2. Run the example with JBang
 In the same terminal execute the example
 
-{% highlight bash %}
+```console
 jbang MultiFeedJoinExample.java
-{% endhighlight %}
+```
 
 # Description
 

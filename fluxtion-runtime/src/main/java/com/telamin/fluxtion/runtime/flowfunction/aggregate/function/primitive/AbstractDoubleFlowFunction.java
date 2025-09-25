@@ -14,9 +14,11 @@ import com.telamin.fluxtion.runtime.annotations.builder.Inject;
 import com.telamin.fluxtion.runtime.callback.DirtyStateMonitor;
 import com.telamin.fluxtion.runtime.flowfunction.DoubleFlowFunction;
 import com.telamin.fluxtion.runtime.flowfunction.aggregate.AggregateDoubleFlowFunction;
+import lombok.ToString;
 
 import java.util.function.BooleanSupplier;
 
+@ToString()
 public abstract class AbstractDoubleFlowFunction<T extends AbstractDoubleFlowFunction<T>>
         implements DoubleFlowFunction, AggregateDoubleFlowFunction<T> {
 

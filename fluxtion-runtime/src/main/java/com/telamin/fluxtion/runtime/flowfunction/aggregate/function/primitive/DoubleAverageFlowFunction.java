@@ -43,4 +43,13 @@ public class DoubleAverageFlowFunction extends AbstractDoubleFlowFunction<Double
         count = 0;
         return 0;
     }
+
+    @Override
+    public String toString() {
+        return "DoubleAverageFlowFunction{" +
+                "count=" + count +
+                ", sum=" + sum +
+                ", value=" + value +
+                '}';
+    }
 }
