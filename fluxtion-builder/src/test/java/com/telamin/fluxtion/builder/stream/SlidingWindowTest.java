@@ -152,26 +152,183 @@ public class SlidingWindowTest extends MultipleSepTargetInProcessTest {
         Assert.assertEquals(500, getStreamed("sum", Integer.class).intValue());
     }
 
+    @Test
+    public void testIntSlidingTimeWindowAverage() {
+        sep(c -> DataFlowBuilder
+                .subscribe(Integer.class)
+                .slidingAggregate(Aggregates.intAverageFactory(), 100, 2)
+                .id("avg"));
 
-//    public static void buildGraphSliding(EventProcessorConfig processorConfig) {
-//        DataFlowBuilder.subscribe(Integer.class)
-//                .slidingAggregate(Aggregates.intSumFactory(), 300, 4)
-//                .console("current sliding 1.2 second sum:{} eventTime:%dt");
-//    }
-//
-//    public static void main(String[] args) throws InterruptedException {
-//        var processor = Fluxtion.interpret(SlidingWindowTest::buildGraphSliding);
-//        processor.init();
-//        Random rand = new Random();
-//
-//        try (ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor()) {
-//            executor.scheduleAtFixedRate(
-//                    () -> {
-////                        processor.onEvent("tick");
-//                        processor.onEvent(rand.nextInt(100));
-//                    },
-//                    10, 10, TimeUnit.MILLISECONDS);
-//            Thread.sleep(4_000);
-//        }
-//    }
+        startTime(0);
+        tick(50);
+        onEvent(10);
+
+        tick(80);
+        onEvent(20);
+        Assert.assertNull(getStreamed("avg", Integer.class));
+
+        tick(120);
+        onEvent(30);
+        Assert.assertNull(getStreamed("avg", Integer.class));
+
+        tick(230);
+        onEvent(40);
+        Assert.assertEquals(20.0, getStreamed("avg", Integer.class), 0.001);
+
+        tick(350);
+        Assert.assertEquals(35.0, getStreamed("avg", Integer.class), 0.001);
+
+        onEvent(50);
+        Assert.assertEquals(35.0, getStreamed("avg", Integer.class), 0.001);
+
+        tick(375);
+        onEvent(60);
+        Assert.assertEquals(35.0, getStreamed("avg", Integer.class), 0.001);
+
+        tick(400);
+        Assert.assertEquals(50.0, getStreamed("avg", Integer.class), 0.001);
+    }
+
+    @Test
+    public void testIntSlidingCountWindowAverage() {
+        sep(c -> DataFlowBuilder
+                .subscribe(Integer.class)
+                .slidingAggregateByCount(Aggregates.intAverageFactory(), 3)
+                .id("avg"));
+
+        onEvent(10);
+        Assert.assertNull(getStreamed("avg", Integer.class));
+
+        onEvent(20);
+        Assert.assertNull(getStreamed("avg", Integer.class));
+
+        onEvent(30);
+        Assert.assertEquals(20.0, getStreamed("avg", Integer.class), 0.001);
+
+        onEvent(40);
+        Assert.assertEquals(30.0, getStreamed("avg", Integer.class), 0.001);
+
+        onEvent(50);
+        Assert.assertEquals(40.0, getStreamed("avg", Integer.class), 0.001);
+    }
+
+    @Test
+    public void testDoubleSlidingTimeWindowAverage() {
+        sep(c -> DataFlowBuilder
+                .subscribe(Double.class)
+                .slidingAggregate(Aggregates.doubleAverageFactory(), 100, 2)
+                .id("avg"));
+
+        startTime(0);
+        tick(50);
+        onEvent(10d);
+
+        tick(80);
+        onEvent(20d);
+        Assert.assertNull(getStreamed("avg", Double.class));
+
+        tick(150);
+        onEvent(30d);
+        Assert.assertNull(getStreamed("avg", Double.class));
+
+        tick(230);
+        onEvent(40d);
+        Assert.assertEquals(20.0, getStreamed("avg", Double.class), 0.001);
+
+        tick(350);
+        Assert.assertEquals(35.0, getStreamed("avg", Double.class), 0.001);
+
+        onEvent(50d);
+        Assert.assertEquals(35.0, getStreamed("avg", Double.class), 0.001);
+
+        tick(375);
+        onEvent(60d);
+        Assert.assertEquals(35.0, getStreamed("avg", Double.class), 0.001);
+
+        tick(400);
+        Assert.assertEquals(50.0, getStreamed("avg", Double.class), 0.001);
+    }
+
+    @Test
+    public void testDoubleSlidingCountWindowAverage() {
+        sep(c -> DataFlowBuilder
+                .subscribe(Double.class)
+                .slidingAggregateByCount(Aggregates.doubleAverageFactory(), 3)
+                .id("avg"));
+
+        onEvent(10d);
+        Assert.assertNull(getStreamed("avg", Double.class));
+
+        onEvent(20d);
+        Assert.assertNull(getStreamed("avg", Double.class));
+
+        onEvent(30d);
+        Assert.assertEquals(20.0, getStreamed("avg", Double.class), 0.001);
+
+        onEvent(40d);
+        Assert.assertEquals(30.0, getStreamed("avg", Double.class), 0.001);
+
+        onEvent(50d);
+        Assert.assertEquals(40.0, getStreamed("avg", Double.class), 0.001);
+    }
+
+    @Test
+    public void testLongeSlidingTimeWindowAverage() {
+        sep(c -> DataFlowBuilder
+                .subscribe(Long.class)
+                .slidingAggregate(Aggregates.longAverageFactory(), 100, 2)
+                .id("avg"));
+
+        startTime(0);
+        tick(50);
+        onEvent(10L);
+
+        tick(80);
+        onEvent(20L);
+        Assert.assertNull(getStreamed("avg", Long.class));
+
+        tick(150);
+        onEvent(30L);
+        Assert.assertNull(getStreamed("avg", Long.class));
+
+        tick(230);
+        onEvent(40L);
+        Assert.assertEquals(20.0, getStreamed("avg", Long.class), 0.001);
+
+        tick(350);
+        Assert.assertEquals(35.0, getStreamed("avg", Long.class), 0.001);
+
+        onEvent(50L);
+        Assert.assertEquals(35.0, getStreamed("avg", Long.class), 0.001);
+
+        tick(375);
+        onEvent(60L);
+        Assert.assertEquals(35.0, getStreamed("avg", Long.class), 0.001);
+
+        tick(400);
+        Assert.assertEquals(50.0, getStreamed("avg", Long.class), 0.001);
+    }
+
+    @Test
+    public void testLongSlidingCountWindowAverage() {
+        sep(c -> DataFlowBuilder
+                .subscribe(Long.class)
+                .slidingAggregateByCount(Aggregates.longAverageFactory(), 3)
+                .id("avg"));
+
+        onEvent(10L);
+        Assert.assertNull(getStreamed("avg", Long.class));
+
+        onEvent(20L);
+        Assert.assertNull(getStreamed("avg", Long.class));
+
+        onEvent(30L);
+        Assert.assertEquals(20.0, getStreamed("avg", Long.class), 0.001);
+
+        onEvent(40L);
+        Assert.assertEquals(30.0, getStreamed("avg", Long.class), 0.001);
+
+        onEvent(50L);
+        Assert.assertEquals(40.0, getStreamed("avg", Long.class), 0.001);
+    }
 }
