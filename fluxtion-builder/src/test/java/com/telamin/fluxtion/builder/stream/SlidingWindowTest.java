@@ -152,26 +152,54 @@ public class SlidingWindowTest extends MultipleSepTargetInProcessTest {
         Assert.assertEquals(500, getStreamed("sum", Integer.class).intValue());
     }
 
+@Test
+public void testSlidingTimeWindowAverage() {
+    sep(c -> DataFlowBuilder
+            .subscribe(Integer.class)
+            .slidingAggregate(Aggregates.intAverageFactory(), 100, 2)
+            .id("avg"));
 
-//    public static void buildGraphSliding(EventProcessorConfig processorConfig) {
-//        DataFlowBuilder.subscribe(Integer.class)
-//                .slidingAggregate(Aggregates.intSumFactory(), 300, 4)
-//                .console("current sliding 1.2 second sum:{} eventTime:%dt");
-//    }
-//
-//    public static void main(String[] args) throws InterruptedException {
-//        var processor = Fluxtion.interpret(SlidingWindowTest::buildGraphSliding);
-//        processor.init();
-//        Random rand = new Random();
-//
-//        try (ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor()) {
-//            executor.scheduleAtFixedRate(
-//                    () -> {
-////                        processor.onEvent("tick");
-//                        processor.onEvent(rand.nextInt(100));
-//                    },
-//                    10, 10, TimeUnit.MILLISECONDS);
-//            Thread.sleep(4_000);
-//        }
-//    }
+    startTime(0);
+    setTime(50);
+    onEvent(10);
+    setTime(80);
+    onEvent(20);
+    Assert.assertNull(getStreamed("avg", Integer.class));
+
+    setTime(150);
+    onEvent(30);
+    Assert.assertNull(getStreamed("avg", Integer.class));
+
+    setTime(230);
+    onEvent(40);
+    Assert.assertEquals(25.0, getStreamed("avg", Integer.class), 0.001);
+
+    setTime(350);
+    onEvent(50);
+    Assert.assertEquals(40.0, getStreamed("avg", Double.class), 0.001);
+}
+
+    @Test
+    public void testSlidingCountWindowAverage() {
+        sep(c -> DataFlowBuilder
+                .subscribe(Integer.class)
+                .slidingAggregateByCount(Aggregates.intAverageFactory(), 3)
+                .console("avg:{}")
+                .id("avg"));
+
+        onEvent(10);
+        Assert.assertNull(getStreamed("avg", Integer.class));
+
+        onEvent(20);
+        Assert.assertNull(getStreamed("avg", Integer.class));
+
+        onEvent(30);
+        Assert.assertEquals(20.0, getStreamed("avg", Integer.class), 0.001);
+
+        onEvent(40);
+        Assert.assertEquals(30.0, getStreamed("avg", Integer.class), 0.001);
+
+        onEvent(50);
+        Assert.assertEquals(40.0, getStreamed("avg", Integer.class), 0.001);
+    }
 }
