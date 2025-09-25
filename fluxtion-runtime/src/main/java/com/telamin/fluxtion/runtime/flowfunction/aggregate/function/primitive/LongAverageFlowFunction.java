@@ -11,30 +11,47 @@ package com.telamin.fluxtion.runtime.flowfunction.aggregate.function.primitive;
 
 public class LongAverageFlowFunction extends AbstractLongFlowFunction<LongAverageFlowFunction> {
 
-    private final DoubleAverageFlowFunction avg = new DoubleAverageFlowFunction();
-
-    @Override
-    public void combine(LongAverageFlowFunction add) {
-        avg.combine(add.avg);
-        value = (long) avg.aggregateDouble(value);
-    }
-
-    @Override
-    public void deduct(LongAverageFlowFunction add) {
-        avg.deduct(add.avg);
-        value = (long) avg.aggregateDouble(value);
-    }
+    private int count;
+    private long sum;
 
     @Override
     public long aggregateLong(long input) {
-        value = (long) avg.aggregateDouble(input);
+        sum += input;
+        count++;
+        value = sum / count;
         return getAsLong();
+    }
+
+    @Override
+    public void combine(LongAverageFlowFunction combine) {
+        sum += combine.sum;
+        count += combine.count;
+        value = sum / count;
+    }
+
+    @Override
+    public void deduct(LongAverageFlowFunction deduct) {
+        sum -= deduct.sum;
+        count -= deduct.count;
+        value = sum / count;
     }
 
     @Override
     public long resetLong() {
-        avg.resetDouble();
-        value = (long) avg.getAsDouble();
+        super.resetLong();
+        sum = 0;
+        count = 0;
         return getAsLong();
+    }
+
+    @Override
+    public String toString() {
+        return "LongAverageFlowFunction{" +
+                "avg=" + value +
+                " count=" + count +
+                ", sum=" + sum +
+                ", value=" + value +
+                ", reset=" + reset +
+                '}';
     }
 }

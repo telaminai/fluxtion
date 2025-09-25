@@ -11,30 +11,47 @@ package com.telamin.fluxtion.runtime.flowfunction.aggregate.function.primitive;
 
 public class IntAverageFlowFunction extends AbstractIntFlowFunction<IntAverageFlowFunction> {
 
-    private final DoubleAverageFlowFunction avg = new DoubleAverageFlowFunction();
-
-    @Override
-    public void combine(IntAverageFlowFunction add) {
-        avg.combine(add.avg);
-        value = (int) avg.aggregateDouble(value);
-    }
-
-    @Override
-    public void deduct(IntAverageFlowFunction add) {
-        avg.deduct(add.avg);
-        value = (int) avg.aggregateDouble(value);
-    }
+    private int count;
+    private int sum;
 
     @Override
     public int aggregateInt(int input) {
-        value = (int) avg.aggregateDouble(input);
+        sum += input;
+        count++;
+        value = sum / count;
         return getAsInt();
+    }
+
+    @Override
+    public void combine(IntAverageFlowFunction combine) {
+        sum += combine.sum;
+        count += combine.count;
+        value = sum / count;
+    }
+
+    @Override
+    public void deduct(IntAverageFlowFunction deduct) {
+        sum -= deduct.sum;
+        count -= deduct.count;
+        value = sum / count;
     }
 
     @Override
     public int resetInt() {
-        avg.resetDouble();
-        value = (int) avg.getAsDouble();
+        super.resetInt();
+        sum = 0;
+        count = 0;
         return getAsInt();
+    }
+
+    @Override
+    public String toString() {
+        return "IntAverageFlowFunction{" +
+                "avg=" + value +
+                " count=" + count +
+                ", sum=" + sum +
+                ", value=" + value +
+                ", reset=" + reset +
+                '}';
     }
 }

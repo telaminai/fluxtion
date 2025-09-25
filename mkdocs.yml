@@ -71,7 +71,7 @@ nav:
       - why fluxtion: home/why-fluxtion.md
       - choosing fluxtion: home/choosing-fluxtion.md
       - concepts and architecture: home/concepts-and-architecture.md
-      - what is dataflow: home/what-is-dataflow.md
+      - dataflow programming: home/what-is-dataflow.md
       - for engineers: home/intro-engineers.md
       - for managers: home/intro-managers.md
       - fundamentals: home/dataflow-fundamentals.md
