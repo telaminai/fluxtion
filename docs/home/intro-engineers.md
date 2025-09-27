@@ -44,7 +44,7 @@ Interoperability
 
 Learn next
 
-- [Fundamentals](home/dataflow-fundamentals.md)
-- [DSL overview](reference/functional/overview-functional.md)
-- [DSL API reference](reference/functional/dataflow-functional-dsl.md)
-- [Imperative/POJO integration](reference/imperative/agent_integration.md)
+- [Fundamentals](dataflow-fundamentals.md)
+- [DSL overview](../reference/functional/overview-functional.md)
+- [DSL API reference](../reference/functional/dataflow-functional-dsl.md)
+- [Imperative/POJO integration](../reference/imperative/agent_integration.md)

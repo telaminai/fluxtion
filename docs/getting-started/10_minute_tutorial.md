@@ -2,7 +2,7 @@
 ---
 
 A 10 minute tutorial demonstrating agentic DataFlow integration. Jbang is used to minimise setup for quick start,  
-see [1 minute tutorial](quickstart) for jbang installation help. In this tutorial we cover:
+see [1 minute tutorial](quickstart.md) for jbang installation help. In this tutorial we cover:
 - Listening to multiple event feeds each with a different type
 - Grouping DataFlows into map structures
 - Merging and joining DataFlows

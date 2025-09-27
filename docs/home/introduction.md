@@ -33,8 +33,8 @@ Where Fluxtion fits
 
 See also
 
-- [DataFlow fundamentals](home/dataflow-fundamentals.md)
-- [Why Fluxtion](home/why-fluxtion.md)
-- [What is DataFlow programming](home/what-is-dataflow.md)
-- [Intro for engineers](home/intro-engineers.md)
-- [Intro for managers](home/intro-managers.md)
+- [DataFlow fundamentals](dataflow-fundamentals.md)
+- [Why Fluxtion](why-fluxtion.md)
+- [What is DataFlow programming](what-is-dataflow.md)
+- [Intro for engineers](intro-engineers.md)
+- [Intro for managers](intro-managers.md)

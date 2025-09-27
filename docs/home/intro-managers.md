@@ -33,6 +33,6 @@ How teams work with it
 
 Learn more
 
-- [Overview](home/introduction.md)
-- [Why Fluxtion](home/why-fluxtion.md)
-- [DataFlow basics](home/what-is-dataflow.md)
+- [Overview](introduction.md)
+- [Why Fluxtion](why-fluxtion.md)
+- [DataFlow basics](what-is-dataflow.md)

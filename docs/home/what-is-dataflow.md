@@ -34,5 +34,5 @@ Common patterns
 
 Learn more
 
-- [Fundamentals](home/dataflow-fundamentals.md)
-- [Why Fluxtion](home/why-fluxtion.md)
+- [Fundamentals](dataflow-fundamentals.md)
+- [Why Fluxtion](why-fluxtion.md)
