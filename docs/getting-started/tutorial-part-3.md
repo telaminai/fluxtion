@@ -6,18 +6,18 @@ In this tutorial you will:
 - Use lifecycle callbacks to initialize and clean up state.
 - Route events through the DSL into your component and emit results.
 
-Prerequisites
+## Prerequisites
 
 - JDK 21+
 - JBang or Maven
 
-About imperative nodes in Fluxtion
+## About imperative nodes in Fluxtion
 
 - The runtime can invoke user components directly as part of the graph.
 - You expose methods for inputs and outputs; Fluxtion wires calls based on dependencies.
 - Lifecycle callbacks (such as onStart/onStop) let your component initialize or reset state.
 
-Option A — Run with JBang
+## Option A — Run with JBang
 
 1) Create a file TutorialPart3.java with the code below.
 2) Run: jbang TutorialPart3.java
@@ -111,24 +111,22 @@ public class TutorialPart3 {
 }
 ```
 
-Option B — Maven
+## Option B — Maven
 
 - Add the dependency (see Part‑1), create the class, and run it from your IDE.
 
-What you should see
+## What you should see
 
 - onStart prints once as the graph becomes active.
 - Device status lines containing last value and running average.
 - Inputs with negative values are filtered out by the DSL before reaching the component.
 
-Key ideas reinforced
+## Key ideas reinforced
 
 - Imperative nodes can hold state and expose methods; the DSL can call into them.
 - Lifecycle callbacks provide clean initialization/shutdown hooks.
 - You can mix declarative operators (filter/map) with direct calls to your own classes.
 
-Next steps
+## Next steps
 
 - Proceed to Part‑4 to package and embed a DataFlow in a microservice with logging, health, and metrics hooks.
-
-```

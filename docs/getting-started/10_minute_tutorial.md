@@ -19,7 +19,7 @@ remote code does not run automatically**
 jbang https://github.com/telaminai/dataflow-examples/blob/main/getstarted/src/main/java/com/fluxtion/dataflow/examples/frontpage/multijoin/MultiFeedJoinExample.java
 ```
 
-Console output:
+#### Console output
 
 ```console
 [jbang] Resolving dependencies...
@@ -71,7 +71,7 @@ Linux/OSX/Windows/AIX Bash:
 Windows Powershell:
 ```console notepad.exe MultiFeedJoinExample.java ```
 
-Copy the example into editor and save
+#### Copy the example into editor and save
 
 ```java
 public class MultiFeedJoinExample {
@@ -145,6 +145,6 @@ In the same terminal execute the example
 jbang MultiFeedJoinExample.java
 ```
 
-# Description
+## Description
 
 **To be completed**

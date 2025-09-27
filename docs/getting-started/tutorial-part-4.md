@@ -6,18 +6,18 @@ In this tutorial you will:
 - Add basic logging, a health check endpoint, and simple metrics hooks.
 - Package and run it as a plain Java app.
 
-Prerequisites
+## Prerequisites
 
 - JDK 21+
 - Maven (wrapper provided) or JBang for a quick run
 
-What we’ll build
+## What we’ll build
 
 - A simple service that receives synthetic events on a scheduler, computes a rolling metric, logs outputs, and exposes:
     - GET /health — reports ready
     - GET /metrics — returns a few counters in text
 
-Option A — Run with JBang (single file demo)
+## Option A — Run with JBang (single file demo)
 
 1) Create a file TutorialPart4.java with the code below.
 2) Run: jbang TutorialPart4.java
@@ -125,7 +125,7 @@ public class TutorialPart4 {
 }
 ```
 
-Option B — Maven project
+## Option B — Maven project
 
 - Add dependencies and a main class similar to the above. Recommended POM fragments:
 
@@ -176,19 +176,19 @@ Option B — Maven project
 </build>
 ```
 
-How to verify
+## How to verify
 
 - Start the app and observe logs for avg latency and any high‑latency alerts.
 - Health check: curl -s localhost:8080/health
 - Metrics: curl -s localhost:8080/metrics
 
-Key ideas reinforced
+## Key ideas reinforced
 
 - Fluxtion is an embeddable library: no external server required.
 - Sinks are a natural way to hook into logging and metrics.
 - Simple HTTP endpoints can be added with JDK HttpServer; use your framework of choice in real services.
 
-Where to next
+## Where to next
 
 - Explore interpreted vs compiled graphs in Concepts and architecture.
 - Add your own sinks for Prometheus, OpenTelemetry, or your logging framework.

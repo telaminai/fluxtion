@@ -6,12 +6,12 @@ In this tutorial you will:
 - Use a sliding time window with buckets for rolling averages.
 - Emit alerts when thresholds are breached.
 
-Prerequisites
+## Prerequisites
 
 - JDK 21+
 - JBang or Maven (see options below)
 
-Option A — Run with JBang (fastest path)
+## Option A — Run with JBang (fastest path)
 
 1. Create a file TutorialPart2.java with the code below.
 2. Run: jbang TutorialPart2.java
@@ -90,7 +90,7 @@ public class TutorialPart2 {
 }
 ```
 
-Option B — Maven
+## Option B — Maven
 
 - Add the dependency:
 
@@ -105,17 +105,17 @@ Option B — Maven
 
 - Add the TutorialPart2 class to your sources and run.
 
-What you should see
+## What you should see
 
 - Console logs of per‑symbol averages changing as new ticks arrive.
 - Occasional ALERT lines when a symbol’s 2‑second average exceeds 150.
 
-Key ideas reinforced
+## Key ideas reinforced
 
 - groupBySliding maintains a rolling window per key with fixed‑size time buckets.
 - Mapping and tee allow you to fan out to multiple sinks (averages + alerts) from one computation.
 - Only affected keys update, preserving incremental recomputation semantics.
 
-Next steps
+## Next steps
 
 - Proceed to Part‑3 to combine the DSL with an imperative, stateful component and lifecycle callbacks.
