@@ -6,12 +6,12 @@ In this hands‑on tutorial you will:
 - Run it in‑process and print results to the console.
 - Understand at‑most‑once dispatch and what triggers recomputation.
 
-Prerequisites
+## Prerequisites
 
 - JDK 21+
 - Maven Wrapper (provided in this repo) or JBang
 
-Option A — Run with JBang (fastest path)
+## Option A — Run with JBang (fastest path)
 
 1. Create a file TutorialPart1.java with the code below.
 2. Run: jbang TutorialPart1.java
@@ -76,7 +76,7 @@ public class TutorialPart1 {
 }
 ```
 
-Option B — Add to a Maven project
+## Option B — Add to a Maven project
 
 - Dependency (use the version from this repo’s docs homepage if newer):
 
@@ -91,7 +91,7 @@ Option B — Add to a Maven project
 
 - Then add the TutorialPart1 class above to your sources and run it from your IDE.
 
-What you should see
+## What you should see
 
 - Console prints a map of net positions that changes incrementally, for example:
 ```console
@@ -113,14 +113,14 @@ Trade[symbol=MSFT, qty=10]
 
 - Only affected keys change as new trades arrive.
 
-How it works (relate to Concepts page)
+## How it works (relate to Concepts page)
 
 - DAG and dispatch: Each Trade triggers a single topological pass. Nodes are invoked at most once per event.
 - Triggering recomputation: A new Trade updates the group for its symbol; only that key’s aggregate changes, then the
   sink fires.
 - Deterministic order: filter → map → groupBy → toMap → sink every time.
 
-Next steps
+## Next steps
 
 - Read Concepts and architecture to internalize the DAG and execution model.
 - Try the 1 minute tutorial for a sliding‑window average.
