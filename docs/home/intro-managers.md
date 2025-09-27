@@ -12,6 +12,7 @@ Business benefits
 - Predictable behavior: clear, deterministic execution—critical for compliance, operations, and user trust.
 - Flexible deployment: no servers to manage—ships as a normal Java library inside your existing services or
   microservices.
+- Infrastructure choice: not tied to Kafka Streams, Flink, or any specific platform—IT can choose or change the messaging/compute stack without rewriting business logic.
 
 When to use it
 

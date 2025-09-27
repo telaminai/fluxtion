@@ -18,8 +18,7 @@ Option A — Run with JBang (fastest path)
 
 ```java
 //DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
-//COMPILE_OPTIONS -proc:full
-//JAVA 21
+//JAVA 25
 
 import com.telamin.fluxtion.builder.DataFlowBuilder;
 import com.telamin.fluxtion.runtime.DataFlow;
@@ -95,9 +94,23 @@ Option B — Add to a Maven project
 What you should see
 
 - Console prints a map of net positions that changes incrementally, for example:
-  {aapl=5, msft=5}
-  {aapl=5, msft=5, goog=10}
-  {aapl=0, msft=5, goog=10}
+```console
+fluxtion-exmples % jbang TutorialPart1.java
+Building DataFlow: per-symbol net quantity over last N events
+Publishing demo trades every 300 ms... Press Ctrl+C to stop
+
+Trade[symbol=MSFT, qty=-5]
+{msft=-50}
+
+Trade[symbol=GOOG, qty=10]
+{goog=100, msft=-50}
+
+Trade[symbol=AAPL, qty=-5]
+{goog=100, aapl=-50, msft=-50}
+
+Trade[symbol=MSFT, qty=10]
+```
+
 - Only affected keys change as new trades arrive.
 
 How it works (relate to Concepts page)

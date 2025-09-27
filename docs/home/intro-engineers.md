@@ -40,6 +40,7 @@ Interoperability
 
 - Works with your existing messaging (Kafka, MQ, HTTP) at the edges—you integrate adapters to feed events in and publish
   out.
+- Not tied to a specific streaming platform (e.g., Kafka Streams, Flink). You choose the transport and hosting runtime, and can swap them without changing business logic.
 - Pure Java 21 codebase; no container dependencies. Shaded Agrona in runtime avoids conflicts.
 
 Learn next

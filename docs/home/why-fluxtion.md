@@ -23,6 +23,7 @@ Value for your organization
 - Predictability and testability: deterministic order and explicit dependencies make unit tests straightforward.
 - Cost control: compiled/ahead‑of‑time graphs can be 10x faster than interpreted, reducing CPU and cloud costs.
 - Flexible deployment: embed in microservices, batch jobs with near‑real‑time needs, or edge devices.
+- Infrastructure choice: not tied to Kafka Streams, Flink, or any specific platform—you can run on your existing messaging/compute stack and change it later without rewriting business logic.
 
 Typical use cases
 

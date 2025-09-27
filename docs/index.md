@@ -17,6 +17,7 @@ clear dependencies and excellent performance.
 - Low overhead: avoids generic reactive machinery; directly invokes methods in dependency order.
 - Scales down and up: great for microservices, trading systems, IoT gateways, or embedded analytics.
 - Familiar Java: plain objects and methods; no special runtime server required.
+- Infrastructure‑agnostic: not tied to Kafka Streams, Flink, or any specific platform—you choose the messaging/compute stack it runs on.
 
 ## Quickstart
 
