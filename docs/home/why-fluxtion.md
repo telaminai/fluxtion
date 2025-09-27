@@ -3,7 +3,7 @@
 Fluxtion targets teams building low‑latency, predictable stream processing in Java. It replaces ad‑hoc event wiring and
 complex reactive frameworks with a simple, deterministic dataflow model.
 
-Problems Fluxtion solves
+## Problems Fluxtion solves
 
 - Scattered event logic: business rules spread across listeners, queues, and schedulers make behavior hard to reason
   about. Fluxtion centralizes logic in a dependency graph with single‑pass, topological dispatch.
@@ -16,7 +16,7 @@ Problems Fluxtion solves
 - Heavy runtime footprints: some stream engines require external servers or complex runtimes. Fluxtion runs in‑process
   with plain Java.
 
-Value for your organization
+## Value for your organization
 
 - Faster delivery: developers declare dependencies; the framework handles the hard parts of dispatch and wiring.
 - Lower latency: direct method invocation, no intermediate queues within the graph, minimal allocations.
@@ -25,7 +25,7 @@ Value for your organization
 - Flexible deployment: embed in microservices, batch jobs with near‑real‑time needs, or edge devices.
 - Infrastructure choice: not tied to Kafka Streams, Flink, or any specific platform—you can run on your existing messaging/compute stack and change it later without rewriting business logic.
 
-Typical use cases
+## Typical use cases
 
 - Real‑time risk and alerts (finance, ops, security)
 - Metrics aggregation and anomaly detection
@@ -33,7 +33,7 @@ Typical use cases
 - Time/windowed analytics (moving averages, counters, rate limiting)
 - Per‑entity state machines (per user, device, or symbol)
 
-How it compares
+## How it compares
 
 - Versus general reactive libraries: Fluxtion favors static analysis and precomputed dispatch over dynamic operator
   graphs, yielding predictability and performance.
@@ -42,7 +42,7 @@ How it compares
 - Versus hand‑rolled event buses: you keep control but gain correctness and clarity from the builder’s dependency
   analysis.
 
-Next steps
+## Next steps
 
 - [Learn the basics](what-is-dataflow.md)
 - [See the fundamentals](dataflow-fundamentals.md)

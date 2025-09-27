@@ -3,7 +3,7 @@
 Fluxtion processes events through a directed acyclic graph (DAG) of nodes. Nodes declare their dependencies; Fluxtion
 computes a topological order and invokes each node at most once per incoming event.
 
-Core concepts
+## Core concepts
 
 - Event: an input object delivered to the graph via DataFlow.onEvent(...) or a bound source.
 - Node: a unit of computation with inputs (dependencies) and optional outputs. Nodes can be stateless or stateful.
@@ -11,7 +11,7 @@ Core concepts
 - Dispatch: on each event, Fluxtion schedules only nodes impacted by that event and runs them in topological order.
 - Sink: a terminal node that publishes results (e.g., to logs, collections, metrics, or external systems).
 
-Execution model at a glance
+## Execution model at a glance
 
 ```mermaid
 flowchart LR
@@ -37,14 +37,14 @@ flowchart LR
 - Deterministic order: ties are resolved consistently; repeated runs over the same graph and event types are
   predictable.
 
-What triggers recomputation?
+## What triggers recomputation?
 
 - New event arrives that a node subscribes to directly.
 - Upstream node’s output changes (e.g., new aggregate value, updated state), making downstream dependents dirty.
 - Time/window rollovers if you use windowed operators (bucket expiry triggers an update in that subgraph).
 - Explicit triggers from lifecycle callbacks (advanced usage).
 
-Interpreted vs compiled graphs
+## Interpreted vs compiled graphs
 Fluxtion supports two execution styles. Pick based on latency, footprint, and deployment needs.
 
 - Interpreted graph
@@ -61,12 +61,12 @@ Fluxtion supports two execution styles. Pick based on latency, footprint, and de
     - When to pick: Latency‑sensitive services, high QPS pipelines, constrained environments (edge), cost‑efficiency
       goals.
 
-Guidance
+## Guidance
 
 - Start interpreted during development for speed of iteration.
 - Switch to compiled for production critical paths; benchmark to validate the gains for your workload.
 
-Related reading
+## Related reading
 
 - Why Fluxtion
 - 1 minute tutorial
