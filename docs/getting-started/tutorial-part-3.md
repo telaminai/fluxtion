@@ -20,12 +20,19 @@ In this tutorial you will:
 ## Option A — Run with JBang
 
 1) Create a file TutorialPart3.java with the code below.
-2) Run: jbang TutorialPart3.java
+
+```console
+vi TutorialPart3.java
+```
+2. Run with jBang
+
+```console 
+jbang TutorialPart3.java 
+```
 
 ```java
 //DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
-//COMPILE_OPTIONS -proc:full
-//JAVA 21
+//JAVA 25
 
 import com.telamin.fluxtion.builder.DataFlowBuilder;
 import com.telamin.fluxtion.runtime.DataFlow;
@@ -120,6 +127,23 @@ public class TutorialPart3 {
 - onStart prints once as the graph becomes active.
 - Device status lines containing last value and running average.
 - Inputs with negative values are filtered out by the DSL before reaching the component.
+
+```console
+fluxtion-exmples % jbang TutorialPart3.java 
+[jbang] Building jar for TutorialPart3.java...
+Building DataFlow: DSL + imperative DeviceState
+[DeviceState] onStart 2025-09-27T08:40:28.626489Z
+Publishing sensor readings every 250 ms...
+
+reading=SensorReading[deviceId=dev-1, value=21.429319588260345]
+device=dev-1, last=21.429319588260345, avg=21.43
+reading=SensorReading[deviceId=dev-1, value=20.630519222967056]
+device=dev-1, last=20.630519222967056, avg=21.03
+reading=SensorReading[deviceId=dev-1, value=24.67064434358356]
+device=dev-1, last=24.67064434358356, avg=22.24
+reading=SensorReading[deviceId=dev-1, value=23.083275479199557]
+device=dev-1, last=23.083275479199557, avg=22.45
+```
 
 ## Key ideas reinforced
 

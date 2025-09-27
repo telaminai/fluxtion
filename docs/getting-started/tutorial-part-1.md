@@ -14,7 +14,15 @@ In this hands‑on tutorial you will:
 ## Option A — Run with JBang (fastest path)
 
 1. Create a file TutorialPart1.java with the code below.
-2. Run: jbang TutorialPart1.java
+
+```console
+vi TutorialPart1.java
+```
+2. Run with jBang
+
+```console 
+jbang TutorialPart1.java 
+```
 
 ```java
 //DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}

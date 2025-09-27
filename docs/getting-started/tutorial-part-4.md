@@ -19,14 +19,21 @@ In this tutorial you will:
 
 ## Option A — Run with JBang (single file demo)
 
-1) Create a file TutorialPart4.java with the code below.
-2) Run: jbang TutorialPart4.java
+1. Create a file TutorialPart4.java with the code below.
+
+```console
+vi TutorialPart4.java
+```
+2. Run with jBang
+
+```console 
+jbang TutorialPart4.java 
+```
 
 ```java
 //DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
 //DEPS org.slf4j:slf4j-simple:2.0.16
-//COMPILE_OPTIONS -proc:full
-//JAVA 21
+//JAVA 25
 
 import com.sun.net.httpserver.HttpServer;
 import com.telamin.fluxtion.builder.DataFlowBuilder;
@@ -176,11 +183,55 @@ public class TutorialPart4 {
 </build>
 ```
 
+## What you should see
+
+- Print metrics and health check endpoints.
+- Console logs for avg latency and any high‑latency alerts
+
+```console
+fluxtion-exmples % jbang TutorialPart4.java 
+[jbang] Resolving dependencies...
+[jbang]    com.telamin.fluxtion:fluxtion-builder:0.9.6
+[jbang]    org.slf4j:slf4j-simple:2.0.16
+[jbang] Dependencies resolved
+[jbang] Building jar for TutorialPart4.java...
+[main] INFO TutorialPart4 - Starting microservice with embedded DataFlow
+[main] INFO TutorialPart4 - HTTP server started on http://localhost:8080
+[main] INFO TutorialPart4 - Service running. Try: curl -s localhost:8080/health | jq, curl -s localhost:8080/metrics
+[pool-1-thread-1] INFO TutorialPart4 - avgLatency=270ms
+[pool-1-thread-1] WARN TutorialPart4 - ALERT: high avg latency 270ms
+```
+
 ## How to verify
 
-- Start the app and observe logs for avg latency and any high‑latency alerts.
-- Health check: curl -s localhost:8080/health
-- Metrics: curl -s localhost:8080/metrics
+Start a new terminal and try to query the service REST endpoints with curl:
+
+### Health check
+
+REST query:
+```console
+curl -s localhost:8080/health
+```
+
+REST response:
+```json
+{"status":"UP","time":"2025-09-27T08:46:25.798373Z"}
+```
+
+### Metrics: 
+
+
+REST query:
+```console
+curl -s localhost:8080/metrics
+```
+
+REST response:
+```console
+events_in 541
+alerts_out 104
+avg_latency_ms 276
+```
 
 ## Key ideas reinforced
 
