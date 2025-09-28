@@ -1,4 +1,5 @@
 # Console sink formatting tokens
+---
 
 The `console(String format)` sink prints values and optional timing information to standard out. It’s handy when
 learning the API and for quick visibility in tests.

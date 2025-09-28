@@ -1,4 +1,5 @@
 # Trigger reference controls
+---
 
 ## No propagate event handler
 An event handler method can prevent its method triggering a notification by setting the propagate attribute to false 

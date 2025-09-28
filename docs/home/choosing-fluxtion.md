@@ -1,4 +1,5 @@
 # Choosing Fluxtion: when it fits and how it compares
+---
 
 Fluxtion is a lightweight, in‑process streaming library for Java. It shines when you need predictable, low‑latency event
 processing with explicit data dependencies and minimal runtime overhead.

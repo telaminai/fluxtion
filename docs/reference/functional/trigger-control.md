@@ -1,5 +1,6 @@
 # Trigger control
 ---
+
 Fluxtion offers a way to override the triggering of a flow node in the event processor. There are four trigger controls
 available for client code to customise:
 

@@ -1,5 +1,6 @@
 # Windowing
 ---
+
 Fluxtion supports windowing operations in a DataFlow to aggregate data. There are four types of windows supported:
 
 - Tumbling window with custom start/stop triggers

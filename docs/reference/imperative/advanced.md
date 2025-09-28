@@ -1,4 +1,5 @@
 # Advanced topics
+---
 
 ## Collection support
 Collections or arrays of references are supported, if any element in the collection fires a change notification the 

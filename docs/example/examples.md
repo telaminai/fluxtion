@@ -1,4 +1,5 @@
 # Fluxtion examples
+---
 
 A practical, copy‑and‑run catalog of small examples that show how to build high‑performance, type‑safe, event‑driven
 DataFlows with Fluxtion.

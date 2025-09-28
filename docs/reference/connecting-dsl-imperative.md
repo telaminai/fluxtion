@@ -1,6 +1,6 @@
-
 # Connecting DataFlow and nodes
 ---
+
 An event processor supports bi-directional linking between flows and normal java classes, also known as nodes,  in the
 event processor.
 

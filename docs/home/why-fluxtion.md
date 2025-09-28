@@ -1,4 +1,5 @@
 # Why Fluxtion: Problems it solves and the value it delivers
+---
 
 Fluxtion targets teams building low‑latency, predictable stream processing in Java. It replaces ad‑hoc event wiring and
 complex reactive frameworks with a simple, deterministic dataflow model.

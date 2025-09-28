@@ -1,4 +1,5 @@
 # Triggering
+---
 
 ## Triggering children
 Event notification is propagated to child instances of event handlers. The notification is sent to any method that is

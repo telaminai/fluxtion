@@ -1,4 +1,5 @@
 # Fluxtion for managers and non‑technical readers
+---
 
 Fluxtion is a Java library your engineers embed in services to process real‑time data streams with low latency and high
 reliability. It organizes business logic as a graph of small steps, so when new data arrives, only the necessary parts

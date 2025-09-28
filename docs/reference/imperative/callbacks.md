@@ -1,4 +1,5 @@
 # Callbacks
+---
 
 ## After event callback
 Register for a post event method callback with the `@AfterEvent` annotation. The callback will be executed whenever

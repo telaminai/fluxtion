@@ -1,6 +1,6 @@
-
 #  DataFlow
 ---
+
 A DataFlow is a live structure where new events trigger a set of dispatch operations. We create a DataFlow with:
 
 ```java

@@ -69,11 +69,8 @@ nav:
       - Why fluxtion: home/why-fluxtion.md
       - Choosing fluxtion: home/choosing-fluxtion.md
       - Concepts and architecture: home/concepts-and-architecture.md
-      - Event dispatch: home/event-dispatch-diagrams.md
-      - Dataflow programming: home/what-is-dataflow.md
       - For engineers: home/intro-engineers.md
       - For managers: home/intro-managers.md
-      - Fundamentals: home/dataflow-fundamentals.md
   - Getting started:
       - 1 minute tutorial: getting-started/quickstart.md
       - Tutorial part‑1: getting-started/tutorial-part-1.md
@@ -84,6 +81,9 @@ nav:
   - Examples and how-to:
       - Example repo: example/examples.md
   - Dataflow programming:
+      - Dataflow overview: home/what-is-dataflow.md
+      - Event dispatch: home/event-dispatch-diagrams.md
+      - Fundamentals: home/dataflow-fundamentals.md
       - DSL Dataflow:
           - DSL introduction: reference/functional/overview-functional.md
           - DSL core: reference/functional/dataflow-functional-dsl.md

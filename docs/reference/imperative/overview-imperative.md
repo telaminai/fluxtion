@@ -1,4 +1,5 @@
 # Binding user classes (Imperative DataFlow)
+---
 
 This section documents how user agents modeled as Java classes or pure functions are integrated into a DataFlow.
 

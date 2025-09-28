@@ -1,4 +1,5 @@
 # Filtering
+---
 
 ## Filtering events
 User events can implement [Event]({{fluxtion_src_runtime}}/event/Event.java), which provides an optional filtering 

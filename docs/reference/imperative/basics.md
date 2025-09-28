@@ -1,4 +1,5 @@
 # Basics
+---
 
 ## Handle event input 
 Sends an incoming even to the EventProcessor to trigger a new stream calculation. Any method annotated with 

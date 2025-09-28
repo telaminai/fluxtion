@@ -1,5 +1,6 @@
 # Aggregating
 ---
+
 Aggregating extends the concept of stateful map functions by adding behaviour when using functions in stateful operations
 like windowing and grouping. An aggregate function has these behaviours:
 

@@ -1,4 +1,5 @@
 # Concepts and architecture
+---
 
 Fluxtion processes events through a directed acyclic graph (DAG) of nodes. Nodes declare their dependencies; Fluxtion
 computes a topological order and invokes each node at most once per incoming event.
