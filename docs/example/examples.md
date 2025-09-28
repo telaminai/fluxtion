@@ -142,7 +142,7 @@ joins. A tutorial series (Part 1–5) builds concepts step by step.
 
 ## Prerequisites
 
-- Java 17+ (examples include headers for newer JDKs and work on current LTS)
+- Java 21+ (examples include headers for newer JDKs and work on current LTS)
 - Maven 3.9+
 - jbang 
 

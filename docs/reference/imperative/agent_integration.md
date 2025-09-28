@@ -4,10 +4,12 @@ This section documents how user agents modelled as java classes or pure function
 
 
 ## Event handling primer
-User classes bound into an [EventProcessor]({{fluxtion_src_runtime}}/runtime/src/main/java/com/fluxtion/runtime/EventProcessor.java) register for event callbacks with annotations. The generated EventProcessor
-implements the [StaticEventProcessor]({{fluxtion_src_runtime}}/StaticEventProcessor.java), with the onEvent method acting as
-a bridge between external event streams and bound processing logic. User code reads the event streams calling onEvent
-with each new event received, the event processor then notifies annotated callback methods according to the [dispatch rules](../fluxtion-explored#event-dispatch-rules).
+User classes bound into an [DataFlow]({{fluxtion_src_runtime}}/DataFlow.java) 
+register for event callbacks with annotations. The generated EventProcessor
+implements the onEvent method acting as a bridge between external event streams and bound processing logic. 
+User code reads the event streams calling onEvent with each new event received, the event processor then notifies 
+annotated callback methods according to the [dispatch rules](../../home/dataflow-fundamentals#event-dispatch-rules ).
+
 
 ## Examples
 The source project for the examples can be found [here]({{fluxtion_example_src}}/runtime-execution/src/main/java/com/fluxtion/example/reference/execution)

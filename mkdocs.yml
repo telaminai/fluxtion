@@ -58,9 +58,7 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/telaminai
   # Define variables here
-  source_root: https://github.com/telaminai/mongoose/tree/main/src
-  example_root: https://github.com/telaminai/mongoose-examples/tree/main
-  fluxtion_src_runtime: https://github.com/telaminai/fluxtion/tree/main
+  fluxtion_src_runtime: https://github.com/telaminai/fluxtion/tree/main/fluxtion-runtime/src/main/java/com/telamin/fluxtion/runtime
   fluxtion_example_src: https://github.com/telaminai/fluxtion-examples/tree/main
   fluxtion_version: 0.9.6
   release_date: "2024-09-13"
@@ -84,8 +82,10 @@ nav:
       - Tutorial part‑5: getting-started/tutorial-part-5.md
   - Examples and how-to:
       - Example repo: example/examples.md
+  - Troubleshooting: troubleshooting/index.md
   - Reference guide:
       - Quick reference: reference/reference-documentation.md
+      - Console sink formatting: reference/console-sink-format.md
       - DSL Dataflow:
           - DSL introduction: reference/functional/overview-functional.md
           - DSL api: reference/functional/dataflow-functional-dsl.md
