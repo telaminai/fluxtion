@@ -82,6 +82,8 @@ nav:
       - Tutorial part‑3: getting-started/tutorial-part-3.md
       - Tutorial part‑4: getting-started/tutorial-part-4.md
       - Tutorial part‑5: getting-started/tutorial-part-5.md
+  - Examples and how-to:
+      - Example repo: example/examples.md
   - Reference guide:
       - Quick reference: reference/reference-documentation.md
       - DSL Dataflow:
