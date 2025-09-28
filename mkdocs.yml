@@ -89,8 +89,9 @@ nav:
       - Console sink formatting: reference/console-sink-format.md
       - DSL Dataflow:
           - DSL introduction: reference/functional/overview-functional.md
-          - DSL api: reference/functional/dataflow-functional-dsl.md
-          - DSL groupBy api: reference/functional/dataflow-functional-groupby-dsl.md
+          - DSL core: reference/functional/dataflow-functional-dsl.md
+          - DSL trigger control: reference/functional/trigger-control.md
+          - DSL groupBy: reference/functional/dataflow-functional-groupby-dsl.md
       - Imperative Dataflow:
           - Binding user classes: reference/imperative/agent_integration.md
           - Lifecycle callbacks: reference/imperative/lifecycle-callbacks.md
