@@ -144,10 +144,10 @@ public class TutorialPart4 {
     <version>0.9.4</version>
 </dependency>
 <dependency>
-<groupId>org.slf4j</groupId>
-<artifactId>slf4j-simple</artifactId>
-<version>2.0.16</version>
-<scope>runtime</scope>
+    <groupId>org.slf4j</groupId>
+    <artifactId>slf4j-simple</artifactId>
+    <version>2.0.16</version>
+    <scope>runtime</scope>
 </dependency>
 ```
 

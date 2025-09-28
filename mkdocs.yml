@@ -67,21 +67,21 @@ extra:
 
 nav:
   - Home:
-      - index: index.md
-      - why fluxtion: home/why-fluxtion.md
-      - choosing fluxtion: home/choosing-fluxtion.md
-      - concepts and architecture: home/concepts-and-architecture.md
-      - dataflow programming: home/what-is-dataflow.md
-      - for engineers: home/intro-engineers.md
-      - for managers: home/intro-managers.md
-      - fundamentals: home/dataflow-fundamentals.md
+      - Index: index.md
+      - Why fluxtion: home/why-fluxtion.md
+      - Choosing fluxtion: home/choosing-fluxtion.md
+      - Concepts and architecture: home/concepts-and-architecture.md
+      - Dataflow programming: home/what-is-dataflow.md
+      - For engineers: home/intro-engineers.md
+      - For managers: home/intro-managers.md
+      - Fundamentals: home/dataflow-fundamentals.md
   - Getting started:
       - 1 minute tutorial: getting-started/quickstart.md
-      - tutorial part‑1: getting-started/tutorial-part-1.md
-      - tutorial part‑2: getting-started/tutorial-part-2.md
-      - tutorial part‑3: getting-started/tutorial-part-3.md
-      - tutorial part‑4: getting-started/tutorial-part-4.md
-      - tutorial part‑5: getting-started/tutorial-part-5.md
+      - Tutorial part‑1: getting-started/tutorial-part-1.md
+      - Tutorial part‑2: getting-started/tutorial-part-2.md
+      - Tutorial part‑3: getting-started/tutorial-part-3.md
+      - Tutorial part‑4: getting-started/tutorial-part-4.md
+      - Tutorial part‑5: getting-started/tutorial-part-5.md
   - Reference guide:
       - Quick reference: reference/reference-documentation.md
       - DSL Dataflow:
