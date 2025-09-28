@@ -69,6 +69,7 @@ nav:
       - Why fluxtion: home/why-fluxtion.md
       - Choosing fluxtion: home/choosing-fluxtion.md
       - Concepts and architecture: home/concepts-and-architecture.md
+      - Event dispatch: home/event-dispatch-diagrams.md
       - Dataflow programming: home/what-is-dataflow.md
       - For engineers: home/intro-engineers.md
       - For managers: home/intro-managers.md
