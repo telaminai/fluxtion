@@ -95,14 +95,13 @@ nav:
           - DSL windowing: reference/functional/windowing.md
           - DSL groupBy: reference/functional/dataflow-functional-groupby-dsl.md
       - Imperative Dataflow:
-          - Binding user classes:
-              - Overview: reference/imperative/agent_integration/index.md
-              - Basics: reference/imperative/agent_integration/basics.md
-              - Filtering: reference/imperative/agent_integration/filtering.md
-              - Triggering: reference/imperative/agent_integration/triggering.md
-              - Callbacks: reference/imperative/agent_integration/callbacks.md
-              - Trigger reference: reference/imperative/agent_integration/trigger-reference.md
-              - Advanced: reference/imperative/agent_integration/advanced.md
+          - Overview: reference/imperative/index.md
+          - Basics: reference/imperative/basics.md
+          - Filtering: reference/imperative/filtering.md
+          - Triggering: reference/imperative/triggering.md
+          - Callbacks: reference/imperative/callbacks.md
+          - Trigger reference: reference/imperative/trigger-reference.md
+          - Advanced: reference/imperative/advanced.md
           - Lifecycle callbacks: reference/imperative/lifecycle-callbacks.md
       - Combine DSL and imperative: reference/connecting-dsl-imperative.md
       - API javadoc:
