@@ -1065,4 +1065,3 @@ MyNode event received:test
 MyNode::batchPause
 MyNode::batchEnd
 ```
-

@@ -4,9 +4,8 @@
 An event processor supports bi-directional linking between flows and normal java classes, also known as nodes,  in the
 event processor.
 
-{: .info }
-Connecting DataFlow and nodes is a powerful mechanism for joining functional and imperative programming in a streaming environment
-{: .fs-4 }
+!!! info "Bridging functional and imperartive models"
+    Connecting DataFlow and nodes is a powerful mechanism for joining functional and imperative programming in a streaming environment
 
 Supported bindings:
 
@@ -145,33 +144,4 @@ Running the example code above logs to console
 ```console
 received push: AAA
 received push: BBB
-```
-
-## Re-entrant events
-
-Events can be added for processing from inside the graph for processing in the next available cycle. Internal events
-are added to LIFO queue for processing in the correct order. The EventProcessor instance maintains the LIFO queue, any
-new input events are queued if there is processing currently acting. Support for internal event publishing is built
-into the streaming api.
-
-Maps an int signal to a String and republishes to the graph
-```java
-public static void main(String[] args) {
-    DataFlowBuilder.subscribeToIntSignal("myIntSignal")
-            .mapToObj(d -> "intValue:" + d)
-            .console("republish re-entrant [{}]")
-            .processAsNewGraphEvent();
-
-    var processor = DataFlowBuilder.subscribe(String.class)
-            .console("received [{}]")
-            .build();
-
-    processor.publishSignal("myIntSignal", 256);
-}
-```
-
-Output
-```console
-republish re-entrant [intValue:256]
-received [intValue:256]
 ```

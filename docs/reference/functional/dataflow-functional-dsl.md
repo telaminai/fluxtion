@@ -276,7 +276,37 @@ Running the example code above logs to console
 new customer : MergeAndMapSample.MyData(customer=John Doe, date=Sat May 11 19:17:11 BST 2024, id=123)
 ```
 
-###Sink
+
+### Re-entrant events
+
+Events can be added for processing from inside the graph for processing in the next available cycle. Internal events
+are added to LIFO queue for processing in the correct order. The EventProcessor instance maintains the LIFO queue, any
+new input events are queued if there is processing currently acting. Support for internal event publishing is built
+into the streaming api.
+
+Maps an int signal to a String and republishes to the graph
+```java
+public static void main(String[] args) {
+    DataFlowBuilder.subscribeToIntSignal("myIntSignal")
+            .mapToObj(d -> "intValue:" + d)
+            .console("republish re-entrant [{}]")
+            .processAsNewGraphEvent();
+
+    var processor = DataFlowBuilder.subscribe(String.class)
+            .console("received [{}]")
+            .build();
+
+    processor.publishSignal("myIntSignal", 256);
+}
+```
+
+Output
+```console
+republish re-entrant [intValue:256]
+received [intValue:256]
+```
+
+### Sink
 
 An application can register for output from the EventProcessor by supplying a consumer to addSink and removed with a 
 call to removeSink. Bound classes can publish to sinks during an event process cycle, any registered sinks will see 
@@ -571,7 +601,7 @@ last 4 elements:[C, D, E, F]
 
 ```
 
-###PublishTriggerOverride
+### PublishTriggerOverride
 In this example the publishTrigger control overrides the normal triggering operation of the flow node. The child is notified
 only when publishTriggerOverride fires, changes due to recalculation are swallowed and not published downstream.
 The values in the parent node are unchanged when publishing.
@@ -623,7 +653,7 @@ node triggered -> SubscribeToNodeSample.MyComplexNode(in=H)
 last 4 elements:[E, F, G, H]
 ```
 
-###UpdateTrigger
+### UpdateTrigger
 In this example the updateTrigger controls when the functional mapping operation of the flow node is invoked. The values 
 are only aggregated when the update trigger is called. Notifications from the parent node are ignored and do not trigger
 a mapping operation.
@@ -670,7 +700,7 @@ node triggered -> SubscribeToNodeSample.MyComplexNode(in=F)
 last 4 elements:[C, F]
 ```
 
-###ResetTrigger
+### ResetTrigger
 In this example the resetTrigger controls when the functional mapping operation of the flow node is reset. The aggregate
 operation is stateful so all the values in the list are removed when then reset trigger fires. The reset operation causes 
 trigger a notification to children of the flow node.
