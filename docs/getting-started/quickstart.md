@@ -39,7 +39,7 @@ notepad.exe GroupByWindowExample.java
 ```
 
 ```java
-//DEPS com.telamin.fluxtion:fluxtion-builder:0.9.4
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
 //COMPILE_OPTIONS -proc:full
 //JAVA 25
 

@@ -107,7 +107,7 @@ public class TutorialPart2 {
 <dependency>
     <groupId>com.telamin.fluxtion</groupId>
     <artifactId>fluxtion-builder</artifactId>
-    <version>0.9.4</version>
+    <version>{{fluxtion_version}}</version>
 </dependency>
 ```
 

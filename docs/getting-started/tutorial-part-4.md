@@ -142,7 +142,7 @@ public class TutorialPart4 {
 <dependency>
     <groupId>com.telamin.fluxtion</groupId>
     <artifactId>fluxtion-builder</artifactId>
-    <version>0.9.4</version>
+    <version>{{fluxtion_version}}</version>
 </dependency>
 <dependency>
     <groupId>org.slf4j</groupId>
@@ -192,7 +192,7 @@ public class TutorialPart4 {
 ```console
 fluxtion-exmples % jbang TutorialPart4.java 
 [jbang] Resolving dependencies...
-[jbang]    com.telamin.fluxtion:fluxtion-builder:0.9.6
+[jbang]    com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
 [jbang]    org.slf4j:slf4j-simple:2.0.16
 [jbang] Dependencies resolved
 [jbang] Building jar for TutorialPart4.java...
