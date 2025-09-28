@@ -48,4 +48,4 @@ This section gives a practical, technical view of Fluxtion for Java developers.
 - [Fundamentals](dataflow-fundamentals.md)
 - [DSL overview](../reference/functional/overview-functional.md)
 - [DSL API reference](../reference/functional/dataflow-functional-dsl.md)
-- [Imperative/POJO integration](../reference/imperative/index.md)
+- [Imperative/POJO integration](../reference/imperative/overview-imperative.md)
