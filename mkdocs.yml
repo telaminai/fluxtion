@@ -94,14 +94,14 @@ nav:
           - DSL windowing: reference/functional/windowing.md
           - DSL groupBy: reference/functional/dataflow-functional-groupby-dsl.md
       - Imperative Dataflow:
-          - Overview: reference/imperative/overview-imperative.md
-          - Basics: reference/imperative/basics.md
-          - Filtering: reference/imperative/filtering.md
-          - Triggering: reference/imperative/triggering.md
-          - Callbacks: reference/imperative/callbacks.md
-          - Trigger reference: reference/imperative/trigger-reference.md
-          - Advanced: reference/imperative/advanced.md
-          - Lifecycle callbacks: reference/imperative/lifecycle-callbacks.md
+          - Imperative Overview: reference/imperative/overview-imperative.md
+          - Imperative Basics: reference/imperative/basics.md
+          - Imperative Filtering: reference/imperative/filtering.md
+          - Imperative Triggering: reference/imperative/triggering.md
+          - Imperative Callbacks: reference/imperative/callbacks.md
+          - Imperative Trigger reference: reference/imperative/trigger-reference.md
+          - Imperative Advanced: reference/imperative/advanced.md
+          - Imperative Lifecycle callbacks: reference/imperative/lifecycle-callbacks.md
       - Combine DSL and imperative: reference/connecting-dsl-imperative.md
       - Console sink formatting: reference/console-sink-format.md
       - API javadoc:
