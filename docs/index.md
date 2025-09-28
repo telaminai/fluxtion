@@ -74,6 +74,12 @@ public class HelloFluxtion {
 - Signal generation and alerting
 - Incremental computation pipelines
 
+!!! info "Choosing Fluxtion (compare to Kafka Streams, Reactor, Flink)"
+    Not sure if Fluxtion is the right fit? Read the decision guide: [Choosing Fluxtion](home/choosing-fluxtion.md).
+
+!!! example "Explore examples"
+    Browse runnable samples in one click: [Examples catalog](example/examples.md).
+
 ## Code samples
 
 
