@@ -1,4 +1,5 @@
-# Imperative DataFlow programming ---
+# Imperative DataFlow programming 
+---
 
 This section documents how user agents modelled as java classes or pure functions are integrated into a DataFlow
 
@@ -16,7 +17,8 @@ The source project for the examples can be found
 [here]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode)
 To process an event stream correctly the following requirements must be met:
 
--  **EventProcessors are not thread safe** a single event should be processed at one time.
+!!! warning "Thread safety"
+    EventProcessors are not thread safe a single event should be processed at one time.
 
 ## Handle event input 
 Sends an incoming even to the EventProcessor to trigger a new stream calculation. Any method annotated with 
