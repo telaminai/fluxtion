@@ -103,10 +103,9 @@ Time:             t0   t1   t2   t3
 
 See runnable samples in reference/trigger:
 
-- Update: reference/.../TriggerUpdateSample.java
-- Publish: reference/.../TriggerPublishSample.java
-- Reset: reference/.../TriggerResetSample.java
-
+- Update trigger: [TriggerUpdateSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/trigger/TriggerUpdateSample.java)
+- Publish trigger: [TriggerPublishSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/trigger/TriggerPublishSample.java)
+- Reset trigger: [TriggerResetSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/trigger/TriggerResetSample.java)
 ---
 
 ## 4) Windowing: sliding vs tumbling (bucket visuals)
@@ -153,9 +152,9 @@ Overlaps fade out old events as new ones enter.
 
 See runnable samples in reference/windowing:
 
-- Sliding: reference/.../SlidingWindowSample.java
-- Tumbling: reference/.../TumblingWindowSample.java
-- Tumbling + publish: reference/.../TumblingTriggerSample.java
+- Sliding window: [SlidingWindowSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/windowing/SlidingWindowSample.java)
+- Tumbling window: [TumblingWindowSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/windowing/TumblingWindowSample.java)
+- Tumbling window with trigger: [TumblingTriggerSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/windowing/TumblingTriggerSample.java)
 
 ---
 
@@ -168,8 +167,3 @@ See runnable samples in reference/windowing:
 1. Windows manage time‑scoped state; aggregates compute results over buckets
 1. Sinks receive final values (push to console, DB, message bus, etc.)
 
-Cross‑links to code:
-
-- Graph shape patterns: getting-started/frontpage/* and reference/functional/*
-- Triggers: reference/trigger/*
-- Windowing: reference/windowing/* and reference/groupby/*

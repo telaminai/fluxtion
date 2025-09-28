@@ -107,23 +107,16 @@ joins. A tutorial series (Part 1–5) builds concepts step by step.
 
 ### Windowing and triggers
 
-- Sliding
-  window: [SlidingWindowSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/windowing/SlidingWindowSample.java)
-- Tumbling
-  window: [TumblingWindowSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/windowing/TumblingWindowSample.java)
-- Tumbling window with
-  trigger: [TumblingTriggerSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/windowing/TumblingTriggerSample.java)
+- Sliding window: [SlidingWindowSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/windowing/SlidingWindowSample.java)
+- Tumbling window: [TumblingWindowSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/windowing/TumblingWindowSample.java)
+- Tumbling window with trigger: [TumblingTriggerSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/windowing/TumblingTriggerSample.java)
 
 ### Triggers
 
-- Update
-  trigger: [TriggerUpdateSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/trigger/TriggerUpdateSample.java)
-- Publish
-  trigger: [TriggerPublishSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/trigger/TriggerPublishSample.java)
-- Reset
-  trigger: [TriggerResetSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/trigger/TriggerResetSample.java)
-- Publish
-  override: [TriggerPublishOverrideSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/trigger/TriggerPublishOverrideSample.java)
+- Update trigger: [TriggerUpdateSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/trigger/TriggerUpdateSample.java)
+- Publish trigger: [TriggerPublishSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/trigger/TriggerPublishSample.java)
+- Reset trigger: [TriggerResetSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/trigger/TriggerResetSample.java)
+- Publish override: [TriggerPublishOverrideSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/trigger/TriggerPublishOverrideSample.java)
 
 ### Working with nodes
 
