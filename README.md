@@ -36,6 +36,7 @@ Requires Java 21 (toolchain), builds with Maven Wrapper.
 
 ## Quickstart
 ```java
+import com.telamin.fluxtion.builder.DataFlowBuilder;
 import com.telamin.fluxtion.runtime.DataFlow;
 
 public class HelloFluxtion {

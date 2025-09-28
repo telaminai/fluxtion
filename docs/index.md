@@ -42,6 +42,7 @@ implementation("com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}")
 Hello world (Java 21):
 
 ```java
+import com.telamin.fluxtion.builder.DataFlowBuilder;
 import com.telamin.fluxtion.runtime.DataFlow;
 
 public class HelloFluxtion {
@@ -57,8 +58,6 @@ public class HelloFluxtion {
     }
 }
 ```
-
-Run locally: see [Run the docs site locally](run_local_guide.md) and use your IDE to run the main above.
 
 ## Core building blocks
 
