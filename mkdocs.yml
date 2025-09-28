@@ -65,7 +65,7 @@ extra:
 
 nav:
   - Home:
-      - Index: overview-imperative.md
+      - Index: index.md
       - Why fluxtion: home/why-fluxtion.md
       - Choosing fluxtion: home/choosing-fluxtion.md
       - Concepts and architecture: home/concepts-and-architecture.md
@@ -83,9 +83,7 @@ nav:
       - Tutorial part‑5: getting-started/tutorial-part-5.md
   - Examples and how-to:
       - Example repo: example/examples.md
-  - Troubleshooting: troubleshooting/index.md
-  - Reference guide:
-      - Quick reference: reference/reference-documentation.md
+  - Dataflow programming:
       - DSL Dataflow:
           - DSL introduction: reference/functional/overview-functional.md
           - DSL core: reference/functional/dataflow-functional-dsl.md
@@ -103,6 +101,9 @@ nav:
           - Imperative Advanced: reference/imperative/advanced.md
           - Imperative Lifecycle callbacks: reference/imperative/lifecycle-callbacks.md
       - Combine DSL and imperative: reference/connecting-dsl-imperative.md
+  - Troubleshooting: troubleshooting/index.md
+  - Reference guide:
+      - Quick reference: reference/reference-documentation.md
       - Console sink formatting: reference/console-sink-format.md
       - API javadoc:
         - Fluxtion-runtime: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-runtime/latest/index.html
