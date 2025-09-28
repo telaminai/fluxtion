@@ -92,6 +92,7 @@ nav:
           - DSL core: reference/functional/dataflow-functional-dsl.md
           - DSL trigger control: reference/functional/trigger-control.md
           - DSL aggregating: reference/functional/aggregating.md
+          - DSL windowing: reference/functional/windowing.md
           - DSL groupBy: reference/functional/dataflow-functional-groupby-dsl.md
       - Imperative Dataflow:
           - Binding user classes: reference/imperative/agent_integration.md
