@@ -145,3 +145,107 @@ Running the example code above logs to console
 received push: AAA
 received push: BBB
 ```
+
+## Map from node property
+
+A data flow can retrieve a value from any normal java class and map it to the data flow
+
+```java
+public class MapNodeSupplierSample {
+    public static void main(String[] args) {
+        MyPushTarget myPushTarget = new MyPushTarget();
+        DataFlow processor = DataFlowBuilder.subscribe(String.class)
+                .push(myPushTarget::updated)
+                .mapFromSupplier(myPushTarget::received)
+                .console("Received - [{}]")
+                .build();
+
+        processor.onEvent("AAA");
+        processor.onEvent("BBB");
+    }
+
+    public static class MyPushTarget {
+        private String store = " ";
+        public void updated(String in) {
+            store += "'" + in + "' ";
+        }
+
+        public String received() {
+            return store;
+        }
+    }
+}
+```
+
+Running the example code above logs to console
+```console
+Received - [ 'AAA' ]
+Received - [ 'AAA' 'BBB' ]
+```
+
+## Wrapping user functions
+
+A data flow can wrap a user defined function and use it in the data flow. The function can be stateful or stateless, both
+binaary and unary functions are supported.
+
+```java
+public class WrapFunctionsSample {
+
+    public static void main(String[] args) {
+        //STATEFUL FUNCTIONS
+        MyFunctions myFunctions = new MyFunctions();
+
+        var stringFlow = DataFlowBuilder.subscribe(String.class).console("input: '{}'");
+
+        var charCount = stringFlow
+                .map(myFunctions::totalCharCount)
+                .console("charCountAggregate: {}");
+
+        var upperCharCount = stringFlow
+                .map(myFunctions::totalUpperCaseCharCount)
+                .console("upperCharCountAggregate: {}");
+
+        DataFlowBuilder.mapBiFunction(new MyFunctions.SimpleMath()::updatePercentage, upperCharCount, charCount)
+                .console("percentage chars upperCase all words:{}");
+
+        //STATELESS FUNCTION
+        DataFlow processor = DataFlowBuilder
+                .mapBiFunction(MyFunctions::wordUpperCasePercentage,
+                        stringFlow.map(MyFunctions::upperCaseCharCount).console("charCourWord:{}"),
+                        stringFlow.map(MyFunctions::charCount).console("upperCharCountWord:{}"))
+                .console("percentage chars upperCase this word:{}\n")
+                .build();
+
+        processor.onEvent("test ME");
+        processor.onEvent("and AGAIN");
+        processor.onEvent("ALL CAPS");
+    }
+}
+```
+
+Running the example code above logs to console
+```console
+input: 'test ME'
+charCountAggregate: 6
+upperCharCountAggregate: 2
+percentage chars upperCase all words:0.3333333333333333
+charCourWord:2
+upperCharCountWord:6
+percentage chars upperCase this word:0.3333333333333333
+
+input: 'and AGAIN'
+charCountAggregate: 14
+upperCharCountAggregate: 7
+percentage chars upperCase all words:0.45
+charCourWord:5
+upperCharCountWord:8
+percentage chars upperCase this word:0.625
+
+input: 'ALL CAPS'
+charCountAggregate: 21
+upperCharCountAggregate: 14
+percentage chars upperCase all words:0.5609756097560976
+charCourWord:7
+upperCharCountWord:7
+percentage chars upperCase this word:1.0
+```

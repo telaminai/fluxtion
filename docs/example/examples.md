@@ -127,13 +127,11 @@ joins. A tutorial series (Part 1–5) builds concepts step by step.
 
 ### Working with nodes
 
-- Wrap
-  functions: [WrapFunctionsSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/node/WrapFunctionsSample.java)
-- Subscribe to
-  node: [SubscribeToNodeSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/node/SubscribeToNodeSample.java)
+- Wrap functions: [WrapFunctionsSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/node/WrapFunctionsSample.java)
+- Subscribe to node: [SubscribeToNodeSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/node/SubscribeToNodeSample.java)
 - Push pattern: [PushSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/node/PushSample.java)
-- Member variable
-  supplier: [FlowSupplierAsMemberVariableSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/node/FlowSupplierAsMemberVariableSample.java)
+- Map from node property: [MapFromNodePropertySample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/node/MapNodeSupplierSample.java)
+- Member variable supplier: [FlowSupplierAsMemberVariableSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/node/FlowSupplierAsMemberVariableSample.java)
 
 ### Event feeds and runners
 
