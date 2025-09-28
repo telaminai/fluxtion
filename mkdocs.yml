@@ -92,3 +92,6 @@ nav:
           - Binding user classes: reference/imperative/agent_integration.md
           - Lifecycle callbacks: reference/imperative/lifecycle-callbacks.md
       - Combine DSL and imperative: reference/connecting-dsl-imperative.md
+      - API javadoc:
+        - Fluxtion-runtime: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-runtime/latest/index.html
+        - Fluxtion-builder: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-builder/latest/index.html
