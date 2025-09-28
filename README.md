@@ -29,7 +29,7 @@ Maven
 
 Gradle (Kotlin DSL)
 ```kotlin
-implementation("com.telamin.fluxtion:fluxtion-builder:0.9.3")
+implementation("com.telamin.fluxtion:fluxtion-builder:0.9.6")
 ```
 
 Requires Java 21 (toolchain), builds with Maven Wrapper.
