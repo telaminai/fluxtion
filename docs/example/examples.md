@@ -39,11 +39,11 @@ joins. A tutorial series (Part 1–5) builds concepts step by step.
     - Triggering: [TriggerExample.java]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/frontpage/triggering/TriggerExample.java)
     - Multi‑join: [MultiFeedJoinExample.java]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/frontpage/multijoin/MultiFeedJoinExample.java)
 - Tutorials (progressive walkthrough)
-    - [TutorialPart1.java]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart1.java)
-    - [TutorialPart2.java]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart2.java)
-    - [TutorialPart3.java]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart3.java)
-    - [TutorialPart4.java]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart4.java)
-    - [TutorialPart5.java]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart5.java)
+    - [TutorialPart1.java]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart1.java) — Basics: build a tiny flow to compute per-symbol running net quantity.
+    - [TutorialPart2.java]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart2.java) — Sliding windows: per-symbol rolling average with thresholded alerts.
+    - [TutorialPart3.java]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart3.java) — Mix DSL with an imperative stateful node and lifecycle @Start/@Stop.
+    - [TutorialPart4.java]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart4.java) — Embed a DataFlow in a microservice with HTTP health/metrics and latency alerts.
+    - [TutorialPart5.java]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart5.java) — Wire file feeds and sinks: read from a file, transform, and write to a file.
 
 ## Reference [git repo]({{fluxtion_example_src}}/reference)
   This module is a cookbook of small, focused samples that each demonstrate one Fluxtion feature in isolation. Browse by
