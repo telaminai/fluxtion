@@ -12,11 +12,10 @@ annotated callback methods according to the [dispatch rules](../../home/dataflow
 
 
 ## Examples
-The source project for the examples can be found [here]({{fluxtion_example_src}}/runtime-execution/src/main/java/com/fluxtion/example/reference/execution)
-
+The source project for the examples can be found 
+[here]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode)
 To process an event stream correctly the following requirements must be met:
 
--  **Call EventProcessor.init() before first use**
 -  **EventProcessors are not thread safe** a single event should be processed at one time.
 
 ## Handle event input 
@@ -24,18 +23,22 @@ Sends an incoming even to the EventProcessor to trigger a new stream calculation
 `@OnEvent` receives the event from the event processor
 
 ```java
-public static class MyNode {
-    @OnEventHandler
-    public boolean handleStringEvent(String stringToProcess) {
-        System.out.println("received:" + stringToProcess);
-        return true;
+public class WrapNode {
+    public static class MyNode {
+        @OnEventHandler
+        public boolean handleStringEvent(String stringToProcess) {
+            System.out.println("received:" + stringToProcess);
+            return true;
+        }
     }
-}
 
-public static void main(String[] args) {
-    var processor = Fluxtion.interpret(new MyNode());
-    processor.init();
-    processor.onEvent("TEST");
+    public static void main(String[] args) {
+        var processor = DataFlowBuilder
+                .subscribeToNode(new MyNode())
+                .build();
+
+        processor.onEvent("TEST");
+    }
 }
 ```
 
