@@ -30,7 +30,8 @@ DataFlow path is executed. In this case we are aggregating into a list that has 
 ```java
 public class SubscribeToNodeSample {
     public static void main(String[] args) {
-        DataFlow processor = DataFlowBuilder.subscribeToNode(new MyComplexNode())
+        DataFlow processor = DataFlowBuilder
+                .subscribeToNode(new MyComplexNode())
                 .console("node triggered -> {}")
                 .map(MyComplexNode::getIn)
                 .aggregate(Collectors.listFactory(4))
@@ -97,7 +98,10 @@ This example binds a data flow of String's to a java record that has an onTrigge
 
 ```java
 public static void main(String[] args) {
-    FlowSupplier<String> stringFlow = DataFlowBuilder.subscribe(String.class).flowSupplier();
+    FlowSupplier<String> stringFlow = DataFlowBuilder
+            .subscribe(String.class)
+            .flowSupplier();
+    
     DataFlow processor = DataFlowBuilder
             .subscribeToNode(new MyFlowHolder(stringFlow))
             .build();
@@ -125,7 +129,8 @@ A data flow can push a value to any normal java class
 
 ```java
 public static void main(String[] args) {
-    DataFlow processor = DataFlowBuilder.subscribe(String.class)
+    DataFlow processor = DataFlowBuilder
+            .subscribe(String.class)
             .push(new MyPushTarget()::updated)
             .build();
 
@@ -154,7 +159,8 @@ A data flow can retrieve a value from any normal java class and map it to the da
 public class MapNodeSupplierSample {
     public static void main(String[] args) {
         MyPushTarget myPushTarget = new MyPushTarget();
-        DataFlow processor = DataFlowBuilder.subscribe(String.class)
+        DataFlow processor = DataFlowBuilder
+                .subscribe(String.class)
                 .push(myPushTarget::updated)
                 .mapFromSupplier(myPushTarget::received)
                 .console("Received - [{}]")
@@ -195,7 +201,9 @@ public class WrapFunctionsSample {
         //STATEFUL FUNCTIONS
         MyFunctions myFunctions = new MyFunctions();
 
-        var stringFlow = DataFlowBuilder.subscribe(String.class).console("input: '{}'");
+        var stringFlow = DataFlowBuilder
+                .subscribe(String.class)
+                .console("input: '{}'");
 
         var charCount = stringFlow
                 .map(myFunctions::totalCharCount)
@@ -205,7 +213,11 @@ public class WrapFunctionsSample {
                 .map(myFunctions::totalUpperCaseCharCount)
                 .console("upperCharCountAggregate: {}");
 
-        DataFlowBuilder.mapBiFunction(new MyFunctions.SimpleMath()::updatePercentage, upperCharCount, charCount)
+        DataFlowBuilder
+                .mapBiFunction(
+                        new MyFunctions.SimpleMath()::updatePercentage, 
+                        upperCharCount, 
+                        charCount)
                 .console("percentage chars upperCase all words:{}");
 
         //STATELESS FUNCTION
