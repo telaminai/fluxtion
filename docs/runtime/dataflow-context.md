@@ -4,7 +4,7 @@ This guide describes how to interact with a running DataFlow graph using the run
 fluxtion‑runtime. It summarizes the behavior demonstrated by the reference examples in the fluxtion‑examples repository
 under:
 
-- https://github.com/telaminai/fluxtion-examples/tree/main/reference/src/main/java/com/telamin/fluxtion/example/reference/runtime/context
+ [Context examples]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/runtime/context)
 
 What you can do at runtime:
 
@@ -19,7 +19,7 @@ What you can do at runtime:
     - The application adds key/value pairs to the processor before starting.
     - Nodes read those values via an injected runtime context.
     - Typical pattern: use a lifecycle "on start" callback to load values into node state.
-- Example to check in the examples repo: [ContextParamInput.java](https://github.com/telaminai/fluxtion-examples/blob/main/reference/src/main/java/com/telamin/fluxtion/example/reference/runtime/context/ContextParamInput.java)
+- Example to check in the examples repo: [ContextParamInput.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/runtime/context/ContextParamInput.java)
     - Demonstrates adding two parameters from the application and reading them in a node at start.
 
 ## Emitting new events from handlers (EventDispatcher)
@@ -29,7 +29,7 @@ What you can do at runtime:
 - How it works:
     - A node receives an input (e.g., a delimited String) and, for each item, dispatches a new event of another type.
     - The dispatched items are processed as independent event cycles to keep processing deterministic.
-- Example to check in the examples repo: [CallBackExample.java](https://github.com/telaminai/fluxtion-examples/blob/main/reference/src/main/java/com/telamin/fluxtion/example/reference/runtime/context/CallBackExample.java)
+- Example to check in the examples repo: [CallBackExample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/runtime/context/CallBackExample.java)
     - Demonstrates receiving a String payload, splitting it, and dispatching the items as Integer events for downstream
       processing.
 
@@ -41,14 +41,14 @@ What you can do at runtime:
     - Check whether a contribution is dirty.
     - Mark it dirty when you need to force dependent calculations to re‑run.
     - Ask the processor to perform a calculation pass.
-- Example to check in the examples repo: [DirtyStateMonitorExample.java](https://github.com/telaminai/fluxtion-examples/blob/main/reference/src/main/java/com/telamin/fluxtion/example/reference/runtime/context/DirtyStateMonitorExample.java)
+- Example to check in the examples repo: [DirtyStateMonitorExample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/runtime/context/DirtyStateMonitorExample.java)
     - Demonstrates reading the dirty flag, marking a flow as dirty, and initiating a recomputation cycle.
 
 ## Where to look in the code
 
-- Context parameters: [ContextParamInput.java](https://github.com/telaminai/fluxtion-examples/blob/main/reference/src/main/java/com/telamin/fluxtion/example/reference/runtime/context/ContextParamInput.java)
-- Event callbacks: [CallBackExample.java](https://github.com/telaminai/fluxtion-examples/blob/main/reference/src/main/java/com/telamin/fluxtion/example/reference/runtime/context/CallBackExample.java)
-- Dirty state: [DirtyStateMonitorExample.java](https://github.com/telaminai/fluxtion-examples/blob/main/reference/src/main/java/com/telamin/fluxtion/example/reference/runtime/context/DirtyStateMonitorExample.java)
+- Context parameters: [ContextParamInput.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/runtime/context/ContextParamInput.java)
+- Event callbacks: [CallBackExample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/runtime/context/CallBackExample.java)
+- Dirty state: [DirtyStateMonitorExample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/runtime/context/DirtyStateMonitorExample.java)
 
 Tip: the examples are small and self‑contained; open them in your IDE and run the main methods to see console output
 that highlights each runtime feature.
