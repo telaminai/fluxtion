@@ -92,7 +92,8 @@ public class HelloFluxtion {
         public static void main(String[] args) {
 
             //calculate average speed, sliding window 5 buckets of 200 millis
-            DataFlow averageCarSpeed = DataFlowBuilder.subscribe(CarTracker::speed)
+            DataFlow averageCarSpeed = DataFlowBuilder
+                    .subscribe(CarTracker::speed)
                     .slidingAggregate(Aggregates.doubleAverageFactory(), 200, 5)
                     .map(v -> "average speed: " + v.intValue() + " km/h")
                     .sink("average car speed")
@@ -115,7 +116,8 @@ public class HelloFluxtion {
     ```java
     public class TriggerExample {
         public static void main(String[] args) {
-            DataFlow sumDataFlow = DataFlowBuilder.subscribe(Integer.class)
+            DataFlow sumDataFlow = DataFlowBuilder
+                    .subscribe(Integer.class)
                     .aggregate(Aggregates.intSumFactory())
                     .resetTrigger(
                         DataFlowBuilder.subscribeToSignal("resetTrigger"))
@@ -236,12 +238,13 @@ public class HelloFluxtion {
     
     public class SubscribeToNodeSample {
         public static void main(String[] args) {
-            DataFlow processor = DataFlowBuilder.subscribeToNode(new MyComplexNode())
-            .console("node triggered -> {}")
-            .map(MyComplexNode::getIn)
-            .aggregate(Collectors.listFactory(4))
-            .console("last 4 elements:{}\n")
-            .build();
+            DataFlow processor = DataFlowBuilder
+                .subscribeToNode(new MyComplexNode())
+                .console("node triggered -> {}")
+                .map(MyComplexNode::getIn)
+                .aggregate(Collectors.listFactory(4))
+                .console("last 4 elements:{}\n")
+                .build();
     
             processor.onEvent("A");
             processor.onEvent("B");
