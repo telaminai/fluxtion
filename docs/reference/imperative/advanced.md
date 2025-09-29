@@ -9,55 +9,58 @@ parent's updating.
 Parent change identity can be tracked using the `@OnParentUpdate` annotation.
 
 ```java
-public static class MyNode {
-    @FilterId
-    private final String filter;
-    private final String name;
+public class CollectionSupport {
+    public static class MyNode {
+        @FilterId
+        private final String filter;
+        private final String name;
 
-    public MyNode(String filter, String name) {
-        this.filter = filter;
-        this.name = name;
+        public MyNode(String filter, String name) {
+            this.filter = filter;
+            this.name = name;
+        }
+
+        @OnEventHandler
+        public boolean handleIntSignal(Signal.IntSignal intSignal) {
+            System.out.printf("MyNode-%s::handleIntSignal - %s%n", filter, intSignal.getValue());
+            return true;
+        }
     }
 
-    @OnEventHandler
-    public boolean handleIntSignal(IntSignal intSignal) {
-        System.out.printf("MyNode-%s::handleIntSignal - %s%n", filter, intSignal.getValue());
-        return true;
+    public static class Child {
+        private final MyNode[] nodes;
+        private int updateCount;
+
+        public Child(MyNode... nodes) {
+            this.nodes = nodes;
+        }
+
+        @OnParentUpdate
+        public void parentUpdated(MyNode updatedNode) {
+            updateCount++;
+            System.out.printf("parentUpdated '%s'%n", updatedNode.name);
+        }
+
+        @OnTrigger
+        public boolean triggered() {
+            System.out.printf("Child::triggered updateCount:%d%n%n", updateCount);
+            updateCount = 0;
+            return true;
+        }
     }
-}
 
-public static class Child {
-    private final MyNode[] nodes;
-    private int updateCount;
+    public static void main(String[] args) {
+        var processor = DataFlowBuilder.subscribeToNode(new Child(
+                        new MyNode("A", "a_1"),
+                        new MyNode("A", "a_2"),
+                        new MyNode("B", "b_1")))
+                .build();
 
-    public Child(MyNode... nodes) {
-        this.nodes = nodes;
+        processor.publishIntSignal("A", 10);
+        processor.publishIntSignal("B", 25);
+        processor.publishIntSignal("A", 12);
+        processor.publishIntSignal("C", 200);
     }
-
-    @OnParentUpdate
-    public void parentUpdated(MyNode updatedNode) {
-        updateCount++;
-        System.out.printf("parentUpdated '%s'%n", updatedNode.name);
-    }
-
-    @OnTrigger
-    public boolean triggered() {
-        System.out.printf("Child::triggered updateCount:%d%n%n", updateCount);
-        updateCount = 0;
-        return true;
-    }
-}
-
-public static void main(String[] args) {
-    var processor = Fluxtion.interpret(new Child(
-            new MyNode("A", "a_1"),
-            new MyNode("A", "a_2"),
-            new MyNode("B", "b_1")));
-    processor.init();
-    processor.publishIntSignal("A", 10);
-    processor.publishIntSignal("B", 25);
-    processor.publishIntSignal("A", 12);
-    processor.publishIntSignal("C", 200);
 }
 ```
 
@@ -88,70 +91,73 @@ be propagated to their children.
 To for a trigger callback use `@OnTrigger(parallelExecution = true)` annotation on the callback method.
 
 ```java
-public static class MyNode {
-    @OnEventHandler
-    public boolean handleStringEvent(String stringToProcess) {
-        System.out.printf("%s MyNode::handleStringEvent %n", Thread.currentThread().getName());
-        return true;
-    }
-}
+public class ForkJoinSupport {
 
-public static class ForkedChild {
-    private final MyNode myNode;
-    private final int id;
-
-    public ForkedChild(MyNode myNode, int id) {
-        this.myNode = myNode;
-        this.id = id;
-    }
-
-    @OnTrigger(parallelExecution = true)
-    public boolean triggered() {
-        int millisSleep = new Random(id).nextInt(25, 200);
-        String threadName = Thread.currentThread().getName();
-        System.out.printf("%s ForkedChild[%d]::triggered - sleep:%d %n", threadName, id, millisSleep);
-        try {
-            Thread.sleep(millisSleep);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-        System.out.printf("%s ForkedChild[%d]::complete %n", threadName, id);
-        return true;
-    }
-}
-
-public static class ResultJoiner {
-    private final ForkedChild[] forkedTasks;
-
-    public ResultJoiner(ForkedChild[] forkedTasks) {
-        this.forkedTasks = forkedTasks;
-    }
-
-    public ResultJoiner(int forkTaskNumber){
-        MyNode myNode = new MyNode();
-        forkedTasks = new ForkedChild[forkTaskNumber];
-        for (int i = 0; i < forkTaskNumber; i++) {
-            forkedTasks[i] = new ForkedChild(myNode, i);
+    public static class MyNode {
+        @OnEventHandler
+        public boolean handleStringEvent(String stringToProcess) {
+            System.out.printf("%s MyNode::handleStringEvent %n", Thread.currentThread().getName());
+            return true;
         }
     }
 
-    @OnTrigger
-    public boolean complete(){
-        System.out.printf("%s ResultJoiner:complete %n%n", Thread.currentThread().getName());
-        return true;
+    public static class ForkedChild {
+        private final MyNode myNode;
+        private final int id;
+
+        public ForkedChild(MyNode myNode, int id) {
+            this.myNode = myNode;
+            this.id = id;
+        }
+
+        @OnTrigger(parallelExecution = true)
+        public boolean triggered() {
+            int millisSleep = new Random(id).nextInt(25, 200);
+            String threadName = Thread.currentThread().getName();
+            System.out.printf("%s ForkedChild[%d]::triggered - sleep:%d %n", threadName, id, millisSleep);
+            try {
+                Thread.sleep(millisSleep);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            System.out.printf("%s ForkedChild[%d]::complete %n", threadName, id);
+            return true;
+        }
+    }
+
+    public static class ResultJoiner {
+        private final ForkedChild[] forkedTasks;
+
+        public ResultJoiner(ForkedChild[] forkedTasks) {
+            this.forkedTasks = forkedTasks;
+        }
+
+        public ResultJoiner(int forkTaskNumber){
+            MyNode myNode = new MyNode();
+            forkedTasks = new ForkedChild[forkTaskNumber];
+            for (int i = 0; i < forkTaskNumber; i++) {
+                forkedTasks[i] = new ForkedChild(myNode, i);
+            }
+        }
+
+        @OnTrigger
+        public boolean complete(){
+            System.out.printf("%s ResultJoiner:complete %n%n", Thread.currentThread().getName());
+            return true;
+        }
+    }
+
+    public static void main(String[] args) {
+        var processor = DataFlowBuilder
+                .subscribeToNode(new ResultJoiner(5))
+                .build();
+
+        Instant start = Instant.now();
+        processor.onEvent("test");
+
+        System.out.printf("duration: %d milliseconds%n", Duration.between(start, Instant.now()).toMillis());
     }
 }
-
-public static void main(String[] args) {
-    var processor = Fluxtion.interpret(new ResultJoiner(5));
-    processor.init();
-
-    Instant start = Instant.now();
-    processor.onEvent("test");
-
-    System.out.printf("duration: %d milliseconds%n", Duration.between(start, Instant.now()).toMillis());
-}
-
 ```
 
 Output
@@ -177,34 +183,37 @@ Batch callbacks are supported through the BatchHandler interface that the genera
 that are annotated with, `@OnBatchPause` or `@OnBatchEnd` will receive calls from the matching BatchHandler method. 
 
 ```java
-public static class MyNode {
-    @OnEventHandler
-    public boolean handleStringEvent(String stringToProcess) {
-        System.out.println("MyNode event received:" + stringToProcess);
-        return true;
+public class BatchSupport {
+    public static class MyNode {
+        @OnEventHandler
+        public boolean handleStringEvent(String stringToProcess) {
+            System.out.println("MyNode event received:" + stringToProcess);
+            return true;
+        }
+
+        @OnBatchPause
+        public void batchPause(){
+            System.out.println("MyNode::batchPause");
+        }
+
+        @OnBatchEnd
+        public void batchEnd(){
+            System.out.println("MyNode::batchEnd");
+        }
     }
 
-    @OnBatchPause
-    public void batchPause(){
-        System.out.println("MyNode::batchPause");
+    public static void main(String[] args) {
+        var processor = DataFlowBuilder
+                .subscribeToNode(new MyNode())
+                .build();
+
+        processor.onEvent("test");
+
+        //use BatchHandler service
+        BatchHandler batchHandler = (BatchHandler)processor;
+        batchHandler.batchPause();
+        batchHandler.batchEnd();
     }
-
-    @OnBatchEnd
-    public void batchEnd(){
-        System.out.println("MyNode::batchEnd");
-    }
-}
-
-public static void main(String[] args) {
-    var processor = Fluxtion.interpret(new MyNode());
-    processor.init();
-
-    processor.onEvent("test");
-
-    //use BatchHandler service
-    BatchHandler batchHandler = (BatchHandler)processor;
-    batchHandler.batchPause();
-    batchHandler.batchEnd();
 }
 ```
 
