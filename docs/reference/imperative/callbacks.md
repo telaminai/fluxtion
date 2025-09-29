@@ -7,31 +7,35 @@ any event is sent to the event processor. Unlike the `@AfterTrigger` which is on
 been triggered.
 
 ```java
-public static class MyNode {
-    @Initialise
-    public void init(){
-        System.out.println("MyNode::init");
+public class AfterEventCallback {
+    public static class MyNode {
+        @Initialise
+        public void init(){
+            System.out.println("MyNode::init");
+        }
+
+        @OnEventHandler
+        public boolean handleStringEvent(String stringToProcess) {
+            System.out.println("MyNode::handleStringEvent received:" + stringToProcess);
+            return true;
+        }
+
+        @AfterEvent
+        public void afterEvent(){
+            System.out.println("MyNode::afterEvent");
+        }
     }
 
-    @OnEventHandler
-    public boolean handleStringEvent(String stringToProcess) {
-        System.out.println("MyNode::handleStringEvent received:" + stringToProcess);
-        return true;
-    }
+    public static void main(String[] args) {
+        var processor = DataFlowBuilder
+                .subscribeToNode(new MyNode())
+                .build();
 
-    @AfterEvent
-    public void afterEvent(){
-        System.out.println("MyNode::afterEvent");
+        System.out.println();
+        processor.onEvent("TEST");
+        System.out.println();
+        processor.onEvent(23);
     }
-}
-
-public static void main(String[] args) {
-    var processor = Fluxtion.interpret(new MyNode());
-    processor.init();
-    System.out.println();
-    processor.onEvent("TEST");
-    System.out.println();
-    processor.onEvent(23);
 }
 ```
 

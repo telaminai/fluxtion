@@ -6,34 +6,39 @@ User events can implement [Event]({{fluxtion_src_runtime}}/event/Event.java), wh
 field. Event handlers can specify the filter value, so they only see events with matching filters
 
 ```java
-public static class MyNode {
-    @OnEventHandler(filterString = "CLEAR_SIGNAL")
-    public boolean allClear(Signal<String> signalToProcess) {
-        System.out.println("allClear [" + signalToProcess + "]");
-        return true;
+public class StaticFiltering {
+
+    public static class MyNode {
+        @OnEventHandler(filterString = "CLEAR_SIGNAL")
+        public boolean allClear(Signal<String> signalToProcess) {
+            System.out.println("allClear [" + signalToProcess + "]");
+            return true;
+        }
+
+        @OnEventHandler(filterString = "ALERT_SIGNAL")
+        public boolean alertSignal(Signal<String> signalToProcess) {
+            System.out.println("alertSignal [" + signalToProcess + "]");
+            return true;
+        }
+
+        @OnEventHandler()
+        public boolean anySignal(Signal<String> signalToProcess) {
+            System.out.println("anySignal [" + signalToProcess + "]");
+            return true;
+        }
     }
 
-    @OnEventHandler(filterString = "ALERT_SIGNAL")
-    public boolean alertSignal(Signal<String> signalToProcess) {
-        System.out.println("alertSignal [" + signalToProcess + "]");
-        return true;
-    }
+    public static void main(String[] args) {
+        var processor = DataFlowBuilder
+                .subscribeToNode(new MyNode())
+                .build();
 
-    @OnEventHandler()
-    public boolean anySignal(Signal<String> signalToProcess) {
-        System.out.println("anySignal [" + signalToProcess + "]");
-        return true;
+        processor.onEvent(new Signal<>("ALERT_SIGNAL", "power failure"));
+        System.out.println();
+        processor.onEvent(new Signal<>("CLEAR_SIGNAL", "power restored"));
+        System.out.println();
+        processor.onEvent(new Signal<>("HEARTBEAT_SIGNAL", "heartbeat message"));
     }
-}
-
-public static void main(String[] args) {
-    var processor = Fluxtion.interpret(new MyNode());
-    processor.init();
-    processor.onEvent(new Signal<>("ALERT_SIGNAL", "power failure"));
-    System.out.println();
-    processor.onEvent(new Signal<>("CLEAR_SIGNAL", "power restored"));
-    System.out.println();
-    processor.onEvent(new Signal<>("HEARTBEAT_SIGNAL", "heartbeat message"));
 }
 ```
 
@@ -53,28 +58,32 @@ The filter value on the event handler method can be extracted from an instance f
 handler method with an attribute that points to the filter variable `@OnEventHandler(filterVariable = "[class variable]")`
 
 ```java
-public static class MyNode {
-    private final String name;
+public class VariableFiltering {
+    public static class MyNode {
+        private final String name;
 
-    public MyNode(String name) {
-        this.name = name;
+        public MyNode(String name) {
+            this.name = name;
+        }
+
+
+        @OnEventHandler(filterVariable = "name")
+        public boolean handleIntSignal(Signal.IntSignal intSignal) {
+            System.out.printf("MyNode-%s::handleIntSignal - %s%n", name, intSignal.getValue());
+            return true;
+        }
     }
 
+    public static void main(String[] args) {
+        DataFlowBuilder.subscribeToNode(new MyNode("A"));
+        var processor = DataFlowBuilder
+                .subscribeToNode(new MyNode("B"))
+                .build();
 
-    @OnEventHandler(filterVariable = "name")
-    public boolean handleIntSignal(Signal.IntSignal intSignal) {
-        System.out.printf("MyNode-%s::handleIntSignal - %s%n", name, intSignal.getValue());
-        return true;
+        processor.publishIntSignal("A", 22);
+        processor.publishIntSignal("B", 45);
+        processor.publishIntSignal("C", 100);
     }
-}
-
-public static void main(String[] args) {
-    var processor = Fluxtion.interpret(new MyNode("A"), new MyNode("B"));
-    processor.init();
-
-    processor.publishIntSignal("A", 22);
-    processor.publishIntSignal("B", 45);
-    processor.publishIntSignal("C", 100);
 }
 ```
 

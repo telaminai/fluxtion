@@ -35,25 +35,30 @@ An event handler class can handle multiple event types. Add as many handler meth
 with an `@OnEvent` annotation.
 
 ```java
-public static class MyNode {
-    @OnEventHandler
-    public boolean handleStringEvent(String stringToProcess) {
-        System.out.println("String received:" + stringToProcess);
-        return true;
+public class MultipleEventTypes {
+
+    public static class MyNode {
+        @OnEventHandler
+        public boolean handleStringEvent(String stringToProcess) {
+            System.out.println("String received:" + stringToProcess);
+            return true;
+        }
+
+        @OnEventHandler
+        public boolean handleIntEvent(int intToProcess) {
+            System.out.println("Int received:" + intToProcess);
+            return true;
+        }
     }
 
-    @OnEventHandler
-    public boolean handleIntEvent(int intToProcess) {
-        System.out.println("Int received:" + intToProcess);
-        return true;
-    }
-}
+    public static void main(String[] args) {
+        var processor = DataFlowBuilder
+                .subscribeToNode(new MyNode())
+                .build();
 
-public static void main(String[] args) {
-    var processor = Fluxtion.interpret(new MyNode());
-    processor.init();
-    processor.onEvent("TEST");
-    processor.onEvent(16);
+        processor.onEvent("TEST");
+        processor.onEvent(16);
+    }
 }
 ```
 
@@ -73,11 +78,14 @@ by the processor. Register the unKnownEventHandler with:
 public class UnknownEventHandling {
 
     public static void main(String[] args) {
-        var processor = Fluxtion.interpret(new MyNode());
-        processor.init();
+        var processor = DataFlowBuilder
+                .subscribeToNode(new MyNode())
+                .build();
+
         //set an unknown event handler
         processor.setUnKnownEventHandler(e -> System.out.println("Unregistered event type -> " + e.getClass().getName()));
         processor.onEvent("TEST");
+
         //handled by unKnownEventHandler
         processor.onEvent(Collections.emptyList());
     }

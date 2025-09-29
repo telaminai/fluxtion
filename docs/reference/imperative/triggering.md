@@ -6,44 +6,48 @@ Event notification is propagated to child instances of event handlers. The notif
 annotated with an `@OnTrigger` annotation. Trigger propagation is in topological order.
 
 ```java
-public static class MyNode {
-    @OnEventHandler
-    public boolean handleStringEvent(String stringToProcess) {
-        System.out.println("received:" + stringToProcess);
-        return true;
-    }
-}
-
-public static class MyNode2 {
-    @OnEventHandler
-    public boolean handleStringEvent(int intToProcess) {
-        System.out.println("received:" + intToProcess);
-        return true;
-    }
-}
-
-public static class Child{
-    private final MyNode myNode;
-    private final MyNode2 myNode2;
-
-    public Child(MyNode myNode, MyNode2 myNode2) {
-        this.myNode = myNode;
-        this.myNode2 = myNode2;
+public class TriggerChildren {
+    public static class MyNode {
+        @OnEventHandler
+        public boolean handleStringEvent(String stringToProcess) {
+            System.out.println("received:" + stringToProcess);
+            return true;
+        }
     }
 
-    @OnTrigger
-    public boolean triggered(){
-        System.out.println("Child:triggered");
-        return true;
+    public static class MyNode2 {
+        @OnEventHandler
+        public boolean handleStringEvent(int intToProcess) {
+            System.out.println("received:" + intToProcess);
+            return true;
+        }
     }
-}
 
-public static void main(String[] args) {
-    var processor = Fluxtion.interpret(new Child(new MyNode(), new MyNode2()));
-    processor.init();
-    processor.onEvent("test");
-    System.out.println();   
-    processor.onEvent(200);
+    public static class Child {
+        private final MyNode myNode;
+        private final MyNode2 myNode2;
+
+        public Child(MyNode myNode, MyNode2 myNode2) {
+            this.myNode = myNode;
+            this.myNode2 = myNode2;
+        }
+
+        @OnTrigger
+        public boolean triggered() {
+            System.out.println("Child:triggered");
+            return true;
+        }
+    }
+
+    public static void main(String[] args) {
+        var processor = DataFlowBuilder
+                .subscribeToNode(new Child(new MyNode(), new MyNode2()))
+                .build();
+
+        processor.onEvent("test");
+        System.out.println();
+        processor.onEvent(200);
+    }
 }
 ```
 
@@ -61,47 +65,51 @@ Event notification is propagated to child instances of event handlers if the eve
 A false return value will cause the event processor to swallow the triggering notification.
 
 ```java
-public static class MyNode {
-    @OnEventHandler
-    public boolean handleStringEvent(String stringToProcess) {
-        System.out.println("received:" + stringToProcess);
-        return true;
-    }
-}
-
-public static class MyNode2 {
-    @OnEventHandler
-    public boolean handleStringEvent(int intToProcess) {
-        boolean propagate = intToProcess > 100;
-        System.out.println("conditional propagate:" + propagate);
-        return propagate;
-    }
-}
-
-public static class Child{
-    private final MyNode myNode;
-    private final MyNode2 myNode2;
-
-    public Child(MyNode myNode, MyNode2 myNode2) {
-        this.myNode = myNode;
-        this.myNode2 = myNode2;
+public class ConditionalTriggerChildren {
+    public static class MyNode {
+        @OnEventHandler
+        public boolean handleStringEvent(String stringToProcess) {
+            System.out.println("received:" + stringToProcess);
+            return true;
+        }
     }
 
-    @OnTrigger
-    public boolean triggered(){
-        System.out.println("Child:triggered");
-        return true;
+    public static class MyNode2 {
+        @OnEventHandler
+        public boolean handleStringEvent(int intToProcess) {
+            boolean propagate = intToProcess > 100;
+            System.out.println("conditional propagate:" + propagate);
+            return propagate;
+        }
     }
-}
 
-public static void main(String[] args) {
-    var processor = Fluxtion.interpret(new Child(new MyNode(), new MyNode2()));
-    processor.init();
-    processor.onEvent("test");
-    System.out.println();   
-    processor.onEvent(200);
-    System.out.println();   
-    processor.onEvent(50);
+    public static class Child{
+        private final MyNode myNode;
+        private final MyNode2 myNode2;
+
+        public Child(MyNode myNode, MyNode2 myNode2) {
+            this.myNode = myNode;
+            this.myNode2 = myNode2;
+        }
+
+        @OnTrigger
+        public boolean triggered(){
+            System.out.println("Child:triggered");
+            return true;
+        }
+    }
+
+    public static void main(String[] args) {
+        var processor = DataFlowBuilder
+                .subscribeToNode(new Child(new MyNode(), new MyNode2()))
+                .build();
+
+        processor.onEvent("test");
+        System.out.println();
+        processor.onEvent(200);
+        System.out.println();
+        processor.onEvent(50);
+    }
 }
 ```
 
@@ -124,63 +132,67 @@ granular detail of which parent has changed, whereas OnTrigger callbacks signify
 The OnParent callbacks are guaranteed to be received before the OnTrigger callback.
 
 ```java
-public static class MyNode {
-    @OnEventHandler
-    public boolean handleStringEvent(String stringToProcess) {
-        System.out.println("MyNode event received:" + stringToProcess);
-        return true;
-    }
-}
-
-public static class MyNode2 {
-    @OnEventHandler
-    public boolean handleIntEvent(int intToProcess) {
-        boolean propagate = intToProcess > 100;
-        System.out.println("MyNode2 conditional propagate:" + propagate);
-        return propagate;
+public class IdentifyTriggerParent {
+    public static class MyNode {
+        @OnEventHandler
+        public boolean handleStringEvent(String stringToProcess) {
+            System.out.println("MyNode event received:" + stringToProcess);
+            return true;
+        }
     }
 
-    @OnEventHandler
-    public boolean handleStringEvent(String stringToProcess) {
-        System.out.println("MyNode2 event received:" + stringToProcess);
-        return true;
-    }
-}
+    public static class MyNode2 {
+        @OnEventHandler
+        public boolean handleIntEvent(int intToProcess) {
+            boolean propagate = intToProcess > 100;
+            System.out.println("MyNode2 conditional propagate:" + propagate);
+            return propagate;
+        }
 
-public static class Child{
-    private final MyNode myNode;
-    private final MyNode2 myNode2;
-
-    public Child(MyNode myNode, MyNode2 myNode2) {
-        this.myNode = myNode;
-        this.myNode2 = myNode2;
-    }
-
-    @OnParentUpdate
-    public void node1Updated(MyNode myNode1){
-        System.out.println("1 - myNode updated");
+        @OnEventHandler
+        public boolean handleStringEvent(String stringToProcess) {
+            System.out.println("MyNode2 event received:" + stringToProcess);
+            return true;
+        }
     }
 
-    @OnParentUpdate
-    public void node2Updated(MyNode2 myNode2){
-        System.out.println("2 - myNode2 updated");
+    public static class Child {
+        private final MyNode myNode;
+        private final MyNode2 myNode2;
+
+        public Child(MyNode myNode, MyNode2 myNode2) {
+            this.myNode = myNode;
+            this.myNode2 = myNode2;
+        }
+
+        @OnParentUpdate
+        public void node1Updated(MyNode myNode1) {
+            System.out.println("1 - myNode updated");
+        }
+
+        @OnParentUpdate
+        public void node2Updated(MyNode2 myNode2) {
+            System.out.println("2 - myNode2 updated");
+        }
+
+        @OnTrigger
+        public boolean triggered() {
+            System.out.println("Child:triggered");
+            return true;
+        }
     }
 
-    @OnTrigger
-    public boolean triggered(){
-        System.out.println("Child:triggered");
-        return true;
-    }
-}
+    public static void main(String[] args) {
+        var processor = DataFlowBuilder
+                .subscribeToNode(new Child(new MyNode(), new MyNode2()))
+                .build();
 
-public static void main(String[] args) {
-    var processor = Fluxtion.interpret(new Child(new MyNode(), new MyNode2()));
-    processor.init();
-    processor.onEvent("test");
-    System.out.println();
-    processor.onEvent(200);
-    System.out.println();
-    processor.onEvent(50);
+        processor.onEvent("test");
+        System.out.println();
+        processor.onEvent(200);
+        System.out.println();
+        processor.onEvent(50);
+    }
 }
 ```
 
@@ -205,56 +217,61 @@ triggered the update. Add the variable name to the `@OnParentyUpdate` annotation
 The OnParent callback is invoked according to the same rules as conditional triggering. 
 
 ```java
-public static class MyNode {
-    private final String name;
+public class IdentifyTriggerParentById {
+    public static class MyNode {
+        private final String name;
 
-    public MyNode(String name) {
-        this.name = name;
+        public MyNode(String name) {
+            this.name = name;
+        }
+
+        @OnEventHandler
+        public boolean handleStringEvent(String stringToProcess) {
+            System.out.println(name + " event received:" + stringToProcess);
+            return stringToProcess.equals("*") | stringToProcess.equals(name);
+        }
     }
 
-    @OnEventHandler
-    public boolean handleStringEvent(String stringToProcess) {
-        System.out.println(name + " event received:" + stringToProcess);
-        return stringToProcess.equals("*") | stringToProcess.equals(name);
+    public static class Child{
+        private final MyNode myNode_a;
+        private final MyNode myNode_b;
+
+        public Child(MyNode myNode_a, MyNode myNode_b) {
+            this.myNode_a = myNode_a;
+            this.myNode_b = myNode_b;
+        }
+
+        @OnParentUpdate(value = "myNode_a")
+        public void node_a_Updated(MyNode myNode_a){
+            System.out.println("Parent A updated");
+        }
+
+        @OnParentUpdate("myNode_b")
+        public void node_b_Updated(MyNode myNode_b){
+            System.out.println("Parent B updated");
+        }
+
+        @OnTrigger
+        public boolean triggered(){
+            System.out.println("Child:triggered");
+            return true;
+        }
     }
-}
 
-public static class Child{
-    private final MyNode myNode_a;
-    private final MyNode myNode_b;
+    public static void main(String[] args) {
+        var processor = DataFlowBuilder
+                .subscribeToNode(new Child(new MyNode("A"), new MyNode("B")))
+                .build();
 
-    public Child(MyNode myNode_a, MyNode myNode_b) {
-        this.myNode_a = myNode_a;
-        this.myNode_b = myNode_b;
+        processor.init();
+        processor.onEvent("test");
+        System.out.println();
+        processor.onEvent("*");
+        System.out.println();
+        processor.onEvent("A");
+        System.out.println();
+        processor.onEvent("B");
     }
-
-    @OnParentUpdate(value = "myNode_a")
-    public void node_a_Updated(MyNode myNode_a){
-        System.out.println("Parent A updated");
-    }
-
-    @OnParentUpdate("myNode_b")
-    public void node_b_Updated(MyNode myNode_b){
-        System.out.println("Parent B updated");
-    }
-
-    @OnTrigger
-    public boolean triggered(){
-        System.out.println("Child:triggered");
-        return true;
-    }
-}
-
-public static void main(String[] args) {
-    var processor = Fluxtion.interpret(new Child(new MyNode("A"), new MyNode("B")));
-    processor.init();
-    processor.onEvent("test");
-    System.out.println();
-    processor.onEvent("*");
-    System.out.println();
-    processor.onEvent("A");
-    System.out.println();
-    processor.onEvent("B");
 }
 ```
 
