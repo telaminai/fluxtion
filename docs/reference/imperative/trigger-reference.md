@@ -6,7 +6,45 @@ An event handler method can prevent its method triggering a notification by sett
 on any event handler annotation, `@OnEventHandler(propagate = false)`
 
 ```java
+public class NoPropagateHandler {
+    public static class MyNode {
+        @OnEventHandler
+        public boolean handleStringEvent(String stringToProcess) {
+            System.out.println("MyNode::handleStringEvent received:" + stringToProcess);
+            return true;
+        }
 
+        @OnEventHandler(propagate = false)
+        public boolean handleIntEvent(int intToProcess) {
+            System.out.println("MyNode::handleIntEvent received:" + intToProcess);
+            return true;
+        }
+    }
+
+    public static class Child {
+        private final MyNode myNode;
+
+        public Child(MyNode myNode) {
+            this.myNode = myNode;
+        }
+
+        @OnTrigger
+        public boolean triggered(){
+            System.out.println("Child:triggered");
+            return true;
+        }
+    }
+
+    public static void main(String[] args) {
+        var processor = DataFlowBuilder
+                .subscribeToNode(new Child(new MyNode()))
+                .build();
+
+        processor.onEvent("test");
+        System.out.println();
+        processor.onEvent(200);
+    }
+}
 ```
 
 Output

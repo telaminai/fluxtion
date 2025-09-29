@@ -56,7 +56,8 @@ Every 300 milliseconds the cumulative sum for the window just expired is logged 
 ```java
 public class TumblingWindowSample {
     public static void main(String[] args) throws InterruptedException {
-        DataFlow processor = DataFlowBuilder.subscribe(Integer.class)
+        DataFlow processor = DataFlowBuilder
+                .subscribe(Integer.class)
                 .tumblingAggregate(Aggregates.intSumFactory(), 300)
                 .console("current tumble sum:{} timeDelta:%dt")
                 .build();
@@ -110,10 +111,16 @@ public class TumblingTriggerSample {
     public record GoToCheckout() {}
 
     public static void main(String[] args) {
-        var resetSignal = DataFlowBuilder.subscribe(ClearCart.class).console("\n--- CLEAR CART ---");
-        var publishSignal = DataFlowBuilder.subscribe(GoToCheckout.class).console("\n--- CHECKOUT CART ---");
+        var resetSignal = DataFlowBuilder
+                .subscribe(ClearCart.class)
+                .console("\n--- CLEAR CART ---");
+        
+        var publishSignal = DataFlowBuilder
+                .subscribe(GoToCheckout.class)
+                .console("\n--- CHECKOUT CART ---");
 
-        DataFlow processor = DataFlowBuilder.subscribe(String.class)
+        DataFlow processor = DataFlowBuilder
+                .subscribe(String.class)
                 .aggregate(Collectors.listFactory(3))
                 .resetTrigger(resetSignal)
                 .publishTriggerOverride(publishSignal)
@@ -174,7 +181,8 @@ window example that resets the sum every 300 milliseconds.
 ```java
 public class SlidingWindowSample {
     public static void main(String[] args) throws InterruptedException {
-        DataFlow processor = DataFlowBuilder.subscribe(Integer.class)
+        DataFlow processor = DataFlowBuilder
+                .subscribe(Integer.class)
                 .slidingAggregate(Aggregates.intSumFactory(), 300, 4)
                 .console("current sliding 1.2 second sum:{} timeDelta:%dt")
                 .build();

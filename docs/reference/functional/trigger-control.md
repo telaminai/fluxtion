@@ -23,7 +23,8 @@ Child DataFlow nodes are notified when publishTrigger fires or the map function 
 ```java
 public class TriggerPublishSample {
     public static void main(String[] args) {
-        DataFlow processor = DataFlowBuilder.subscribeToNode(new SubscribeToNodeSample.MyComplexNode())
+        DataFlow processor = DataFlowBuilder
+                .subscribeToNode(new SubscribeToNodeSample.MyComplexNode())
                 .console("node triggered -> {}")
                 .map(SubscribeToNodeSample.MyComplexNode::getIn)
                 .aggregate(Collectors.listFactory(4))
@@ -77,7 +78,8 @@ Child DataFlow nodes are notified when publishTriggerOverride fires.
 ```java
 public class TriggerPublishOverrideSample {
     public static void main(String[] args) {
-        DataFlow processor = DataFlowBuilder.subscribeToNode(new SubscribeToNodeSample.MyComplexNode())
+        DataFlow processor = DataFlowBuilder
+                .subscribeToNode(new SubscribeToNodeSample.MyComplexNode())
                 .console("node triggered -> {}")
                 .map(SubscribeToNodeSample.MyComplexNode::getIn)
                 .aggregate(Collectors.listFactory(4))
@@ -129,7 +131,8 @@ A map operation only occurs when the update trigger fires.
 ```java
 public class TriggerUpdateSample {
     public static void main(String[] args) {
-        var processor = DataFlowBuilder.subscribeToNode(new SubscribeToNodeSample.MyComplexNode())
+        var processor = DataFlowBuilder
+                .subscribeToNode(new SubscribeToNodeSample.MyComplexNode())
                 .console("node triggered -> {}")
                 .map(SubscribeToNodeSample.MyComplexNode::getIn)
                 .aggregate(Collectors.listFactory(4))
@@ -176,7 +179,8 @@ The reset trigger notifies the stateful function to clear its state.
 ```java
 public class TriggerResetSample {
     public static void main(String[] args) {
-        DataFlow processor = DataFlowBuilder.subscribeToNode(new SubscribeToNodeSample.MyComplexNode())
+        DataFlow processor = DataFlowBuilder
+                .subscribeToNode(new SubscribeToNodeSample.MyComplexNode())
                 .console("node triggered -> {}")
                 .map(SubscribeToNodeSample.MyComplexNode::getIn)
                 .aggregate(Collectors.listFactory(4))
@@ -224,7 +228,8 @@ method. Configuring the resetTrigger will automatically route calls to the reset
 ```java
 public class ResetFunctionSample {
     public static void main(String[] args) {
-        DataFlow processor = DataFlowBuilder.subscribe(String.class)
+        DataFlow processor = DataFlowBuilder
+                .subscribe(String.class)
                 .map(new MyResetSum()::increment)
                 .resetTrigger(DataFlowBuilder.subscribeToSignal("resetMe"))
                 .console("count:{}")

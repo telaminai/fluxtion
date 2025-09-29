@@ -14,14 +14,15 @@ To create a flow for String events, call  `DataFlowBuilder.subscribe(String.clas
 routed to this flow.
 
 ```java
-DataFlow.subscribe(String.class)
+DataFlow.subscribe(String.class);
 ```
 
 Once a flow has been created map, filter, groupBy, etc. functions can be applied as chained calls.
 
 ```java
 public static void main(String[] args) {
-    DataFlow processor = DataFlowBuilder.subscribe(String.class)
+    DataFlow processor = DataFlowBuilder
+            .subscribe(String.class)
             .console("string in {}")
             .build();
 
@@ -42,8 +43,8 @@ A map operation takes the output from a parent node and then applies a function 
 function is null then the event notification no longer propagates down that path.
 
 ```java
-DataFlow.subscribe(String.class);
-    .map(String::toLowerCase);
+DataFlow.subscribe(String.class)
+        .map(String::toLowerCase);
 ```
 
 **Map supports**
@@ -55,7 +56,8 @@ DataFlow.subscribe(String.class);
 
 ```java
 public static void main(String[] args) {
-    DataFlow processor = DataFlowBuilder.subscribe(String.class)
+    DataFlow processor = DataFlowBuilder
+            .subscribe(String.class)
             .map(String::toLowerCase)
             .console("string in {}")
             .build();
@@ -72,15 +74,18 @@ string mapped aaa
 string mapped bbb
 ```
 
-###BiMap
+### BiMap
 Two data flows can be mapped with a bi map function. Both flows must have triggered at least once for the bimap function
 to be invoked
 
 ```java
 public static void main(String[] args) {
     var strings = DataFlowBuilder.subscribe(String.class);
+    
     var ints = DataFlowBuilder.subscribe(Integer.class);
-    DataFlow processor = DataFlowBuilder.mapBiFunction((a, b) -> Integer.parseInt(a) + b, strings, ints)
+    
+    DataFlow processor = DataFlowBuilder
+            .mapBiFunction((a, b) -> Integer.parseInt(a) + b, strings, ints)
             .console("biMap ans: {}")
             .build();
 
@@ -101,9 +106,14 @@ argument is optional
 
 ```java
 public static void main(String[] args) {
-    var strings = DataFlowBuilder.subscribe(String.class).defaultValue("200");
+    var strings = DataFlowBuilder
+            .subscribe(String.class)
+            .defaultValue("200");
+    
     var ints = DataFlowBuilder.subscribe(Integer.class);
-    DataFlow processor = DataFlowBuilder.mapBiFunction((a, b) -> Integer.parseInt(a) + b, strings, ints)
+    
+    DataFlow processor = DataFlowBuilder
+            .mapBiFunction((a, b) -> Integer.parseInt(a) + b, strings, ints)
             .console("biMap with default value ans: {}")
             .build();
     processor.onEvent(55);
@@ -116,14 +126,15 @@ Running the example code above logs to console
 biMap with default value ans: 255
 ```
 
-###Filter
+### Filter
 A filter predicate can be applied to a node to control event propagation, true continues the propagation and false swallows
 the notification. If the predicate returns true then the input to the predicate is passed to the next operation in the
 event processor.
 
 ```java
-DataFlow.subscribe(Integer.class)
-    .filter(i -> i > 10)
+DataFlow
+    .subscribe(Integer.class)
+    .filter(i -> i > 10);
 ```
 
 **Filter supports**
@@ -136,7 +147,8 @@ DataFlow.subscribe(Integer.class)
 
 ```java
 public static void main(String[] args) {
-    DataFlow processor = DataFlowBuilder.subscribe(Integer.class)
+    DataFlow processor = DataFlowBuilder
+            .subscribe(Integer.class)
             .filter(i -> i > 10)
             .console("int {} > 10 ")
             .build();
@@ -166,7 +178,8 @@ performed on each element in the collection.
 
 ```java
 public static void main(String[] args) {
-    DataFlow processor = DataFlowBuilder.subscribe(String.class)
+    DataFlow processor = DataFlowBuilder
+            .subscribe(String.class)
             .console("\ncsv in [{}]")
             .flatMap(s -> Arrays.asList(s.split(",")))
             .console("flattened item [{}]")
@@ -287,12 +300,14 @@ into the streaming api.
 Maps an int signal to a String and republishes to the graph
 ```java
 public static void main(String[] args) {
-    DataFlowBuilder.subscribeToIntSignal("myIntSignal")
+    DataFlowBuilder
+            .subscribeToIntSignal("myIntSignal")
             .mapToObj(d -> "intValue:" + d)
             .console("republish re-entrant [{}]")
             .processAsNewGraphEvent();
 
-    var processor = DataFlowBuilder.subscribe(String.class)
+    var processor = DataFlowBuilder
+            .subscribe(String.class)
             .console("received [{}]")
             .build();
 
@@ -318,7 +333,8 @@ the update as soon as the data is published, not at the end of the cycle.
 
 ```java
 public static void main(String[] args) {
-    DataFlow processor = DataFlowBuilder.subscribeToIntSignal("myIntSignal")
+    DataFlow processor = DataFlowBuilder
+            .subscribeToIntSignal("myIntSignal")
             .mapToObj(d -> "intValue:" + d)
             .sink("mySink")//CREATE A SINK IN THE PROCESSOR
             .build();
@@ -352,7 +368,8 @@ When building the graph with DSL a call to `id` makes that element addressable f
 ```java
 
 public static void main(String[] args) throws NoSuchFieldException {
-    DataFlow processor = DataFlowBuilder.subscribe(String.class)
+    DataFlow processor = DataFlowBuilder
+            .subscribe(String.class)
             .filter(s -> s.equalsIgnoreCase("monday"))
             //ID START - this makes the wrapped value accessible via the id
             .mapToInt(Mappers.count()).id("MondayChecker")
@@ -402,7 +419,9 @@ public static void main(String[] args) {
     //STATEFUL FUNCTIONS
     MyFunctions myFunctions = new MyFunctions();
 
-    var stringFlow = DataFlowBuilder.subscribe(String.class).console("input: '{}'");
+    var stringFlow = DataFlowBuilder
+            .subscribe(String.class)
+            .console("input: '{}'");
 
     var charCount = stringFlow
             .map(myFunctions::totalCharCount)

@@ -22,7 +22,9 @@ public class AggregateSample {
     public record ResetList() {}
 
     public static void main(String[] args) {
-        var resetSignal = DataFlowBuilder.subscribe(ResetList.class).console("\n--- RESET ---");
+        var resetSignal = DataFlowBuilder
+                .subscribe(ResetList.class)
+                .console("\n--- RESET ---");
 
         DataFlow processor = DataFlowBuilder
                 .subscribe(String.class)
@@ -84,7 +86,8 @@ is unaltered the aggregate operation returns a null and no notifications are tri
 public class CustomAggregateFunctionSample {
 
     public static void main(String[] args) {
-        DataFlow processor = DataFlowBuilder.subscribe(LocalDate.class)
+        DataFlow processor = DataFlowBuilder
+                .subscribe(LocalDate.class)
                 .aggregate(DateRangeAggregate::new)
                 .resetTrigger(DataFlowBuilder.subscribeToSignal("resetDateRange"))
                 .console("UPDATED date range : '{}'")
