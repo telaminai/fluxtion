@@ -73,17 +73,17 @@ Tiny timelines below show value changes over time (t0..t5). A solid dot (●) ma
 ### a) Update trigger
 
 ```
-Upstream value:   a ── b ── c ── d
-Downstream emit: ●a ── ●b ── ●c ── ●d   (every change flows immediately)
+Upstream value:   a ──── b ──── c ──── d
+Downstream emit: ●a ─── ●b ─── ●c ─── ●d   (every change flows immediately)
 Time:             t0   t1   t2   t3
 ```
 
 ### b) Publish trigger (defer until publish event)
 
 ```
-Upstream value:   a ── b ── c ── d
-Publish events:        P          P
-Downstream emit: ●a ──────────── ●d   (only on publish; latest buffered value)
+Upstream value:   a ──── b ──── c ──── d
+Publish events:   P                    P
+Downstream emit: ●a ───────────────── ●d   (only on publish; latest buffered value)
 Time:             t0   t1   t2   t3   t4
 ```
 
@@ -93,9 +93,9 @@ Time:             t0   t1   t2   t3   t4
 ### c) Reset trigger (clear state without emitting)
 
 ```
-State value:      a ── b ── X ── c
-Reset events:          R
-Downstream emit: ●a ── ●b      ●c   (reset clears state; no value emitted at reset time)
+State value:      a ──── b ──── X ──── c
+Reset events:            R
+Downstream emit: ●a ─── ●b            ●c   (reset clears state; no value emitted at reset time)
 Time:             t0   t1   t2   t3
 ```
 
