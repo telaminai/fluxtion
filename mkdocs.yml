@@ -103,7 +103,7 @@ nav:
       - Combine DSL and imperative: reference/connecting-dsl-imperative.md
   - Dataflow runtime:
       - Runtime introduction: runtime/runtime-overview.md
-      - Interacting with the DataFlow runtime: runtime/dataflow-context.md
+      - DataFlow context: runtime/dataflow-context.md
   - Troubleshooting: troubleshooting/index.md
   - Reference guide:
       - Quick reference: reference/reference-documentation.md
