@@ -46,8 +46,8 @@ This section gives a practical, technical view of Fluxtion for Java developers.
 
 ## Javadoc 
 
-- Fluxtion-runtime: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-runtime/latest/index.html
-- Fluxtion-builder: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-builder/latest/index.html
+- [Fluxtion-runtime](https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-runtime/latest/index.html)
+- [Fluxtion-builder](https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-builder/latest/index.html)
 
 ## Learn next
 
