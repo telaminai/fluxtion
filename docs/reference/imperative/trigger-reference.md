@@ -6,41 +6,7 @@ An event handler method can prevent its method triggering a notification by sett
 on any event handler annotation, `@OnEventHandler(propagate = false)`
 
 ```java
-public static class MyNode {
-    @OnEventHandler
-    public boolean handleStringEvent(String stringToProcess) {
-        System.out.println("MyNode::handleStringEvent received:" + stringToProcess);
-        return true;
-    }
 
-    @OnEventHandler(propagate = false)
-    public boolean handleIntEvent(int intToProcess) {
-        System.out.println("MyNode::handleIntEvent received:" + intToProcess);
-        return true;
-    }
-}
-
-public static class Child {
-    private final MyNode myNode;
-
-    public Child(MyNode myNode) {
-        this.myNode = myNode;
-    }
-
-    @OnTrigger
-    public boolean triggered(){
-        System.out.println("Child:triggered");
-        return true;
-    }
-}
-
-public static void main(String[] args) {
-    var processor = Fluxtion.interpret(new Child(new MyNode()));
-    processor.init();
-    processor.onEvent("test");
-    System.out.println();
-    processor.onEvent(200);
-}
 ```
 
 Output
@@ -56,47 +22,44 @@ A child can isolate itself from a parent's event notification by marking the ref
 annotation. This will stop the onTrigger method from firing even when the parent has triggered.
 
 ```java
-public static class MyNode {
-    @OnEventHandler
-    public boolean handleStringEvent(String stringToProcess) {
-        System.out.println("MyNode::handleStringEvent received:" + stringToProcess);
-        return true;
-    }
-}
+public class NoPropagateHandler {
+    public static class MyNode {
+        @OnEventHandler
+        public boolean handleStringEvent(String stringToProcess) {
+            System.out.println("MyNode::handleStringEvent received:" + stringToProcess);
+            return true;
+        }
 
-public static class MyNode2 {
-    @OnEventHandler
-    public boolean handleIntEvent(int intToProcess) {
-        System.out.println("MyNode2::handleIntEvent received:" + intToProcess);
-        return true;
-    }
-}
-
-
-public static class Child {
-    private final MyNode myNode;
-    @NoTriggerReference
-    private final MyNode2 myNode2;
-
-    public Child(MyNode myNode, MyNode2 myNode2) {
-        this.myNode = myNode;
-        this.myNode2 = myNode2;
+        @OnEventHandler(propagate = false)
+        public boolean handleIntEvent(int intToProcess) {
+            System.out.println("MyNode::handleIntEvent received:" + intToProcess);
+            return true;
+        }
     }
 
+    public static class Child {
+        private final MyNode myNode;
 
-    @OnTrigger
-    public boolean triggered() {
-        System.out.println("Child:triggered");
-        return true;
+        public Child(MyNode myNode) {
+            this.myNode = myNode;
+        }
+
+        @OnTrigger
+        public boolean triggered(){
+            System.out.println("Child:triggered");
+            return true;
+        }
     }
-}
 
-public static void main(String[] args) {
-    var processor = Fluxtion.interpret(new Child(new MyNode(), new MyNode2()));
-    processor.init();
-    processor.onEvent("test");
-    System.out.println();
-    processor.onEvent(200);
+    public static void main(String[] args) {
+        var processor = DataFlowBuilder
+                .subscribeToNode(new Child(new MyNode()))
+                .build();
+
+        processor.onEvent("test");
+        System.out.println();
+        processor.onEvent(200);
+    }
 }
 ```
 
@@ -113,47 +76,51 @@ A child can force only a single parent to fire its trigger, all other parents wi
 `@NoTriggerReference` and removed from the event notification triggers for this class.
 
 ```java
-public static class MyNode {
-    @OnEventHandler
-    public boolean handleStringEvent(String stringToProcess) {
-        System.out.println("MyNode::handleStringEvent received:" + stringToProcess);
-        return true;
+public class SingleTriggerOverride {
+    public static class MyNode {
+        @OnEventHandler
+        public boolean handleStringEvent(String stringToProcess) {
+            System.out.println("MyNode::handleStringEvent received:" + stringToProcess);
+            return true;
+        }
     }
-}
 
-public static class MyNode2 {
-    @OnEventHandler
-    public boolean handleIntEvent(int intToProcess) {
-        System.out.println("MyNode2::handleIntEvent received:" + intToProcess);
-        return true;
-    }
-}
-
-
-public static class Child {
-    private final MyNode myNode;
-    @TriggerEventOverride
-    private final MyNode2 myNode2;
-
-    public Child(MyNode myNode, MyNode2 myNode2) {
-        this.myNode = myNode;
-        this.myNode2 = myNode2;
+    public static class MyNode2 {
+        @OnEventHandler
+        public boolean handleIntEvent(int intToProcess) {
+            System.out.println("MyNode2::handleIntEvent received:" + intToProcess);
+            return true;
+        }
     }
 
 
-    @OnTrigger
-    public boolean triggered() {
-        System.out.println("Child:triggered");
-        return true;
-    }
-}
+    public static class Child {
+        private final MyNode myNode;
+        @TriggerEventOverride
+        private final MyNode2 myNode2;
 
-public static void main(String[] args) {
-    var processor = Fluxtion.interpret(new Child(new MyNode(), new MyNode2()));
-    processor.init();
-    processor.onEvent("test");
-    System.out.println();
-    processor.onEvent(200);
+        public Child(MyNode myNode, MyNode2 myNode2) {
+            this.myNode = myNode;
+            this.myNode2 = myNode2;
+        }
+
+
+        @OnTrigger
+        public boolean triggered() {
+            System.out.println("Child:triggered");
+            return true;
+        }
+    }
+
+    public static void main(String[] args) {
+        var processor = DataFlowBuilder
+                .subscribeToNode(new Child(new MyNode(), new MyNode2()))
+                .build();
+
+        processor.onEvent("test");
+        System.out.println();
+        processor.onEvent(200);
+    }
 }
 ```
 

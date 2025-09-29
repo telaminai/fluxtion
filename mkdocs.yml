@@ -97,7 +97,7 @@ nav:
           - Imperative Filtering: reference/imperative/filtering.md
           - Imperative Triggering: reference/imperative/triggering.md
           - Imperative Callbacks: reference/imperative/callbacks.md
-          - Imperative Trigger reference: reference/imperative/trigger-reference.md
+          - Imperative Trigger override: reference/imperative/trigger-reference.md
           - Imperative Advanced: reference/imperative/advanced.md
           - Imperative Lifecycle callbacks: reference/imperative/lifecycle-callbacks.md
       - Combine DSL and imperative: reference/connecting-dsl-imperative.md
