@@ -7,6 +7,8 @@ In this tutorial you will:
 - Use lifecycle callbacks to initialize and clean up state.
 - Route events through the DSL into your component and emit results.
 
+Source reference in examples repository: [TutorialPart5]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart4.java)
+
 ## Prerequisites
 
 - JDK 21+

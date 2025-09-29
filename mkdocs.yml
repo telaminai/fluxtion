@@ -80,7 +80,7 @@ nav:
       - Tutorial part‑5: getting-started/tutorial-part-5.md
   - Examples and how-to:
       - Example repo: example/examples.md
-  - Dataflow programming:
+  - Fluxtion programming:
       - Dataflow overview: home/what-is-dataflow.md
       - Event dispatch: home/event-dispatch-diagrams.md
       - Fundamentals: home/dataflow-fundamentals.md

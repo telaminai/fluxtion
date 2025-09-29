@@ -127,7 +127,47 @@ joins. A tutorial series (Part 1–5) builds concepts step by step.
 - Map from node property: [MapFromNodePropertySample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/node/MapNodeSupplierSample.java)
 - Member variable supplier: [FlowSupplierAsMemberVariableSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/node/FlowSupplierAsMemberVariableSample.java)
 
-### Event feeds and runners
+## Imperative node examples
+
+### Subscribe
+
+- Multiple event types: [MultipleEventTypes.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/subscribe/MultipleEventTypes.java)
+- Unknown event handling: [UnknownEventHandling.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/subscribe/UnknownEventHandling.java)
+- Wrap node: [WrapNode.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/subscribe/WrapNode.java)
+
+
+### Filtering
+
+- Static filtering: [StaticFiltering.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/filtering/StaticFiltering.java)
+- Variable filtering: [VariableFiltering.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/filtering/VariableFiltering.java)
+
+### Callbacks
+
+- After event callback: [AfterEventCallback.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/callback/AfterEventCallback.java)
+- After trigger callback: [AfterTriggerCallback.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/callback/AfterTriggerCallback.java)
+- Lifecycle callback: [LifecycleCallback.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/callback/LifecycleCallback.java)
+
+### Triggering
+
+- Conditional trigger children: [ConditionalTriggerChildren.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/triggering/ConditionalTriggerChildren.java)
+- Identify trigger parent: [IdentifyTriggerParent.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/triggering/IdentifyTriggerParent.java)
+- Identify trigger parent by id: [IdentifyTriggerParentById.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/triggering/IdentifyTriggerParentById.java)
+- Push trigger: [PushTrigger.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/triggering/PushTrigger.java)
+- Trigger children: [TriggerChildren.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/triggering/TriggerChildren.java)
+
+### Trigger overrides
+
+- Invert dirty trigger: [InvertDirtyTrigger.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/triggeroverride/InvertDirtyTrigger.java)
+- No-propagate handler: [NoPropagateHandler.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/triggeroverride/NoPropagateHandler.java)
+- Single trigger override: [SingleTriggerOverride.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/triggeroverride/SingleTriggerOverride.java)
+
+### Advanced
+
+- Batch support: [BatchSupport.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/advanced/BatchSupport.java)
+- Collection support: [CollectionSupport.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/advanced/CollectionSupport.java)
+- Fork/join support: [ForkJoinSupport.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/advanced/ForkJoinSupport.java)
+
+## Event feeds and runners
 
 - Data flow runner (file
   feed): [DataFlowRunnerSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/eventfeed/DataFlowRunnerSample.java)

@@ -8,10 +8,7 @@ In this tutorial you will:
 - Run the processor and the feed in their own threads via DataFlowConnector.
 - Observe live processing when you append new lines to the input file.
 
-Source reference in examples repository:
-
-- [TutorialPart5]({{ fluxtion_example_src
-  }}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart5.java)
+Source reference in examples repository: [TutorialPart5]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart5.java)
 
 ## What we’ll build
 
