@@ -7,7 +7,7 @@ In this tutorial you will:
 - Add basic logging, a health check endpoint, and simple metrics hooks.
 - Package and run it as a plain Java app.
 
-Source reference in examples repository: [TutorialPart5]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart4.java)
+Source reference in examples repository: [TutorialPart4]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart4.java)
 
 ## Prerequisites
 

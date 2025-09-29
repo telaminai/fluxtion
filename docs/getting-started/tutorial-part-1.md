@@ -7,7 +7,7 @@ In this hands‑on tutorial you will:
 - Run it in‑process and print results to the console.
 - Understand at‑most‑once dispatch and what triggers recomputation.
 
-Source reference in examples repository: [TutorialPart5]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart1.java)
+Source reference in examples repository: [TutorialPart1]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart1.java)
 
 ## Prerequisites
 

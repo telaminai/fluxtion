@@ -7,7 +7,7 @@ In this tutorial you will:
 - Use a sliding time window with buckets for rolling averages.
 - Emit alerts when thresholds are breached.
 
-Source reference in examples repository: [TutorialPart5]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart2.java)
+Source reference in examples repository: [TutorialPart2]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart2.java)
 
 ## Prerequisites
 
