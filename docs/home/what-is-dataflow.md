@@ -5,6 +5,10 @@ DataFlow programming expresses computations as a graph of values and the depende
 the program when to recompute, you describe how outputs depend on inputs. When inputs change, the runtime updates only
 what is needed.
 
+
+!!! warning "Thread safety"
+    EventProcessors are not thread safe a single event should be processed at one time.
+
 ## Key ideas
 
 - Graph of nodes: nodes are functions or stateful components; edges indicate dependencies.

@@ -15,11 +15,6 @@ The source project for the examples can be found
 [here]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode)
 To process an event stream correctly the following requirements must be met:
 
-!!! warning "Thread safety"
-    EventProcessors are not thread safe a single event should be processed at one time.
-
----
-
 Use the mini‑sections below for specific topics:
 
 - Basics: handling events and multiple types
