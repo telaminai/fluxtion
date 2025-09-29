@@ -105,6 +105,7 @@ nav:
       - Runtime introduction: runtime/runtime-overview.md
       - DataFlow context: runtime/dataflow-context.md
       - Clocks and time: runtime/clocks-and-time.md
+      - Buffer and trigger: runtime/buffer-and-trigger.md
   - Troubleshooting: troubleshooting/index.md
   - Reference guide:
       - Quick reference: reference/reference-documentation.md

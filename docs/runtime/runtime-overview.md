@@ -13,3 +13,4 @@ See also:
 
 - Interacting with the DataFlow runtime (context, callbacks, dirty state): [dataflow-context](dataflow-context.md)
 - Working with clocks and time: [clocks-and-time](clocks-and-time.md)
+- Buffering events and triggering calculation: [buffer-and-trigger](buffer-and-trigger.md)
