@@ -31,35 +31,40 @@ User nodes that are added to the processing graph can attach to the lifecycle ca
 the relevant annotations.
 
 ```java
-public static class MyNode {
+public class LifecycleCallback {
+    public static class MyNode {
 
-    @Initialise
-    public void myInitMethod() {
-        System.out.println("Initialise");
+        @Initialise
+        public void myInitMethod() {
+            System.out.println("Initialise");
+        }
+
+        @Start
+        public void myStartMethod() {
+            System.out.println("Start");
+        }
+
+        @Stop
+        public void myStopMethod() {
+            System.out.println("Stop");
+        }
+
+        @TearDown
+        public void myTearDownMethod() {
+            System.out.println("TearDown");
+        }
     }
 
-    @Start
-    public void myStartMethod() {
-        System.out.println("Start");
-    }
+    public static void main(String[] args) {
+        var processor = DataFlowBuilder
+                .subscribeToNode(new MyNode())
+                .build();
 
-    @Stop
-    public void myStopMethod() {
-        System.out.println("Stop");
+        //init is implicitly called
+        processor.start();
+        processor.stop();
+        processor.tearDown();
     }
-
-    @TearDown
-    public void myTearDownMethod() {
-        System.out.println("TearDown");
-    }
-}
-
-public static void main(String[] args) {
-    var processor = Fluxtion.interpret(new MyNode());
-    processor.init();
-    processor.start();
-    processor.stop();
-    processor.tearDown();
 }
 ```
 
