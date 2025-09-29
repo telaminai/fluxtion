@@ -92,14 +92,14 @@ nav:
           - DSL windowing: reference/functional/windowing.md
           - DSL groupBy: reference/functional/dataflow-functional-groupby-dsl.md
       - Imperative Dataflow:
-          - Imperative Overview: reference/imperative/overview-imperative.md
-          - Imperative Basics: reference/imperative/basics.md
-          - Imperative Filtering: reference/imperative/filtering.md
-          - Imperative Triggering: reference/imperative/triggering.md
-          - Imperative Callbacks: reference/imperative/callbacks.md
-          - Imperative Trigger override: reference/imperative/trigger-reference.md
-          - Imperative Advanced: reference/imperative/advanced.md
-          - Imperative Lifecycle callbacks: reference/imperative/lifecycle-callbacks.md
+          - Imperative introduction: reference/imperative/overview-imperative.md
+          - Imperative subscribing: reference/imperative/basics.md
+          - Imperative filtering: reference/imperative/filtering.md
+          - Imperative triggering: reference/imperative/triggering.md
+          - Imperative callbacks: reference/imperative/callbacks.md
+          - Imperative trigger override: reference/imperative/trigger-reference.md
+          - Imperative advanced: reference/imperative/advanced.md
+          - Imperative lifecycle callbacks: reference/imperative/lifecycle-callbacks.md
       - Combine DSL and imperative: reference/connecting-dsl-imperative.md
   - Troubleshooting: troubleshooting/index.md
   - Reference guide:
