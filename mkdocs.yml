@@ -58,36 +58,59 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/telaminai
   # Define variables here
-  source_root: https://github.com/telaminai/mongoose/tree/main/src
-  example_root: https://github.com/telaminai/mongoose-examples/tree/main
-  fluxtion_src_runtime: https://github.com/telaminai/fluxtion/tree/main
+  fluxtion_src_runtime: https://github.com/telaminai/fluxtion/tree/main/fluxtion-runtime/src/main/java/com/telamin/fluxtion/runtime
   fluxtion_example_src: https://github.com/telaminai/fluxtion-examples/tree/main
-  fluxtion_version: 0.9.5
+  fluxtion_version: 0.9.6
   release_date: "2024-09-13"
 
 nav:
   - Home:
-      - index: index.md
-      - why fluxtion: home/why-fluxtion.md
-      - choosing fluxtion: home/choosing-fluxtion.md
-      - concepts and architecture: home/concepts-and-architecture.md
-      - dataflow programming: home/what-is-dataflow.md
-      - for engineers: home/intro-engineers.md
-      - for managers: home/intro-managers.md
-      - fundamentals: home/dataflow-fundamentals.md
+      - Index: index.md
+      - Why fluxtion: home/why-fluxtion.md
+      - Choosing fluxtion: home/choosing-fluxtion.md
+      - Concepts and architecture: home/concepts-and-architecture.md
+      - For engineers: home/intro-engineers.md
+      - For managers: home/intro-managers.md
   - Getting started:
       - 1 minute tutorial: getting-started/quickstart.md
-      - tutorial part‑1: getting-started/tutorial-part-1.md
-      - tutorial part‑2: getting-started/tutorial-part-2.md
-      - tutorial part‑3: getting-started/tutorial-part-3.md
-      - tutorial part‑4: getting-started/tutorial-part-4.md
-  - Reference guide:
-      - Quick reference: reference/reference-documentation.md
+      - Tutorial part‑1: getting-started/tutorial-part-1.md
+      - Tutorial part‑2: getting-started/tutorial-part-2.md
+      - Tutorial part‑3: getting-started/tutorial-part-3.md
+      - Tutorial part‑4: getting-started/tutorial-part-4.md
+      - Tutorial part‑5: getting-started/tutorial-part-5.md
+  - Examples and how-to:
+      - Example repo: example/examples.md
+  - Fluxtion programming:
+      - Dataflow overview: home/what-is-dataflow.md
+      - Event dispatch: home/event-dispatch-diagrams.md
+      - Fundamentals: home/dataflow-fundamentals.md
       - DSL Dataflow:
           - DSL introduction: reference/functional/overview-functional.md
-          - DSL api: reference/functional/dataflow-functional-dsl.md
-          - DSL groupBy api: reference/functional/dataflow-functional-groupby-dsl.md
+          - DSL core: reference/functional/dataflow-functional-dsl.md
+          - DSL trigger control: reference/functional/trigger-control.md
+          - DSL aggregating: reference/functional/aggregating.md
+          - DSL windowing: reference/functional/windowing.md
+          - DSL groupBy: reference/functional/dataflow-functional-groupby-dsl.md
       - Imperative Dataflow:
-          - Binding user classes: reference/imperative/agent_integration.md
-          - Lifecycle callbacks: reference/imperative/lifecycle-callbacks.md
+          - Imperative introduction: reference/imperative/overview-imperative.md
+          - Imperative subscribing: reference/imperative/basics.md
+          - Imperative filtering: reference/imperative/filtering.md
+          - Imperative triggering: reference/imperative/triggering.md
+          - Imperative callbacks: reference/imperative/callbacks.md
+          - Imperative trigger override: reference/imperative/trigger-reference.md
+          - Imperative advanced: reference/imperative/advanced.md
+          - Imperative lifecycle callbacks: reference/imperative/lifecycle-callbacks.md
       - Combine DSL and imperative: reference/connecting-dsl-imperative.md
+  - Dataflow runtime:
+      - Runtime introduction: runtime/runtime-overview.md
+      - DataFlow context: runtime/dataflow-context.md
+      - Clocks and time: runtime/clocks-and-time.md
+      - Buffer and trigger: runtime/buffer-and-trigger.md
+  - Troubleshooting: troubleshooting/index.md
+  - Reference guide:
+      - Quick reference: reference/reference-documentation.md
+      - Console sink formatting: reference/console-sink-format.md
+      - Performance results: reference/performance.md
+      - API javadoc:
+        - Fluxtion-runtime: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-runtime/latest/index.html
+        - Fluxtion-builder: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-builder/latest/index.html

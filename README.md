@@ -1,5 +1,10 @@
 # Fluxtion – Dataflow processing for Java
 
+[![Maven Central](https://img.shields.io/maven-central/v/com.telamin.fluxtion/fluxtion-builder.svg)](https://search.maven.org/search?q=g:com.telamin.fluxtion)
+![Java](https://img.shields.io/badge/java-21+-blue)
+[![License](https://img.shields.io/badge/license-AGPL%2FSSPL-important)](./LICENSE)
+[![Docs](https://img.shields.io/badge/docs-website-blue)](https://telaminai.github.io/fluxtion/)
+
 Fluxtion is a lightweight Java library for real‑time, in‑memory dataflow processing. You declare how values depend on each other; Fluxtion builds a dependency graph and executes updates deterministically when events arrive.
 
 - Deterministic: topologically ordered dispatch, at‑most‑once per node per event
@@ -18,19 +23,20 @@ Maven
 <dependency>
   <groupId>com.telamin.fluxtion</groupId>
   <artifactId>fluxtion-builder</artifactId>
-  <version>0.9.3</version>
+  <version>0.9.6</version>
 </dependency>
 ```
 
 Gradle (Kotlin DSL)
 ```kotlin
-implementation("com.telamin.fluxtion:fluxtion-builder:0.9.3")
+implementation("com.telamin.fluxtion:fluxtion-builder:0.9.6")
 ```
 
 Requires Java 21 (toolchain), builds with Maven Wrapper.
 
 ## Quickstart
 ```java
+import com.telamin.fluxtion.builder.DataFlowBuilder;
 import com.telamin.fluxtion.runtime.DataFlow;
 
 public class HelloFluxtion {

@@ -2,7 +2,7 @@
 ---
 
 A 10 minute tutorial demonstrating agentic DataFlow integration. Jbang is used to minimise setup for quick start,  
-see [1 minute tutorial](quickstart) for jbang installation help. In this tutorial we cover:
+see [1 minute tutorial](../../getting-started/quickstart.md) for jbang installation help. In this tutorial we cover:
 - Listening to multiple event feeds each with a different type
 - Grouping DataFlows into map structures
 - Merging and joining DataFlows
@@ -19,11 +19,11 @@ remote code does not run automatically**
 jbang https://github.com/telaminai/dataflow-examples/blob/main/getstarted/src/main/java/com/fluxtion/dataflow/examples/frontpage/multijoin/MultiFeedJoinExample.java
 ```
 
-Console output:
+#### Console output
 
 ```console
 [jbang] Resolving dependencies...
-[jbang]    com.fluxtion.dataflow:dataflow-builder:1.0.0
+[jbang]    com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
 [jbang]    org.projectlombok:lombok:1.18.36
 [jbang] Dependencies resolved
 [jbang] Building jar for MultiFeedJoinExample.java...
@@ -71,7 +71,7 @@ Linux/OSX/Windows/AIX Bash:
 Windows Powershell:
 ```console notepad.exe MultiFeedJoinExample.java ```
 
-Copy the example into editor and save
+#### Copy the example into editor and save
 
 ```java
 public class MultiFeedJoinExample {
@@ -145,6 +145,6 @@ In the same terminal execute the example
 jbang MultiFeedJoinExample.java
 ```
 
-# Description
+## Description
 
 **To be completed**

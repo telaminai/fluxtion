@@ -14,9 +14,12 @@ public class GroupBySample {
     public record ResetList() {}
 
     public static void main(String[] args) {
-        var resetSignal = DataFlowBuilder.subscribe(ResetList.class).console("\n--- RESET ---");
+        var resetSignal = DataFlowBuilder
+                .subscribe(ResetList.class)
+                .console("\n--- RESET ---");
 
-        DataFlow processor = DataFlowBuilder.subscribe(Integer.class)
+        DataFlow processor = DataFlowBuilder
+                .subscribe(Integer.class)
                 .groupBy(i -> i % 2 == 0 ? "evens" : "odds", Aggregates.countFactory())
                 .resetTrigger(resetSignal)
                 .map(GroupBy::toMap)
@@ -68,9 +71,12 @@ public class GroupByToListSample {
     public record ResetList() {}
 
     public static void main(String[] args) {
-        var resetSignal = DataFlowBuilder.subscribe(ResetList.class).console("\n--- RESET ---");
+        var resetSignal = DataFlowBuilder
+                .subscribe(ResetList.class)
+                .console("\n--- RESET ---");
 
-        DataFlow processor = DataFlowBuilder.subscribe(Integer.class)
+        DataFlow processor = DataFlowBuilder
+                .subscribe(Integer.class)
                 .groupByToList(i -> i % 2 == 0 ? "evens" : "odds")
                 .resetTrigger(resetSignal)
                 .map(GroupBy::toMap)
@@ -108,9 +114,12 @@ public class GroupByToSetSample {
     public record ResetList() {}
 
     public static void main(String[] args) {
-        var resetSignal = DataFlowBuilder.subscribe(ResetList.class).console("\n--- RESET ---");
+        var resetSignal = DataFlowBuilder.
+                subscribe(ResetList.class)
+                .console("\n--- RESET ---");
 
-        DataFlow processor = DataFlowBuilder.subscribe(Integer.class)
+        DataFlow processor = DataFlowBuilder
+                .subscribe(Integer.class)
                 .groupByToSet(i -> i % 2 == 0 ? "evens" : "odds")
                 .resetTrigger(resetSignal)
                 .map(GroupBy::toMap)
@@ -154,7 +163,8 @@ public class GroupByFieldsSample {
     public record Pupil(int year, String sex, String name) {}
 
     public static void main(String[] args) {
-        DataFlow processor = DataFlowBuilder.subscribe(Pupil.class)
+        DataFlow processor = DataFlowBuilder
+                .subscribe(Pupil.class)
                 .groupByFieldsAggregate(Aggregates.countFactory(), Pupil::year, Pupil::sex)
                 .map(GroupByFieldsSample::formatGroupBy)
                 .console("Pupil count by year/sex \n----\n{}----\n")
@@ -242,7 +252,8 @@ public class GroupByDeleteSample {
     public record Pupil(long pupilId, int year, String name) {}
 
     public static void main(String[] args) {
-        DataFlow processor = DataFlowBuilder.groupByToList(Pupil::year)
+        DataFlow processor = DataFlowBuilder
+                .groupByToList(Pupil::year)
                 .deleteByValue(new DeleteFilter()::leftSchool)
                 .map(GroupBy::toMap)
                 .console()
@@ -323,7 +334,8 @@ public class TumblingGroupBySample {
     private static String[] symbols = new String[]{"GOOG", "AMZN", "MSFT", "TKM"};
 
     public static void main(String[] args) throws InterruptedException {
-        DataFlow processor = DataFlowBuilder.subscribe(Trade.class)
+        DataFlow processor = DataFlowBuilder
+                .subscribe(Trade.class)
                 .groupByTumbling(Trade::symbol, Trade::amountTraded, Aggregates.intSumFactory(), 250)
                 .map(GroupBy::toMap)
                 .console("Trade volume for last 250 millis:{} timeDelta:%dt")
@@ -371,7 +383,8 @@ public class SlidingGroupBySample {
     private static String[] symbols = new String[]{"GOOG", "AMZN", "MSFT", "TKM"};
 
     public static void main(String[] args) throws InterruptedException {
-        DataFlow processor = DataFlowBuilder.subscribe(Trade.class)
+        DataFlow processor = DataFlowBuilder
+                .subscribe(Trade.class)
                 .groupBySliding(Trade::symbol, Trade::amountTraded, Aggregates.intSumFactory(), 250, 4)
                 .map(GroupBy::toMap)
                 .console("Trade volume for last second:{} timeDelta:%dt")
@@ -416,7 +429,8 @@ public class TumblingGroupByCompoundKeySample {
     private static String[] clients = new String[]{"client_A", "client_B", "client_D", "client_E"};
 
     public static void main(String[] args) throws InterruptedException {
-        DataFlow processor = DataFlowBuilder.subscribe(Trade.class)
+        DataFlow processor = DataFlowBuilder
+                .subscribe(Trade.class)
                 .groupByTumbling(
                         GroupByKey.build(Trade::client, Trade::symbol),
                         Trade::amountTraded,
@@ -506,7 +520,8 @@ public class SlidingGroupByCompoundKeySample {
     private static String[] clients = new String[]{"client_A", "client_B", "client_D", "client_E"};
 
     public static void main(String[] args) throws InterruptedException {
-        DataFlow processor = DataFlowBuilder.subscribe(Trade.class)
+        DataFlow processor = DataFlowBuilder
+                .subscribe(Trade.class)
                 .groupBySliding(
                         GroupByKey.build(Trade::client, Trade::symbol),
                         Trade::amountTraded,
@@ -610,7 +625,8 @@ public class GroupByMapKeySample {
     public record Pupil(int year, String sex, String name) {}
 
     public static void main(String[] args) {
-        DataFlow processor = DataFlowBuilder.subscribe(Pupil.class)
+        DataFlow processor = DataFlowBuilder
+                .subscribe(Pupil.class)
                 .groupByFieldsAggregate(Aggregates.countFactory(), Pupil::year, Pupil::sex)
                 .mapKeys(GroupByKey::getKey)//MAPS KEYS
                 .map(GroupBy::toMap)
@@ -654,7 +670,8 @@ public class GroupByMapValuesSample {
     public static void main(String[] args) {
         var resetSignal = DataFlowBuilder.subscribe(ResetList.class).console("\n--- RESET ---");
 
-        DataFlow processor = DataFlowBuilder.subscribe(Integer.class)
+        DataFlow processor = DataFlowBuilder
+                .subscribe(Integer.class)
                 .groupByToSet(i -> i % 2 == 0 ? "evens" : "odds")
                 .resetTrigger(resetSignal)
                 .mapValues(GroupByMapValuesSample::toRange)//MAPS VALUES
@@ -709,7 +726,8 @@ consume.
 ```java
 public class GroupByReduceSample {
     public static void main(String[] args) {
-        var processor = DataFlowBuilder.subscribe(Integer.class)
+        var processor = DataFlowBuilder
+                .subscribe(Integer.class)
                 .groupBy(i -> i % 2 == 0 ? "evens" : "odds", Aggregates.intSumFactory())
                 .console("ODD/EVEN sum:{}")
                 .reduceValues(Aggregates.intSumFactory())
@@ -771,7 +789,8 @@ public class GroupByJoinSample {
         var pupils = DataFlowBuilder.subscribe(Pupil.class).groupByToList(Pupil::school);
         var schools = DataFlowBuilder.subscribe(School.class).groupBy(School::name);
 
-        DataFlow processor = JoinFlowBuilder.innerJoin(schools, pupils)
+        DataFlow processor = JoinFlowBuilder
+                .innerJoin(schools, pupils)
                 .mapValues(Tuples.mapTuple(GroupByJoinSample::prettyPrint))
                 .map(GroupBy::toMap)
                 .console()
@@ -825,11 +844,14 @@ public class GroupByLeftOuterJoinSample {
 
     public static void main(String[] args) {
         var schools = DataFlowBuilder.subscribe(School.class).groupBy(School::name);
-        var pupils = DataFlowBuilder.subscribe(Pupil.class)
+        
+        var pupils = DataFlowBuilder
+                .subscribe(Pupil.class)
                 .groupByToList(Pupil::school)
                 .defaultValue(GroupBy.emptyCollection());
 
-        DataFlow processor = JoinFlowBuilder.leftJoin(schools, pupils)
+        DataFlow processor = JoinFlowBuilder
+                .leftJoin(schools, pupils)
                 .mapValues(Tuples.mapTuple(GroupByLeftOuterJoinSample::prettyPrint))
                 .map(GroupBy::toMap)
                 .console()
@@ -887,9 +909,13 @@ public class GroupByRightOuterJoinSample {
 
     public static void main(String[] args) {
         var schools = DataFlowBuilder.subscribe(School.class).groupBy(School::name);
-        var pupils = DataFlowBuilder.subscribe(Pupil.class).groupByToList(Pupil::school);
+        
+        var pupils = DataFlowBuilder
+                .subscribe(Pupil.class)
+                .groupByToList(Pupil::school);
 
-        DataFlow processor = JoinFlowBuilder.rightJoin(schools, pupils)
+        DataFlow processor = JoinFlowBuilder
+                .rightJoin(schools, pupils)
                 .mapValues(Tuples.mapTuple(GroupByRightOuterJoinSample::prettyPrint))
                 .map(GroupBy::toMap)
                 .console()
@@ -945,9 +971,13 @@ public class GroupByFullOuterJoinSample {
 
     public static void main(String[] args) {
         var schools = DataFlowBuilder.subscribe(School.class).groupBy(School::name);
-        var pupils = DataFlowBuilder.subscribe(Pupil.class).groupByToList(Pupil::school);
+        
+        var pupils = DataFlowBuilder
+                .subscribe(Pupil.class)
+                .groupByToList(Pupil::school);
 
-        DataFlow processor = JoinFlowBuilder.outerJoin(schools, pupils)
+        DataFlow processor = JoinFlowBuilder
+                .outerJoin(schools, pupils)
                 .mapValues(Tuples.mapTuple(GroupByFullOuterJoinSample::prettyPrint))
                 .map(GroupBy::toMap)
                 .console()
@@ -1025,7 +1055,8 @@ public class MultiJoinSample {
         var nationalityDataFlow = DataFlowBuilder.groupBy(Nationality::getName);
         var dependentDataFlow = DataFlowBuilder.groupByToList(Dependent::getGuardianName);
 
-        DataFlow processor = MultiJoinBuilder.builder(String.class, MergedData::new)
+        DataFlow processor = MultiJoinBuilder
+                .builder(String.class, MergedData::new)
                 .addJoin(ageDataFlow, MergedData::setAge)
                 .addJoin(genderDataFlow, MergedData::setGender)
                 .addJoin(nationalityDataFlow, MergedData::setNationality)

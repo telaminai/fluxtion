@@ -1,4 +1,5 @@
 # Fluxtion
+---
 
 ## Welcome to Fluxtion!
 
@@ -17,6 +18,14 @@ clear dependencies and excellent performance.
 - Low overhead: avoids generic reactive machinery; directly invokes methods in dependency order.
 - Scales down and up: great for microservices, trading systems, IoT gateways, or embedded analytics.
 - Familiar Java: plain objects and methods; no special runtime server required.
+- Infrastructure‑agnostic: not tied to Kafka Streams, Flink, or any specific platform—you choose the messaging/compute stack it runs on.
+
+!!! tip "Performance at a glance"
+    - 50 million events per second (thrpt)
+    - ~20 ns average latency per event including app logic
+    - Low‑nanosecond processing overhead, zero GC, single‑threaded
+    
+    See detailed benchmarks and methodology: [Performance results](reference/performance.md).
 
 ## Quickstart
 
@@ -41,6 +50,7 @@ implementation("com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}")
 Hello world (Java 21):
 
 ```java
+import com.telamin.fluxtion.builder.DataFlowBuilder;
 import com.telamin.fluxtion.runtime.DataFlow;
 
 public class HelloFluxtion {
@@ -57,8 +67,6 @@ public class HelloFluxtion {
 }
 ```
 
-Run locally: see [Run the docs site locally](run_local_guide.md) and use your IDE to run the main above.
-
 ## Core building blocks
 
 - Events: any Java object submitted into the DataFlow.
@@ -74,6 +82,12 @@ Run locally: see [Run the docs site locally](run_local_guide.md) and use your ID
 - Signal generation and alerting
 - Incremental computation pipelines
 
+!!! info "Choosing Fluxtion (compare to Kafka Streams, Reactor, Flink)"
+    Not sure if Fluxtion is the right fit? Read the decision guide: [Choosing Fluxtion](home/choosing-fluxtion.md).
+
+!!! example "Explore examples"
+    Browse runnable samples in one click: [Examples catalog](example/examples.md).
+
 ## Code samples
 
 
@@ -85,7 +99,8 @@ Run locally: see [Run the docs site locally](run_local_guide.md) and use your ID
         public static void main(String[] args) {
 
             //calculate average speed, sliding window 5 buckets of 200 millis
-            DataFlow averageCarSpeed = DataFlowBuilder.subscribe(CarTracker::speed)
+            DataFlow averageCarSpeed = DataFlowBuilder
+                    .subscribe(CarTracker::speed)
                     .slidingAggregate(Aggregates.doubleAverageFactory(), 200, 5)
                     .map(v -> "average speed: " + v.intValue() + " km/h")
                     .sink("average car speed")
@@ -108,7 +123,8 @@ Run locally: see [Run the docs site locally](run_local_guide.md) and use your ID
     ```java
     public class TriggerExample {
         public static void main(String[] args) {
-            DataFlow sumDataFlow = DataFlowBuilder.subscribe(Integer.class)
+            DataFlow sumDataFlow = DataFlowBuilder
+                    .subscribe(Integer.class)
                     .aggregate(Aggregates.intSumFactory())
                     .resetTrigger(
                         DataFlowBuilder.subscribeToSignal("resetTrigger"))
@@ -219,6 +235,47 @@ Run locally: see [Run the docs site locally](run_local_guide.md) and use your ID
     }
     ```
 
+=== "Stateful functions"
+
+    ```java
+    import com.telamin.fluxtion.builder.DataFlowBuilder;
+    import com.telamin.fluxtion.runtime.DataFlow;
+    import com.telamin.fluxtion.runtime.annotations.OnEventHandler;
+    import com.telamin.fluxtion.runtime.flowfunction.helpers.Collectors;
+    
+    public class SubscribeToNodeSample {
+        public static void main(String[] args) {
+            DataFlow processor = DataFlowBuilder
+                .subscribeToNode(new MyComplexNode())
+                .console("node triggered -> {}")
+                .map(MyComplexNode::getIn)
+                .aggregate(Collectors.listFactory(4))
+                .console("last 4 elements:{}\n")
+                .build();
+    
+            processor.onEvent("A");
+            processor.onEvent("B");
+            processor.onEvent("C");
+            processor.onEvent("D");
+            processor.onEvent("E");
+            processor.onEvent("F");
+        }
+    
+        public static class MyComplexNode {
+            private String in;
+    
+            @OnEventHandler
+            public boolean stringUpdate(String in) {
+                this.in = in;
+                return true;
+            }
+    
+            public String getIn() {
+                return in;
+            }
+        }
+    }
+    ```
 ## Start here
 
 - [Introduction](home/introduction.md)

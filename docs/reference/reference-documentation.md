@@ -5,6 +5,8 @@ DSL is used to create a data flow that can be mapped, filter, windowed, grouped 
 subscription and then can be manipulated with functional operations. Describes the api a developer must be familiar with
 to use DataFlow
 
+> Looking for performance numbers? See the compiled AOT benchmark: [Performance results](performance.md).
+
 | Use                                                                                 | DSL sample                                                                                                                                                                                                                    |
 |-------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | DataFlow subscribe to event of type T                                               | `DataFlowBuilder.subscribe(Class<T> eventClass)`                                                                                                                                                                              |
@@ -78,14 +80,8 @@ output is null then the event notification no longer propagates down that path.
 ```java
 var stringFlow = DataFlow.subscribe(String.class);
 
-stringFlow.
-
-map(String::toLowerCase);
-stringFlow.
-
-mapToInt(s ->s.
-
-length()/2);
+stringFlow.map(String::toLowerCase);
+stringFlow.mapToInt(s ->s.length()/2);
 ```
 
 - Stateless functions
@@ -103,14 +99,8 @@ event processor.
 
 ```java
 DataFlow.subscribe(String .class)
-    .
-
-filter(Objects::nonNull)
-    .
-
-mapToInt(s ->s.
-
-length()/2);
+    .filter(Objects::nonNull)
+    .mapToInt(s ->s.length()/2);
 
 ```
 
@@ -186,8 +176,24 @@ types
 
 ## Console
 
-Specialisation of peek that logs to console
+Specialisation of peek that logs to console. The console utility supports specialized tokens that are replaced at
+runtime with timing information:
 
+| Token | Description                                             |
+|-------|---------------------------------------------------------|
+| {}    | Replaced with the actual output value                   |
+| %e    | Current event time                                      |
+| %t    | Current wall clock time                                 |
+| %p    | Current process time                                    |
+| %de   | Delta between current event time and initial event time |
+| %dt   | Delta between current wall clock time and initial time  |
+| %dp   | Delta between current process time and initial time     |
+
+Example usage:
+
+```java
+DataFlowBuilder.subscribe(String.class).console("deltaTime:%dt");
+```
 ## Push
 
 Pushes the output of a node to user class, joins functional to imperative flow

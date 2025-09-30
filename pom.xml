@@ -4,7 +4,7 @@
 
     <groupId>com.telamin.fluxtion</groupId>
     <artifactId>fluxtion-parent</artifactId>
-    <version>0.9.7-SNAPSHOT</version>
+    <version>0.9.8-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>telamin :: fluxtion-master</name>
 
@@ -227,7 +227,6 @@
         <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
-            <scope>provided</scope>
         </dependency>
     </dependencies>
 

@@ -1,4 +1,5 @@
 # Tutorial Part‑2 — Per‑key aggregations, windows, and alerts
+---
 
 In this tutorial you will:
 
@@ -6,20 +7,29 @@ In this tutorial you will:
 - Use a sliding time window with buckets for rolling averages.
 - Emit alerts when thresholds are breached.
 
-Prerequisites
+Source reference in examples repository: [TutorialPart2]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart2.java)
+
+## Prerequisites
 
 - JDK 21+
 - JBang or Maven (see options below)
 
-Option A — Run with JBang (fastest path)
+## Option A — Run with JBang (fastest path)
 
 1. Create a file TutorialPart2.java with the code below.
-2. Run: jbang TutorialPart2.java
+
+```console
+vi TutorialPart2.java
+```
+2. Run with jBang
+
+```console 
+jbang TutorialPart2.java 
+```
 
 ```java
-//DEPS com.telamin.fluxtion:fluxtion-builder:0.9.4
-//COMPILE_OPTIONS -proc:full
-//JAVA 21
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
+//JAVA 25
 
 import com.telamin.fluxtion.builder.DataFlowBuilder;
 import com.telamin.fluxtion.builder.flowfunction.GroupByFlowBuilder;
@@ -90,7 +100,7 @@ public class TutorialPart2 {
 }
 ```
 
-Option B — Maven
+## Option B — Maven
 
 - Add the dependency:
 
@@ -99,23 +109,49 @@ Option B — Maven
 <dependency>
     <groupId>com.telamin.fluxtion</groupId>
     <artifactId>fluxtion-builder</artifactId>
-    <version>0.9.4</version>
+    <version>{{fluxtion_version}}</version>
 </dependency>
 ```
 
 - Add the TutorialPart2 class to your sources and run.
 
-What you should see
+## What you should see
 
 - Console logs of per‑symbol averages changing as new ticks arrive.
 - Occasional ALERT lines when a symbol’s 2‑second average exceeds 150.
 
-Key ideas reinforced
+```console
+fluxtion-exmples % jbang TutorialPart2.java 
+[jbang] Building jar for TutorialPart2.java...
+Building DataFlow: per-symbol sliding average and alerts
+Publishing random ticks every 200 ms. Watch averages and occasional alerts...
+
+2025-09-27T08:39:33.698635Z avg={MSFT=145.66, GOOG=139.76, AAPL=145.45}
+2025-09-27T08:39:34.097128Z avg={MSFT=146.82, GOOG=135.72, AAPL=148.01}
+2025-09-27T08:39:34.696726Z avg={MSFT=148.63, GOOG=133.74, AAPL=143.23}
+2025-09-27T08:39:35.093145Z avg={MSFT=139.94, GOOG=127.57, AAPL=143.7}
+2025-09-27T08:39:35.697075Z avg={MSFT=136.49, GOOG=155.42, AAPL=145.52}
+>>> ALERTS: {GOOG=ALERT: avg>150}
+
+2025-09-27T08:39:36.097093Z avg={MSFT=143.26, GOOG=162.04, AAPL=140.43}
+>>> ALERTS: {GOOG=ALERT: avg>150}
+
+2025-09-27T08:39:36.693796Z avg={MSFT=139.78, GOOG=162.04, AAPL=152.57}
+>>> ALERTS: {GOOG=ALERT: avg>150, AAPL=ALERT: avg>150}
+
+2025-09-27T08:39:37.096920Z avg={MSFT=154.03, GOOG=162.04, AAPL=142.52}
+>>> ALERTS: {MSFT=ALERT: avg>150, GOOG=ALERT: avg>150}
+
+2025-09-27T08:39:37.696783Z avg={MSFT=152.89, GOOG=149.43, AAPL=140.73}
+>>> ALERTS: {MSFT=ALERT: avg>150}
+```
+
+## Key ideas reinforced
 
 - groupBySliding maintains a rolling window per key with fixed‑size time buckets.
 - Mapping and tee allow you to fan out to multiple sinks (averages + alerts) from one computation.
 - Only affected keys update, preserving incremental recomputation semantics.
 
-Next steps
+## Next steps
 
 - Proceed to Part‑3 to combine the DSL with an imperative, stateful component and lifecycle callbacks.
