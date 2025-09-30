@@ -58,7 +58,7 @@ non-blocking poll() loop.
 ```java
 package com.example.feed;
 
-import com.telamin.fluxtion.runtime.eventfeed.EventFeedAgent;
+import com.telamin.fluxtion.runtime.eventfeed.BaseEventFeed;
 import org.agrona.concurrent.status.AtomicCounter;
 
 import java.util.Objects;
@@ -70,7 +70,7 @@ import java.util.function.Supplier;
  * - put(String) can be called from any thread to enqueue new events.
  * - poll() runs on the connector’s AgentRunner thread to drain and publish events.
  */
-public class QueueStringFeed implements EventFeedAgent<String> {
+public class QueueStringFeed extends BaseEventFeed<String> {
 
     private final String id; // NamedFeed id used by DataFlow.subscribe(id)
     private final ConcurrentLinkedQueue<String> queue = new ConcurrentLinkedQueue<>();
