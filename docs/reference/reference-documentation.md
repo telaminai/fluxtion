@@ -5,6 +5,8 @@ DSL is used to create a data flow that can be mapped, filter, windowed, grouped 
 subscription and then can be manipulated with functional operations. Describes the api a developer must be familiar with
 to use DataFlow
 
+> Looking for performance numbers? See the compiled AOT benchmark: [Performance results](performance.md).
+
 | Use                                                                                 | DSL sample                                                                                                                                                                                                                    |
 |-------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | DataFlow subscribe to event of type T                                               | `DataFlowBuilder.subscribe(Class<T> eventClass)`                                                                                                                                                                              |

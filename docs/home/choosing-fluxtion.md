@@ -42,7 +42,7 @@ This page helps you decide if Fluxtion is a good fit, and contrasts it with comm
 
 - Deployment: ship as part of your service JAR. No external services to provision.
 - Observability: add sinks to publish metrics/events; integrate with your logging/metrics stack.
-- Performance: compiled graphs remove reflection and indirection. Expect fewer allocations and tight call paths.
+- Performance: compiled graphs remove reflection and indirection. Expect fewer allocations and tight call paths. See: [Performance results](../reference/performance.md).
 
 ## Decision checklist
 

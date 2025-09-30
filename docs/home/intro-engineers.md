@@ -22,6 +22,14 @@ This section gives a practical, technical view of Fluxtion for Java developers.
 - Direct method calls (no reflective hot path in compiled mode), minimal allocations.
 - Optional ahead‑of‑time (AOT) code generation can yield ~10x over interpreted builder mode, lowering latency and CPU.
 
+!!! note "Headline performance"
+    Real‑world micro‑benchmark of an AOT‑generated processor:
+    - 50 million events/second
+    - ~20 ns average per event (includes application logic)
+    - Low‑ns overhead, zero GC, single‑threaded
+    
+    Full write‑up: [Performance results](../reference/performance.md).
+
 ## Developer workflow
 
 - Define domain events (simple classes) and stateful components.

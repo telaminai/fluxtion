@@ -20,6 +20,13 @@ clear dependencies and excellent performance.
 - Familiar Java: plain objects and methods; no special runtime server required.
 - Infrastructure‑agnostic: not tied to Kafka Streams, Flink, or any specific platform—you choose the messaging/compute stack it runs on.
 
+!!! tip "Performance at a glance"
+    - 50 million events per second (thrpt)
+    - ~20 ns average latency per event including app logic
+    - Low‑nanosecond processing overhead, zero GC, single‑threaded
+    
+    See detailed benchmarks and methodology: [Performance results](reference/performance.md).
+
 ## Quickstart
 
 Install the builder (which depends on the runtime) and try a 2‑minute example.
