@@ -82,6 +82,7 @@ nav:
   - Examples and how-to:
       - Example repo: example/examples.md
       - Sample applications: sample-apps/embedding-dataflow-file-feed-sink-demo.md
+      - Creating an EventFeedAgent: example/event-feed-agent.md
   - Fluxtion programming:
       - Dataflow overview: home/what-is-dataflow.md
       - Event dispatch: home/event-dispatch-diagrams.md
@@ -108,6 +109,8 @@ nav:
       - DataFlow context: runtime/dataflow-context.md
       - Clocks and time: runtime/clocks-and-time.md
       - Buffer and trigger: runtime/buffer-and-trigger.md
+  - Integrations:
+      - DataFlow connector: integration/dataflow-connector.md
   - Troubleshooting: troubleshooting/index.md
   - Reference guide:
       - Quick reference: reference/reference-documentation.md
