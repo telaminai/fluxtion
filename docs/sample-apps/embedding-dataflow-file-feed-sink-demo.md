@@ -256,7 +256,7 @@ public class FileFeedSinkDemo {
         DataFlow dataFlow = DataFlowBuilder.subscribeToFeed("fileFeed", String.class)
                 .console("read file in:{}")
                 .map(String::toUpperCase)
-                .console("write file out:{}<br/>")
+                .console("write file out:{}")
                 .sink("fileSink")
                 .build();
 
