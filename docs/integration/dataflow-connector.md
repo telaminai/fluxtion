@@ -19,6 +19,51 @@ then fans out results to user‑provided sinks. It provides:
 
 Relevant class: [DataFlowConnector](https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-runtime/latest/com/telamin/fluxtion/runtime/connector/DataFlowConnector.html)
 
+## Architecture overview
+```mermaid
+flowchart TB
+  subgraph "Agent thread"
+    direction TB
+    FEEDS[[EventFeedAgents]]
+    DF[[DataFlows]]
+    SINKS[[Named sinks<br/>Consumer sink]]
+    FEEDS -->|onEvent| DF -->|publish| SINKS
+  end
+  APP[Your application threads] -->|addFeed / addDataFlow / addSink| FEEDS
+  APP -->|start / stop| FEEDS
+```
+
+## Runtime sequence (poll loop)
+```mermaid
+sequenceDiagram
+  participant Runner as AgentRunner thread
+  participant Feed as EventFeedAgent
+  participant Flow as DataFlow
+  participant Sink as Consumer sink
+  loop run()
+    Runner->>Feed: poll()
+    alt new event
+      Feed-->>Runner: event
+      Runner->>Flow: onEvent(e)
+      Flow-->>Runner: onPublish(id, value)
+      Runner->>Sink: accept(value)
+    else idle
+      Runner-->>Runner: IdleStrategy.idle(...)
+    end
+  end
+```
+
+## Lifecycle states
+```mermaid
+stateDiagram-v2
+  [*] --> Created
+  Created --> Started: start()
+  Started --> Active: agent status == ACTIVE
+  Active --> Stopping: stop()
+  Stopping --> Stopped: agentRunner.close()
+  Stopped --> [*]
+```
+
 ## When to use it
 
 Use DataFlowConnector when you:
