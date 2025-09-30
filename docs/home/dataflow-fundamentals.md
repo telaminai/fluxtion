@@ -1,5 +1,6 @@
 # DataFlow fundamentals
 ---
+
 A DataFlow is a container that combines dependency injection with event dispatch for realtime data processing. In
 technical
 terms all elements within a DataFlow are organised in a topologically sorted directed acyclic graph (DAG).

@@ -1,11 +1,3 @@
----
-title: 1 minute tutorial
-parent: DataFlow
-nav_order: 1
-published: true
-layout: default
----
-
 # DataFlow developer quickstart
 ---
 
@@ -47,7 +39,7 @@ notepad.exe GroupByWindowExample.java
 ```
 
 ```java
-//DEPS com.telamin.fluxtion:fluxtion-builder:0.9.4
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
 //COMPILE_OPTIONS -proc:full
 //JAVA 25
 
@@ -113,7 +105,7 @@ Console output:
 ```console
 %> jbang GroupByWindowExample.java
 [jbang] Resolving dependencies...
-[jbang]    com.fluxtion.dataflow:dataflow-builder:1.0.0
+[jbang]    com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
 [jbang] Dependencies resolved
 [jbang] Building jar for GroupByWindowExample.java...
 building DataFlow::avgSpeedByMake...

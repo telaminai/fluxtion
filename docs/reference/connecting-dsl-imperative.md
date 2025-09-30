@@ -1,12 +1,11 @@
-
 # Connecting DataFlow and nodes
 ---
+
 An event processor supports bi-directional linking between flows and normal java classes, also known as nodes,  in the
 event processor.
 
-{: .info }
-Connecting DataFlow and nodes is a powerful mechanism for joining functional and imperative programming in a streaming environment
-{: .fs-4 }
+!!! info "Bridging functional and imperartive models"
+    Connecting DataFlow and nodes is a powerful mechanism for joining functional and imperative programming in a streaming environment
 
 Supported bindings:
 
@@ -31,7 +30,8 @@ DataFlow path is executed. In this case we are aggregating into a list that has 
 ```java
 public class SubscribeToNodeSample {
     public static void main(String[] args) {
-        DataFlow processor = DataFlowBuilder.subscribeToNode(new MyComplexNode())
+        DataFlow processor = DataFlowBuilder
+                .subscribeToNode(new MyComplexNode())
                 .console("node triggered -> {}")
                 .map(MyComplexNode::getIn)
                 .aggregate(Collectors.listFactory(4))
@@ -98,7 +98,10 @@ This example binds a data flow of String's to a java record that has an onTrigge
 
 ```java
 public static void main(String[] args) {
-    FlowSupplier<String> stringFlow = DataFlowBuilder.subscribe(String.class).flowSupplier();
+    FlowSupplier<String> stringFlow = DataFlowBuilder
+            .subscribe(String.class)
+            .flowSupplier();
+    
     DataFlow processor = DataFlowBuilder
             .subscribeToNode(new MyFlowHolder(stringFlow))
             .build();
@@ -126,7 +129,8 @@ A data flow can push a value to any normal java class
 
 ```java
 public static void main(String[] args) {
-    DataFlow processor = DataFlowBuilder.subscribe(String.class)
+    DataFlow processor = DataFlowBuilder
+            .subscribe(String.class)
             .push(new MyPushTarget()::updated)
             .build();
 
@@ -147,31 +151,113 @@ received push: AAA
 received push: BBB
 ```
 
-## Re-entrant events
+## Map from node property
 
-Events can be added for processing from inside the graph for processing in the next available cycle. Internal events
-are added to LIFO queue for processing in the correct order. The EventProcessor instance maintains the LIFO queue, any
-new input events are queued if there is processing currently acting. Support for internal event publishing is built
-into the streaming api.
+A data flow can retrieve a value from any normal java class and map it to the data flow
 
-Maps an int signal to a String and republishes to the graph
 ```java
-public static void main(String[] args) {
-    DataFlowBuilder.subscribeToIntSignal("myIntSignal")
-            .mapToObj(d -> "intValue:" + d)
-            .console("republish re-entrant [{}]")
-            .processAsNewGraphEvent();
+public class MapNodeSupplierSample {
+    public static void main(String[] args) {
+        MyPushTarget myPushTarget = new MyPushTarget();
+        DataFlow processor = DataFlowBuilder
+                .subscribe(String.class)
+                .push(myPushTarget::updated)
+                .mapFromSupplier(myPushTarget::received)
+                .console("Received - [{}]")
+                .build();
 
-    var processor = DataFlowBuilder.subscribe(String.class)
-            .console("received [{}]")
-            .build();
+        processor.onEvent("AAA");
+        processor.onEvent("BBB");
+    }
 
-    processor.publishSignal("myIntSignal", 256);
+    public static class MyPushTarget {
+        private String store = " ";
+        public void updated(String in) {
+            store += "'" + in + "' ";
+        }
+
+        public String received() {
+            return store;
+        }
+    }
 }
 ```
 
-Output
+Running the example code above logs to console
 ```console
-republish re-entrant [intValue:256]
-received [intValue:256]
+Received - [ 'AAA' ]
+Received - [ 'AAA' 'BBB' ]
+```
+
+## Wrapping user functions
+
+A data flow can wrap a user defined function and use it in the data flow. The function can be stateful or stateless, both
+binaary and unary functions are supported.
+
+```java
+public class WrapFunctionsSample {
+
+    public static void main(String[] args) {
+        //STATEFUL FUNCTIONS
+        MyFunctions myFunctions = new MyFunctions();
+
+        var stringFlow = DataFlowBuilder
+                .subscribe(String.class)
+                .console("input: '{}'");
+
+        var charCount = stringFlow
+                .map(myFunctions::totalCharCount)
+                .console("charCountAggregate: {}");
+
+        var upperCharCount = stringFlow
+                .map(myFunctions::totalUpperCaseCharCount)
+                .console("upperCharCountAggregate: {}");
+
+        DataFlowBuilder
+                .mapBiFunction(
+                        new MyFunctions.SimpleMath()::updatePercentage, 
+                        upperCharCount, 
+                        charCount)
+                .console("percentage chars upperCase all words:{}");
+
+        //STATELESS FUNCTION
+        DataFlow processor = DataFlowBuilder
+                .mapBiFunction(MyFunctions::wordUpperCasePercentage,
+                        stringFlow.map(MyFunctions::upperCaseCharCount).console("charCourWord:{}"),
+                        stringFlow.map(MyFunctions::charCount).console("upperCharCountWord:{}"))
+                .console("percentage chars upperCase this word:{}\n")
+                .build();
+
+        processor.onEvent("test ME");
+        processor.onEvent("and AGAIN");
+        processor.onEvent("ALL CAPS");
+    }
+}
+```
+
+Running the example code above logs to console
+```console
+input: 'test ME'
+charCountAggregate: 6
+upperCharCountAggregate: 2
+percentage chars upperCase all words:0.3333333333333333
+charCourWord:2
+upperCharCountWord:6
+percentage chars upperCase this word:0.3333333333333333
+
+input: 'and AGAIN'
+charCountAggregate: 14
+upperCharCountAggregate: 7
+percentage chars upperCase all words:0.45
+charCourWord:5
+upperCharCountWord:8
+percentage chars upperCase this word:0.625
+
+input: 'ALL CAPS'
+charCountAggregate: 21
+upperCharCountAggregate: 14
+percentage chars upperCase all words:0.5609756097560976
+charCourWord:7
+upperCharCountWord:7
+percentage chars upperCase this word:1.0
 ```

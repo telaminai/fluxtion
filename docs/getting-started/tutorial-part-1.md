@@ -1,4 +1,5 @@
 # Tutorial Part‑1 — Build your first DataFlow
+---
 
 In this hands‑on tutorial you will:
 
@@ -6,20 +7,29 @@ In this hands‑on tutorial you will:
 - Run it in‑process and print results to the console.
 - Understand at‑most‑once dispatch and what triggers recomputation.
 
-Prerequisites
+Source reference in examples repository: [TutorialPart1]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart1.java)
+
+## Prerequisites
 
 - JDK 21+
 - Maven Wrapper (provided in this repo) or JBang
 
-Option A — Run with JBang (fastest path)
+## Option A — Run with JBang (fastest path)
 
 1. Create a file TutorialPart1.java with the code below.
-2. Run: jbang TutorialPart1.java
+
+```console
+vi TutorialPart1.java
+```
+2. Run with jBang
+
+```console 
+jbang TutorialPart1.java 
+```
 
 ```java
-//DEPS com.telamin.fluxtion:fluxtion-builder:0.9.4
-//COMPILE_OPTIONS -proc:full
-//JAVA 21
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
+//JAVA 25
 
 import com.telamin.fluxtion.builder.DataFlowBuilder;
 import com.telamin.fluxtion.runtime.DataFlow;
@@ -77,7 +87,7 @@ public class TutorialPart1 {
 }
 ```
 
-Option B — Add to a Maven project
+## Option B — Add to a Maven project
 
 - Dependency (use the version from this repo’s docs homepage if newer):
 
@@ -86,28 +96,42 @@ Option B — Add to a Maven project
 <dependency>
     <groupId>com.telamin.fluxtion</groupId>
     <artifactId>fluxtion-builder</artifactId>
-    <version>0.9.4</version>
+    <version>{{fluxtion_version}}</version>
 </dependency>
 ```
 
 - Then add the TutorialPart1 class above to your sources and run it from your IDE.
 
-What you should see
+## What you should see
 
 - Console prints a map of net positions that changes incrementally, for example:
-  {aapl=5, msft=5}
-  {aapl=5, msft=5, goog=10}
-  {aapl=0, msft=5, goog=10}
+```console
+fluxtion-exmples % jbang TutorialPart1.java
+Building DataFlow: per-symbol net quantity over last N events
+Publishing demo trades every 300 ms... Press Ctrl+C to stop
+
+Trade[symbol=MSFT, qty=-5]
+{msft=-50}
+
+Trade[symbol=GOOG, qty=10]
+{goog=100, msft=-50}
+
+Trade[symbol=AAPL, qty=-5]
+{goog=100, aapl=-50, msft=-50}
+
+Trade[symbol=MSFT, qty=10]
+```
+
 - Only affected keys change as new trades arrive.
 
-How it works (relate to Concepts page)
+## How it works (relate to Concepts page)
 
 - DAG and dispatch: Each Trade triggers a single topological pass. Nodes are invoked at most once per event.
 - Triggering recomputation: A new Trade updates the group for its symbol; only that key’s aggregate changes, then the
   sink fires.
 - Deterministic order: filter → map → groupBy → toMap → sink every time.
 
-Next steps
+## Next steps
 
 - Read Concepts and architecture to internalize the DAG and execution model.
 - Try the 1 minute tutorial for a sliding‑window average.
