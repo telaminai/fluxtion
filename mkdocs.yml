@@ -110,6 +110,7 @@ nav:
   - Reference guide:
       - Quick reference: reference/reference-documentation.md
       - Console sink formatting: reference/console-sink-format.md
+      - Performance results: reference/performance.md
       - API javadoc:
         - Fluxtion-runtime: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-runtime/latest/index.html
         - Fluxtion-builder: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-builder/latest/index.html
