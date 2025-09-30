@@ -53,9 +53,19 @@ The goal is to create a representative test with randomly distributed input data
 
 ### AOT generated event processor
 
+Fluxtion generates an ahead-of-time (AOT) event processor that is optimized for the specific graph of nodes and their
+relationships. The generated code:
 
-## Jmh results
+- Creates a single class that handles all event routing
+- Maintains node references and dependencies
+- Executes nodes in the correct order based on dependencies
+- Eliminates reflection and dynamic dispatch
+- Removes all runtime overhead of graph traversal
 
+The generated event processor for this test is here [PriceLadderProcessor.java]({{fluxtion_example_src}}/compiler/aot-compiler/src/main/java/com/telamin/fluxtion/example/compile/aot/generated/PriceLadderProcessor.java)
+
+
+## Throughput and per operation results
 ```console
 Benchmark                                            Mode  Cnt         Score   Error  Units
 PriceLadderBenchmark.throughPut_BranchingProcessor  thrpt    2  50872626.050          ops/s
@@ -71,7 +81,7 @@ recorded using HdrHistogram which adds an overhead of several nanoseconds to eac
 follows the tail for jitter on the test machine with no app code executing, this tells us the jitter at the higher
 end is due to the machine and not the application.
 
-![](../images/aot_latency_histogram.png)
+[![](../images/aot_latency_histogram.png)](../images/aot_latency_histogram.png){:target="_blank"}
 
 * blue line - total latency
 * red line - machine jitter with no processing
