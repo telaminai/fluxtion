@@ -18,17 +18,17 @@ For background, the “getting-started” tutorial [TutorialPart5](../getting-st
 
 ## Architecture overview
 ```mermaid
-flowchart LR
+flowchart TB
   subgraph Source
-    A[Input file\n./data/input.txt]
+    A[Input file<br/>./data/input.txt]
   end
   subgraph "Fluxtion runtime"
-    FEED[[FileEventFeed\nReadStrategy.EARLIEST]]
-    DF[[DataFlow\n console -> map upper -> console -> sink fileSink ]]
-    SINK[[FileMessageSink\nfileSink]]
+    FEED[[FileEventFeed<br/>ReadStrategy.EARLIEST]]
+    DF[[DataFlow event in -><br/>console -> <br/>map upper -> <br/>console -> <br/>sink fileSink ]]
+    SINK[[FileMessageSink<br/>fileSink]]
   end
   subgraph Target
-    B[Output file\n./data/output.txt]
+    B[Output file<br/>./data/output.txt]
   end
 
   A -- tail + append --> FEED
@@ -256,7 +256,7 @@ public class FileFeedSinkDemo {
         DataFlow dataFlow = DataFlowBuilder.subscribeToFeed("fileFeed", String.class)
                 .console("read file in:{}")
                 .map(String::toUpperCase)
-                .console("write file out:{}\n")
+                .console("write file out:{}<br/>")
                 .sink("fileSink")
                 .build();
 
