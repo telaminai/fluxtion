@@ -92,6 +92,9 @@ nav:
           - DSL aggregating: reference/functional/aggregating.md
           - DSL windowing: reference/functional/windowing.md
           - DSL groupBy: reference/functional/dataflow-functional-groupby-dsl.md
+          - DSL groupBy windowed: reference/functional/windowed-groupby.md
+          - DSL groupBy map/reduce: reference/functional/groupby-functional-support.md
+          - DSL groupBy joining: reference/functional/joining.md
       - Imperative Dataflow:
           - Imperative introduction: reference/imperative/overview-imperative.md
           - Imperative subscribing: reference/imperative/basics.md
