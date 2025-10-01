@@ -5,6 +5,8 @@
 User events can implement [Event]({{fluxtion_src_runtime}}/event/Event.java), which provides an optional filtering 
 field. Event handlers can specify the filter value, so they only see events with matching filters
 
+See sample - [StaticFiltering.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/filtering/StaticFiltering.java)
+
 ```java
 public class StaticFiltering {
 
@@ -56,6 +58,8 @@ anySignal [Signal: {filterString: HEARTBEAT_SIGNAL, value: heartbeat message}]
 ## Filter variables
 The filter value on the event handler method can be extracted from an instance field in the class. Annotate the event
 handler method with an attribute that points to the filter variable `@OnEventHandler(filterVariable = "[class variable]")`
+
+See sample - [VariableFiltering.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/filtering/VariableFiltering.java)
 
 ```java
 public class VariableFiltering {

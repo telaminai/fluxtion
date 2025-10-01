@@ -30,6 +30,8 @@ The stop calls are invoked reverse topological order.
 User nodes that are added to the processing graph can attach to the lifecycle callbacks by annotating methods with 
 the relevant annotations.
 
+See sample - [LifecycleCallback.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/callback/LifecycleCallback.java)
+
 ```java
 public class LifecycleCallback {
     public static class MyNode {

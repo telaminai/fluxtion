@@ -5,6 +5,8 @@
 Sends an incoming even to the EventProcessor to trigger a new stream calculation. Any method annotated with 
 `@OnEvent` receives the event from the event processor
 
+See sample - [WrapNode.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/subscribe/WrapNode.java)
+
 ```java
 public class WrapNode {
     public static class MyNode {
@@ -33,6 +35,8 @@ received:TEST
 ## Handle multiple event types
 An event handler class can handle multiple event types. Add as many handler methods as required and annotate each method
 with an `@OnEvent` annotation.
+
+See sample - [MultipleEventTypes.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/subscribe/MultipleEventTypes.java)
 
 ```java
 public class MultipleEventTypes {
@@ -73,6 +77,8 @@ An unknown event handler can be registered at runtime with the event processor, 
 by the processor. Register the unKnownEventHandler with:
 
 `[processor].setUnKnownEventHandler(Consumer<T> consumer)`
+
+See sample - [UnknownEventHandling.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/subscribe/UnknownEventHandling.java)
 
 ```java
 public class UnknownEventHandling {

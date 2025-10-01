@@ -178,6 +178,8 @@ In this example the resetTrigger controls when the functional mapping operation 
 operation is stateful so all the values in the list are removed when then reset trigger fires. The reset operation causes 
 trigger a notification to children of the flow node.
 
+See sample - [TriggerResetSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/trigger/TriggerResetSample.java)
+
 `resetTrigger(DataFlow.subscribeToSignal("resetMe"))`
 
 The reset trigger notifies the stateful function to clear its state.
@@ -226,10 +228,11 @@ node triggered -> SubscribeToNodeSample.MyComplexNode(in=F)
 last 4 elements:[E, F]
 ```
 
-###Stateful function reset
+### Stateful function reset
 Stateful functions can be reset by implementing the [Stateful]({{fluxtion_src_runtime}}/dataflow/Stateful.java) interface with a reset 
 method. Configuring the resetTrigger will automatically route calls to the reset method of the stateful function.
 
+See sample - [ResetFunctionSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/trigger/ResetFunctionSample.java)
 
 ```java
 public class ResetFunctionSample {
