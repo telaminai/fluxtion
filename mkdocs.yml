@@ -102,6 +102,10 @@ nav:
           - Imperative advanced: reference/imperative/advanced.md
           - Imperative lifecycle callbacks: reference/imperative/lifecycle-callbacks.md
       - Combine DSL and imperative: reference/connecting-dsl-imperative.md
+      - Services:
+          - Service introduction: reference/service/introduction.md
+          - Service import: reference/service/service-registered.md
+          - Service export: reference/service/service-export.md
       - Dataflow runtime:
           - Runtime introduction: runtime/runtime-overview.md
           - DataFlow context: runtime/dataflow-context.md
