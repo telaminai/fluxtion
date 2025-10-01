@@ -115,11 +115,11 @@ nav:
         - Dataflow overview: reference/what-is-dataflow.md
         - Event dispatch: reference/event-dispatch-diagrams.md
         - Fundamentals: reference/dataflow-fundamentals.md
-      - Console sink formatting: reference/console-sink-format.md
       - Performance results: reference/performance.md
       - Reference:
           - Alternative comparisons: reference/alternative-comparisons.md
-          - Troubleshooting: troubleshooting/index.md
+          - Console sink formatting: reference/console-sink-format.md
+          - Troubleshooting: troubleshooting/troubleshooting_index.md
           - API javadoc:
             - Fluxtion-runtime: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-runtime/latest/index.html
             - Fluxtion-builder: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-builder/latest/index.html
