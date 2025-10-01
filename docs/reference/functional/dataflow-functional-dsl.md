@@ -13,6 +13,8 @@ DataFlowBuilder.[subscribe operation].build()
 To create a flow for String events, call  `DataFlowBuilder.subscribe(String.class)`, any call to processor.onEvent("myString") will be 
 routed to this flow.
 
+See sample - [SubscribeToEventSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/functional/SubscribeToEventSample.java)
+
 ```java
 DataFlow.subscribe(String.class);
 ```
@@ -41,6 +43,8 @@ string in BBB
 ###Map
 A map operation takes the output from a parent node and then applies a function to it. If the return of the
 function is null then the event notification no longer propagates down that path.
+
+See sample - [MapSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/functional/MapSample.java)
 
 ```java
 DataFlow.subscribe(String.class)
@@ -78,6 +82,8 @@ string mapped bbb
 Two data flows can be mapped with a bi map function. Both flows must have triggered at least once for the bimap function
 to be invoked
 
+See sample - [BiMapSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/functional/BiMapSample.java)
+
 ```java
 public static void main(String[] args) {
     var strings = DataFlowBuilder.subscribe(String.class);
@@ -100,7 +106,7 @@ Running the example code above logs to console
 biMap ans: 555
 ```
 
-###Default value
+### Default value
 A default value can be assigned to any flow. This can be useful when calculating a bi map function and one data flow
 argument is optional
 
@@ -165,13 +171,13 @@ Running the example code above logs to console
 int 17 > 10
 ```
 
-###Reduce
+### Reduce
 There is no reduce function required in Fluxtion, stateful map functions perform the role of reduce. In a classic batch
 environment the reduce operation combines a collection of items into a single value. In a streaming environment
 the set of values is never complete, we can view the current value of a stateful map operation which is equivalent to the
 reduce operation. The question is rather, when is the value of the stateful map published and reset.
 
-###FlatMap
+### FlatMap
 
 A Flatmap operation flattens a collection in a data flow. Any operations applied after the flatmap operation are 
 performed on each element in the collection. 
@@ -212,7 +218,7 @@ flattened item [7]
 flattened item [11]
 ```
 
-###Merge flows
+### Merge flows
 Flows can be merged to output a single flow that can be operated on
 
 ```java
@@ -241,7 +247,7 @@ int : 123
 MERGED FLOW -> 123
 ```
 
-###Merge and map flows
+### Merge and map flows
 
 Merge multiple streams of different types into a single output, applying a mapping operation to combine the different types.
 Only when at least one element from each required flow is received will the data flow publish. The upstream flows are
