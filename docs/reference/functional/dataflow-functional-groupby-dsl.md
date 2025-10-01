@@ -9,6 +9,8 @@ to the partition.
 
 ### GroupBy and aggregate
 
+See sample - [GroupBySample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/groupby/GroupBySample.java)
+
 ```java
 public class GroupBySample {
     public record ResetList() {}
@@ -56,7 +58,7 @@ ODD/EVEN map:{evens=1}
 ```
 
 
-###GroupBy to list
+### GroupBy to list
 
 Collect items in group to a list with this call.
 
@@ -65,6 +67,8 @@ Collect items in group to a list with this call.
 This is shorthand for:
 
 `.groupBy(i -> i % 2 == 0 ? "evens" : "odds", Collectors.listFactory())`
+
+See sample - [GroupByToListSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/groupby/GroupByToListSample.java)
 
 ```java
 public class GroupByToListSample {
@@ -107,7 +111,9 @@ ODD/EVEN map:{}
 ```
 
 
-###GroupBy to set
+### GroupBy to set
+
+See sample - [GroupByToSetSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/groupby/GroupByToSetSample.java)
 
 ```java
 public class GroupByToSetSample {
@@ -155,7 +161,9 @@ ODD/EVEN map:{odds=[1, 5, 7], evens=[2]}
 ODD/EVEN map:{}
 ```
 
-###GroupBy with compound key
+### GroupBy with compound key
+
+See sample - [GroupByFieldsSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/groupby/GroupByFieldsSample.java)
 
 ```java
 public class GroupByFieldsSample {
@@ -326,7 +334,9 @@ subscription method to be declared as it is called implicitly. Some examples bel
 ## Windowed GroupBy
 --- 
 
-###Tumbling GroupBy
+### Tumbling GroupBy
+
+See sample - [TumblingGroupBySample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/groupby/TumblingGroupBySample.java)
 
 ```java
 public class TumblingGroupBySample {
@@ -374,7 +384,9 @@ Trade volume for last 250 millis:{MSFT=263, GOOG=197, AMZN=411, TKM=373} timeDel
 ```
 
 
-###Sliding GroupBy
+### Sliding GroupBy
+
+See sample - [SlidingGroupBySample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/groupby/SlidingGroupBySample.java)
 
 ```java
 public class SlidingGroupBySample {
@@ -420,7 +432,9 @@ Trade volume for last second:{MSFT=1384, GOOG=1344, AMZN=1153, TKM=865} timeDelt
 ```
 
 
-###Tumbling GroupBy with compound key
+### Tumbling GroupBy with compound key
+
+See sample - [TumblingGroupByCompoundKeySample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/groupby/TumblingGroupByCompoundKeySample.java)
 
 ```java
 public class TumblingGroupByCompoundKeySample {
@@ -511,7 +525,9 @@ client_A_MSFT_: 65
 ```
 
 
-###Sliding GroupBy with compound key
+### Sliding GroupBy with compound key
+
+See sample - [SlidingGroupByCompoundKeySample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/groupby/SlidingGroupByCompoundKeySample.java)
 
 ```java
 public class SlidingGroupByCompoundKeySample {
@@ -614,11 +630,13 @@ client_D_TKM_: 305
 --- 
 Fluxtion offers extended methods for manipulating a GroupBy instance of DataFlow node
 
-###Mapping keys
+### Mapping keys
 Keys of GroupBy can be mapped with
 
 `mapKeys(Function<KEY_OLD, KEY_NEW> keyMappingFunction)`
 
+
+See sample - [GroupByMapKeySample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/groupby/GroupByMapKeySample.java)
 
 ```java
 public class GroupByMapKeySample {
@@ -657,11 +675,13 @@ Running the example code above logs to console
 ```
 
 
-###Mapping values
+### Mapping values
 Values of GroupBy can be mapped with
 
 `mapValues(Function<VALUE_OLD, VALUE_NEW> valueMappingFunction)`
 
+
+See sample - [GroupByMapValuesSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/groupby/GroupByMapValuesSample.java)
 
 ```java
 public class GroupByMapValuesSample {
@@ -715,13 +735,15 @@ ODD/EVEN map:{odds=range [1,7], evens=range [2,2]}
 ODD/EVEN map:{}
 ```
 
-###Reducing values
+### Reducing values
 All the values of GroupBy can be reduced to a single value
 
 `reduceValues(Supplier<AggregateFlowFunction> aggregateFactory)`
 
 All the values are passed to the aggregate function and the single scalar output is published for downstream nodes to
 consume.
+
+See sample - [GroupByReduceSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/groupby/GroupByReduceSample.java)
 
 ```java
 public class GroupByReduceSample {
@@ -768,7 +790,7 @@ REDUCED sum:17
 
 Fluxtion supports join operations for groupBy data flow nodes.
 
-###Inner join
+### Inner join
 Joins are create with the data flow node of a group by or using the [JoinFlowBuilder]({{fluxtion_src_compiler}}/builder/dataflow/JoinFlowBuilder.java)
 
 `JoinFlowBuilder.innerJoin(schools, pupils)`
@@ -779,6 +801,8 @@ The utility static method in [Tuples]({{fluxtion_src_runtime}}/dataflow/helpers/
 `Tuples.mapTuple`
 
 Is used to map the School, Pupil Tuple into a pretty print String.
+
+See sample - [GroupByJoinSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/groupby/GroupByJoinSample.java)
 
 ```java
 public class GroupByJoinSample {
@@ -828,13 +852,15 @@ Running the example code above logs to console
 {Belles=pupils[Channing,Tamsin,Ayola,Sunita], RGS=pupils[Bob,Ashkay,Chelsea]}
 ```
 
-###Left outer join
+### Left outer join
 Joins are create with the data flow node of a group by or using the [JoinFlowBuilder]({{fluxtion_src_compiler}}/builder/dataflow/JoinFlowBuilder.java)
 
 `JoinFlowBuilder.leftJoin(schools, pupils)`
 
 A default value of an empty collection is assigned to the pupil groupBy so the first school can join against a non-null
 value.
+
+See sample - [GroupByLeftOuterJoinSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/groupby/GroupByLeftOuterJoinSample.java)
 
 ```java
 public class GroupByLeftOuterJoinSample {
@@ -893,13 +919,15 @@ left outer join
 {Belles=pupils[Channing,Sunita], RGS=pupils[Bob,Ashkay], Framling=pupils[]}
 ```
 
-###right outer join
+### right outer join
 Joins are create with the data flow node of a group by or using the [JoinFlowBuilder]({{fluxtion_src_compiler}}/builder/dataflow/JoinFlowBuilder.java)
 
 `JoinFlowBuilder.rightJoin(schools, pupils)`
 
 A default value of an empty collection is assigned to the pupil groupBy so the first school can join against a non-null
 value.
+
+See sample - [GroupByRightOuterJoinSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/groupby/GroupByRightOuterJoinSample.java)
 
 ```java
 public class GroupByRightOuterJoinSample {
@@ -961,6 +989,8 @@ Joins are create with the data flow node of a group by or using the [JoinFlowBui
 
 A default value of an empty collection is assigned to the pupil groupBy so the first school can join against a non-null
 value.
+
+See sample - [GroupByFullOuterJoinSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/groupby/GroupByFullOuterJoinSample.java)
 
 ```java
 public class GroupByFullOuterJoinSample {
@@ -1045,6 +1075,8 @@ to publish a MergedData record to the flow.
 The MergedData instance is added to the GroupBy data flow keyed by name. The multi join data flow can be operated on 
 as any normal flow, in this case we are mapping the value with a 
 pretty printing function.
+
+See sample - [MultiJoinSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/groupby/MultiJoinSample.java)
 
 ```java
 public class MultiJoinSample {

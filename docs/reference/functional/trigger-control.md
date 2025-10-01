@@ -20,6 +20,8 @@ addition to the normal triggering operation of the flow node. The values in the 
 
 Child DataFlow nodes are notified when publishTrigger fires or the map function executes in a calculation cycle.
 
+See sample - [TriggerPublishSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/trigger/TriggerPublishSample.java)
+
 ```java
 public class TriggerPublishSample {
     public static void main(String[] args) {
@@ -75,6 +77,8 @@ The values in the parent node are unchanged when publishing.
 
 Child DataFlow nodes are notified when publishTriggerOverride fires.
 
+See sample - [TriggerPublishOverrideSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/trigger/TriggerPublishOverrideSample.java)
+
 ```java
 public class TriggerPublishOverrideSample {
     public static void main(String[] args) {
@@ -127,6 +131,8 @@ a mapping operation.
 `updateTrigger(DataFlow.subscribeToSignal("updateMe"))`
 
 A map operation only occurs when the update trigger fires. 
+
+See sample - [TriggerUpdateSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/trigger/TriggerUpdateSample.java)
 
 ```java
 public class TriggerUpdateSample {
