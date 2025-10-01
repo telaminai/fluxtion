@@ -152,7 +152,7 @@ msg:WORLD
                 .resetTrigger(resetSignal)
                 .filter(i -> i != 0)
                 .publishTriggerOverride(publishSignal)
-                .console("Current sun:{}")
+                .console("Current sum:{}")
                 .build();
     
         sumDataFlow.onEvent(10);
@@ -176,8 +176,8 @@ msg:WORLD
     ```console
     jbang Triggering.java
     [jbang] Building jar for Triggering.java...
-    Current sun:92
-    Current sun:25
+    Current sum:92
+    Current sum:25
     ```
 
 === "Stateful functions"
