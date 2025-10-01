@@ -110,6 +110,8 @@ biMap ans: 555
 A default value can be assigned to any flow. This can be useful when calculating a bi map function and one data flow
 argument is optional
 
+See sample - [DefaultValueSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/functional/DefaultValueSample.java)
+
 ```java
 public static void main(String[] args) {
     var strings = DataFlowBuilder
@@ -136,6 +138,8 @@ biMap with default value ans: 255
 A filter predicate can be applied to a node to control event propagation, true continues the propagation and false swallows
 the notification. If the predicate returns true then the input to the predicate is passed to the next operation in the
 event processor.
+
+See sample - [FilterSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/functional/FilterSample.java)
 
 ```java
 DataFlow
@@ -182,6 +186,8 @@ reduce operation. The question is rather, when is the value of the stateful map 
 A Flatmap operation flattens a collection in a data flow. Any operations applied after the flatmap operation are 
 performed on each element in the collection. 
 
+See sample - [FlatMapSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/functional/FlatMapSample.java)
+
 ```java
 public static void main(String[] args) {
     DataFlow processor = DataFlowBuilder
@@ -221,6 +227,8 @@ flattened item [11]
 ### Merge flows
 Flows can be merged to output a single flow that can be operated on
 
+See sample - [MergeSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/functional/MergeSample.java)
+
 ```java
 public static void main(String[] args) {
     DataFlow processor = DataFlowBuilder.merge(
@@ -248,6 +256,8 @@ MERGED FLOW -> 123
 ```
 
 ### Merge and map flows
+
+See sample - [MergeAndMapSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/functional/MergeAndMapSample.java)
 
 Merge multiple streams of different types into a single output, applying a mapping operation to combine the different types.
 Only when at least one element from each required flow is received will the data flow publish. The upstream flows are
@@ -298,6 +308,8 @@ new customer : MergeAndMapSample.MyData(customer=John Doe, date=Sat May 11 19:17
 
 ### Re-entrant events
 
+See sample - [ReEntrantEventSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/functional/ReEntrantEventSample.java)
+
 Events can be added for processing from inside the graph for processing in the next available cycle. Internal events
 are added to LIFO queue for processing in the correct order. The EventProcessor instance maintains the LIFO queue, any
 new input events are queued if there is processing currently acting. Support for internal event publishing is built
@@ -328,6 +340,8 @@ received [intValue:256]
 ```
 
 ### Sink
+
+See sample - [SinkExample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/functional/SinkExample.java)
 
 An application can register for output from the EventProcessor by supplying a consumer to addSink and removed with a 
 call to removeSink. Bound classes can publish to sinks during an event process cycle, any registered sinks will see 
@@ -364,7 +378,10 @@ intValue:10
 intValue:256
 ```
 
-###DataFlow node lookup by id
+### DataFlow node lookup by id
+
+See sample - [GetFlowNodeByIdExample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/functional/GetFlowNodeByIdExample.java)
+
 DataFlow nodes are available for lookup from an event processor instance using their name. In this case the lookup 
 returns a reference to the wrapped value and not the wrapping node. The application can then use the reference to 
 pull data from the node without requiring an event process cycle to push data to an output.
@@ -409,7 +426,7 @@ Monday is triggered
 Monday count:2
 ```
 
-###Graph of functions
+### Graph of functions
 Fluxtion automatically wraps the function in a node, actually a monad, and binds both into the event processor. The wrapping node
 handles all the event notifications, invoking the user function when it is triggered. Each wrapping node can be the
 head of multiple child flows forming complex graph structures that obey the dispatch rules. This is in contrast to
