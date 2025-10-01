@@ -67,7 +67,7 @@ nav:
   - Home:
       - Index: index.md
       - Why fluxtion: home/why-fluxtion.md
-      - Choosing fluxtion: home/choosing-fluxtion.md
+      - Choosing fluxtion: reference/choosing-fluxtion.md
       - Concepts and architecture: home/concepts-and-architecture.md
       - For engineers: home/intro-engineers.md
       - For managers: home/intro-managers.md
@@ -84,9 +84,6 @@ nav:
       - Sample applications: sample-apps/embedding-dataflow-file-feed-sink-demo.md
       - Creating an EventFeedAgent: example/event-feed-agent.md
   - Fluxtion programming:
-      - Dataflow overview: home/what-is-dataflow.md
-      - Event dispatch: home/event-dispatch-diagrams.md
-      - Fundamentals: home/dataflow-fundamentals.md
       - DSL Dataflow:
           - DSL introduction: reference/functional/overview-functional.md
           - DSL core: reference/functional/dataflow-functional-dsl.md
@@ -104,18 +101,24 @@ nav:
           - Imperative advanced: reference/imperative/advanced.md
           - Imperative lifecycle callbacks: reference/imperative/lifecycle-callbacks.md
       - Combine DSL and imperative: reference/connecting-dsl-imperative.md
-  - Dataflow runtime:
-      - Runtime introduction: runtime/runtime-overview.md
-      - DataFlow context: runtime/dataflow-context.md
-      - Clocks and time: runtime/clocks-and-time.md
-      - Buffer and trigger: runtime/buffer-and-trigger.md
+      - Dataflow runtime:
+          - Runtime introduction: runtime/runtime-overview.md
+          - DataFlow context: runtime/dataflow-context.md
+          - Clocks and time: runtime/clocks-and-time.md
+          - Buffer and trigger: runtime/buffer-and-trigger.md
   - Integrations:
       - DataFlow connector: integration/dataflow-connector.md
-  - Troubleshooting: troubleshooting/index.md
   - Reference guide:
       - Quick reference: reference/reference-documentation.md
+      - Architecture and design:
+        - Dataflow overview: reference/what-is-dataflow.md
+        - Event dispatch: reference/event-dispatch-diagrams.md
+        - Fundamentals: reference/dataflow-fundamentals.md
       - Console sink formatting: reference/console-sink-format.md
       - Performance results: reference/performance.md
-      - API javadoc:
-        - Fluxtion-runtime: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-runtime/latest/index.html
-        - Fluxtion-builder: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-builder/latest/index.html
+      - Reference:
+          - Alternative comparisons: reference/alternative-comparisons.md
+          - Troubleshooting: troubleshooting/index.md
+          - API javadoc:
+            - Fluxtion-runtime: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-runtime/latest/index.html
+            - Fluxtion-builder: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-builder/latest/index.html

@@ -83,7 +83,7 @@ public class HelloFluxtion {
 - Incremental computation pipelines
 
 !!! info "Choosing Fluxtion (compare to Kafka Streams, Reactor, Flink)"
-    Not sure if Fluxtion is the right fit? Read the decision guide: [Choosing Fluxtion](home/choosing-fluxtion.md).
+    Not sure if Fluxtion is the right fit? Read the decision guide: [Choosing Fluxtion](reference/choosing-fluxtion.md).
 
 !!! example "Explore examples"
     Browse runnable samples in one click: [Examples catalog](example/examples.md).
@@ -280,11 +280,11 @@ public class HelloFluxtion {
 
 - [Introduction](home/introduction.md)
 - [Why Fluxtion](home/why-fluxtion.md)
-- [What is DataFlow](home/what-is-dataflow.md)
+- [What is DataFlow](reference/what-is-dataflow.md)
 - [For engineers](home/intro-engineers.md)
 - [For managers](home/intro-managers.md)
 
 ## Reference
 
-- [DataFlow fundamentals](home/dataflow-fundamentals.md)
+- [DataFlow fundamentals](reference/dataflow-fundamentals.md)
 - [Reference guide](reference/reference-documentation.md)
