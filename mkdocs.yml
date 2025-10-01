@@ -79,7 +79,7 @@ nav:
         - Tutorial windows, aggregation and outputs: getting-started/tutorial-part-2.md
         - Tutorial DSL and imperative: getting-started/tutorial-part-3.md
         - Tutorial embed in microservice: getting-started/tutorial-part-4.md
-        - Tutorial DataConnector to Files: getting-started/tutorial-part-5.md
+        - Tutorial poll feeds: getting-started/tutorial-part-5.md
   - Examples and how-to:
       - Example repo: example/examples.md
       - How-to:
