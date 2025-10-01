@@ -73,16 +73,17 @@ nav:
       - For managers: home/intro-managers.md
   - Getting started:
       - 1 minute tutorial: getting-started/quickstart.md
+      - Sample application: sample-apps/embedding-dataflow-file-feed-sink-demo.md
       - Tutorials:
-        - Tutorial part‑1: getting-started/tutorial-part-1.md
-        - Tutorial part‑2: getting-started/tutorial-part-2.md
-        - Tutorial part‑3: getting-started/tutorial-part-3.md
-        - Tutorial part‑4: getting-started/tutorial-part-4.md
-        - Tutorial part‑5: getting-started/tutorial-part-5.md
+        - Tutorial filer/map/groupBy: getting-started/tutorial-part-1.md
+        - Tutorial windows, aggregation and outputs: getting-started/tutorial-part-2.md
+        - Tutorial DSL and imperative: getting-started/tutorial-part-3.md
+        - Tutorial embed in microservice: getting-started/tutorial-part-4.md
+        - Tutorial DataConnector to Files: getting-started/tutorial-part-5.md
   - Examples and how-to:
       - Example repo: example/examples.md
-      - Sample applications: sample-apps/embedding-dataflow-file-feed-sink-demo.md
-      - Creating an EventFeedAgent: example/event-feed-agent.md
+      - How-to:
+        - Creating an EventFeedAgent: example/event-feed-agent.md
   - Fluxtion programming:
       - DSL Dataflow:
           - DSL introduction: reference/functional/overview-functional.md

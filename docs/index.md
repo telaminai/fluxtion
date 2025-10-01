@@ -29,50 +29,35 @@ clear dependencies and excellent performance.
 
 ## Quickstart
 
-Install the builder (which depends on the runtime) and try a 2‑minute example.
-
-Maven (pom.xml):
-
-```xml
-<dependency>
-  <groupId>com.telamin.fluxtion</groupId>
-  <artifactId>fluxtion-builder</artifactId>
-  <version>{{fluxtion_version}}</version>
-</dependency>
-```
-
-Gradle (Kotlin DSL):
-
-```kotlin
-implementation("com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}")
-```
-
-Hello world (Java 21):
+Install [Jbang](https://www.jbang.dev/documentation/jbang/latest/installation.html) and try a Hello world (Java 25):
 
 ```java
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
+//JAVA 25
+
 import com.telamin.fluxtion.builder.DataFlowBuilder;
 import com.telamin.fluxtion.runtime.DataFlow;
 
-public class HelloFluxtion {
-    public static void main(String[] args) {
-        DataFlow dataFlow = DataFlowBuilder
-                .subscribe(String.class)           // accept String events
-                .map(String::toUpperCase)          // transform
-                .console("msg:{}")                 // print to console
-                .build();                          // build the DataFlow
+void main() {
+    DataFlow dataFlow = DataFlowBuilder
+            .subscribe(String.class)           // accept String events
+            .map(String::toUpperCase)          // transform
+            .console("msg:{}")                 // print to console
+            .build();                          // build the DataFlow
 
-        dataFlow.onEvent("hello");  // prints: msg:HELLO
-        dataFlow.onEvent("world");  // prints: msg:WORLD
-    }
+    dataFlow.onEvent("hello");  // prints: msg:HELLO
+    dataFlow.onEvent("world");  // prints: msg:WORLD
 }
 ```
 
-## Core building blocks
+copy the code into a hello.java and run it with `jbang hello.java`
 
-- Events: any Java object submitted into the DataFlow.
-- Nodes: functions or stateful components wired together by dependencies.
-- Graph: a DAG computed by the builder that determines dispatch order.
-- Handlers and triggers: annotated methods that receive events or fire when dependencies update.
+```console
+> jbang hello.java 
+[jbang] Building jar for hello.java...
+msg:HELLO
+msg:WORLD
+```
 
 ## Where Fluxtion fits
 
@@ -88,71 +73,182 @@ public class HelloFluxtion {
 !!! example "Explore examples"
     Browse runnable samples in one click: [Examples catalog](example/examples.md).
 
+## Core building blocks
+
+- Events: any Java object submitted into the DataFlow.
+- Nodes: functions or stateful components wired together by dependencies.
+- Graph: a DAG computed by the builder that determines dispatch order.
+- Handlers and triggers: annotated methods that receive events or fire when dependencies update.
+
 ## Code samples
 
 
 === "Windowing"
+    See example [WindowExample.java]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/frontpage/windowing/WindowExample.java)
 
     ```java
-    public class WindowExample {
-        record CarTracker(String id, double speed) {}
-        public static void main(String[] args) {
-
-            //calculate average speed, sliding window 5 buckets of 200 millis
-            DataFlow averageCarSpeed = DataFlowBuilder
-                    .subscribe(CarTracker::speed)
-                    .slidingAggregate(Aggregates.doubleAverageFactory(), 200, 5)
-                    .map(v -> "average speed: " + v.intValue() + " km/h")
-                    .sink("average car speed")
-                    .build();
-
-            //register an output sink
-            averageCarSpeed.addSink("average car speed", System.out::println);
-
-            //send data from an unbounded real-time feed
-            Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(
-                    () -> averageCarSpeed.onEvent(
-                        new CarTracker("car-reg", new Random().nextDouble(100))),
-                        100, 100, TimeUnit.MILLISECONDS);
-        }
+    //DEPS com.telamin.fluxtion:fluxtion-builder:0.9.6
+    //JAVA 25
+    
+    import com.telamin.fluxtion.builder.DataFlowBuilder;
+    import com.telamin.fluxtion.runtime.DataFlow;
+    import com.telamin.fluxtion.runtime.flowfunction.helpers.Aggregates;
+    
+    import java.util.Random;
+    import java.util.concurrent.Executors;
+    import java.util.concurrent.TimeUnit;
+    
+    record CarTracker(String id, double speed) { }
+    
+    void main() {
+        //calculate average speed, sliding window 5 buckets of 200 millis
+        DataFlow averageCarSpeed = DataFlowBuilder
+            .subscribe(CarTracker::speed)
+            .slidingAggregate(Aggregates.doubleAverageFactory(), 200, 5)
+            .map(v -> "average speed: " + v.intValue() + " km/h")
+            .sink("average car speed")
+            .build();
+    
+        //register an output sink
+        averageCarSpeed.addSink("average car speed", System.out::println);
+    
+        //send data from an unbounded real-time feed
+        Executors.newSingleThreadScheduledExecutor()
+                    .scheduleAtFixedRate(
+                        () -> averageCarSpeed.onEvent(
+                            new CarTracker("car-reg", 
+                            new Random().nextDouble(100))),
+                100, 100, TimeUnit.MILLISECONDS);
     }
+    ```
+
+    console output:
+    ```console
+    jbang WindowExample.java
+    [jbang] Building jar for WindowExample.java...
+    average speed: 59 km/h
+    average speed: 60 km/h
+    average speed: 68 km/h
     ```
 
 === "Triggering"
+    See example [TriggerExample.java]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/frontpage/triggering/TriggerExample.java)
 
     ```java
-    public class TriggerExample {
-        public static void main(String[] args) {
-            DataFlow sumDataFlow = DataFlowBuilder
-                    .subscribe(Integer.class)
-                    .aggregate(Aggregates.intSumFactory())
-                    .resetTrigger(
-                        DataFlowBuilder.subscribeToSignal("resetTrigger"))
-                    .filter(i -> i != 0)
-                    .publishTriggerOverride(
-                        DataFlowBuilder.subscribeToSignal("publishSumTrigger"))
-                    .console("Current sun:{}")
-                    .build();
+    //DEPS com.telamin.fluxtion:fluxtion-builder:0.9.6
+    //JAVA 25
     
-            sumDataFlow.onEvent(10);
-            sumDataFlow.onEvent(50);
-            sumDataFlow.onEvent(32);
-            //publish
-            sumDataFlow.publishSignal("publishSumTrigger");
+    import com.telamin.fluxtion.builder.DataFlowBuilder;
+    import com.telamin.fluxtion.runtime.DataFlow;
+    import com.telamin.fluxtion.runtime.flowfunction.helpers.Aggregates;
     
-            //reset sum
-            sumDataFlow.publishSignal("resetTrigger");
+    void main() {
+        var resetSignal = DataFlowBuilder.subscribeToSignal("resetTrigger");
+        var publishSignal = DataFlowBuilder.subscribeToSignal("publishSumTrigger");
     
-            //new sum
-            sumDataFlow.onEvent(8);
-            sumDataFlow.onEvent(17);
-            //publish
-            sumDataFlow.publishSignal("publishSumTrigger");
+        DataFlow sumDataFlow = DataFlowBuilder
+                .subscribe(Integer.class)
+                .aggregate(Aggregates.intSumFactory())
+                .resetTrigger(resetSignal)
+                .filter(i -> i != 0)
+                .publishTriggerOverride(publishSignal)
+                .console("Current sun:{}")
+                .build();
+    
+        sumDataFlow.onEvent(10);
+        sumDataFlow.onEvent(50);
+        sumDataFlow.onEvent(32);
+        //publish
+        sumDataFlow.publishSignal("publishSumTrigger");
+    
+        //reset sum
+        sumDataFlow.publishSignal("resetTrigger");
+    
+        //new sum
+        sumDataFlow.onEvent(8);
+        sumDataFlow.onEvent(17);
+        //publish
+        sumDataFlow.publishSignal("publishSumTrigger");
+    }
+    ```
+
+    console output:
+    ```console
+    jbang Triggering.java
+    [jbang] Building jar for Triggering.java...
+    Current sun:92
+    Current sun:25
+    ```
+
+=== "Stateful functions"
+    See example [SubscribeToNodeSample.java]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/frontpage/imperative/SubscribeToNodeSample.java)
+
+    ```java
+    //DEPS com.telamin.fluxtion:fluxtion-builder:0.9.6
+    //JAVA 25
+    
+    import com.telamin.fluxtion.builder.DataFlowBuilder;
+    import com.telamin.fluxtion.runtime.DataFlow;
+    import com.telamin.fluxtion.runtime.annotations.OnEventHandler;
+    import com.telamin.fluxtion.runtime.flowfunction.helpers.Collectors;
+    
+    void main() {
+        DataFlow processor = DataFlowBuilder
+                .subscribeToNode(new MyComplexNode())
+                .console("node triggered -> {}")
+                .map(MyComplexNode::getIn)
+                .aggregate(Collectors.listFactory(4))
+                .console("last 4 elements:{}\n")
+                .build();
+    
+        processor.onEvent("A");
+        processor.onEvent("B");
+        processor.onEvent("C");
+        processor.onEvent("D");
+        processor.onEvent("E");
+        processor.onEvent("F");
+    }
+    
+    public static class MyComplexNode {
+        private String in;
+    
+        @OnEventHandler
+        public boolean stringUpdate(String in) {
+            this.in = in;
+            return true;
+        }
+    
+        public String getIn() {
+            return in;
         }
     }
     ```
 
+    console output:
+    ```console
+    jbang StatefulFunction.java
+    [jbang] Building jar for StatefulFunction.java...
+    node triggered -> scratch$MyComplexNode@4923ab24
+    last 4 elements:[A]
+    
+    node triggered -> scratch$MyComplexNode@4923ab24
+    last 4 elements:[A, B]
+    
+    node triggered -> scratch$MyComplexNode@4923ab24
+    last 4 elements:[A, B, C]
+    
+    node triggered -> scratch$MyComplexNode@4923ab24
+    last 4 elements:[A, B, C, D]
+    
+    node triggered -> scratch$MyComplexNode@4923ab24
+    last 4 elements:[B, C, D, E]
+    
+    node triggered -> scratch$MyComplexNode@4923ab24
+    last 4 elements:[C, D, E, F]
+    ```
+
 === "Multifeed join"
+    See example [MultiFeedJoinExample]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/frontpage/multijoin/)
 
     ```java
     import java.util.Random;
@@ -235,47 +331,47 @@ public class HelloFluxtion {
     }
     ```
 
-=== "Stateful functions"
-
-    ```java
-    import com.telamin.fluxtion.builder.DataFlowBuilder;
-    import com.telamin.fluxtion.runtime.DataFlow;
-    import com.telamin.fluxtion.runtime.annotations.OnEventHandler;
-    import com.telamin.fluxtion.runtime.flowfunction.helpers.Collectors;
+    console output:
+    ```console
+    Application started - wait four seconds for first machine readings
     
-    public class SubscribeToNodeSample {
-        public static void main(String[] args) {
-            DataFlow processor = DataFlowBuilder
-                .subscribeToNode(new MyComplexNode())
-                .console("node triggered -> {}")
-                .map(MyComplexNode::getIn)
-                .aggregate(Collectors.listFactory(4))
-                .console("last 4 elements:{}\n")
-                .build();
+    ALARM UPDATE 09:45:20.685
+    New alarms: ['server_GOOG@USA_EAST_1',  temp:'97.57', avgTemp:'50.07' SupportContactEvent[name=Jean, locationCode=USA_EAST_1, contactDetails=jean@fluxtion.com], 'server_TKM@USA_EAST_2',  temp:'5.15', avgTemp:'50.02' SupportContactEvent[name=Tandy, locationCode=USA_EAST_2, contactDetails=tandy@fluxtion.com], 'server_MSFT@USA_EAST_2',  temp:'46.72', avgTemp:'50.00' SupportContactEvent[name=Tandy, locationCode=USA_EAST_2, contactDetails=tandy@fluxtion.com]]
+    Alarms to clear[]
+    Current alarms[server_GOOG, server_TKM, server_MSFT]
+    ------------------------------------
     
-            processor.onEvent("A");
-            processor.onEvent("B");
-            processor.onEvent("C");
-            processor.onEvent("D");
-            processor.onEvent("E");
-            processor.onEvent("F");
-        }
+    ALARM UPDATE 09:45:21.680
+    New alarms: []
+    Alarms to clear[server_TKM, server_MSFT]
+    Current alarms[server_GOOG]
+    ------------------------------------
     
-        public static class MyComplexNode {
-            private String in;
-    
-            @OnEventHandler
-            public boolean stringUpdate(String in) {
-                this.in = in;
-                return true;
-            }
-    
-            public String getIn() {
-                return in;
-            }
-        }
-    }
+    ALARM UPDATE 09:45:26.680
+    New alarms: ['server_MSFT@USA_EAST_2',  temp:'97.16', avgTemp:'49.91' SupportContactEvent[name=Tandy, locationCode=USA_EAST_2, contactDetails=tandy@fluxtion.com]]
+    Alarms to clear[]
+    Current alarms[server_GOOG, server_MSFT]
+    ------------------------------------
     ```
+
+## Library dependencies
+
+Maven (pom.xml):
+
+```xml
+<dependency>
+  <groupId>com.telamin.fluxtion</groupId>
+  <artifactId>fluxtion-builder</artifactId>
+  <version>{{fluxtion_version}}</version>
+</dependency>
+```
+
+Gradle (Kotlin DSL):
+
+```kotlin
+implementation("com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}")
+```
+
 ## Start here
 
 - [Introduction](home/introduction.md)
