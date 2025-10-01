@@ -246,6 +246,56 @@ msg:WORLD
     node triggered -> scratch$MyComplexNode@4923ab24
     last 4 elements:[C, D, E, F]
     ```
+=== "Poll feeds"
+    See example [PollFeedExample]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart5.java)
+
+    ```java
+    //DEPS com.telamin.fluxtion:fluxtion-builder:0.9.6
+    //JAVA 21
+    //JAVA_OPTIONS --add-opens java.base/jdk.internal.misc=ALL-UNNAMED
+    
+    import com.telamin.fluxtion.builder.DataFlowBuilder;
+    import com.telamin.fluxtion.runtime.DataFlow;
+    import com.telamin.fluxtion.runtime.connector.DataFlowConnector;
+    import com.telamin.fluxtion.runtime.connector.FileEventFeed;
+    import com.telamin.fluxtion.runtime.connector.FileMessageSink;
+    import com.telamin.fluxtion.runtime.eventfeed.ReadStrategy;
+    
+    public class TutorialPart5 {
+        public static void main(String[] args) throws Exception {
+            // Feed: publish each line from input file
+            // as a String event into feed "myFeed"
+            FileEventFeed myFileFeed = new FileEventFeed(
+                    "./tutorial4-input.txt",    // input file to tail
+                    "myFeed",                   // logical feed name
+                    ReadStrategy.EARLIEST       // tail from start of file
+            );
+    
+            // DataFlow: subscribe to the named feed, 
+            // log, uppercase, log, then emit to a named sink
+            DataFlow dataFlow = DataFlowBuilder
+                    .subscribeToFeed("myFeed", String.class)
+                    .console("read file in:{}")
+                    .map(String::toUpperCase)
+                    .console("write file out:{}\n")
+                    .sink("output")              // name the sink "output"
+                    .build();
+    
+            // Sink: bind sink name "output" to an output file
+            FileMessageSink outputFile = new FileMessageSink("./tutorial4-output.txt");
+    
+            // Connector: owns threads for the processor and the feed. 
+            // Then wires everything together
+            DataFlowConnector runner = new DataFlowConnector();
+            runner.addDataFlow(dataFlow);
+            runner.addFeed(myFileFeed);
+            runner.addSink("output", outputFile);
+    
+            // Start: spins up threads and begins processing
+            runner.start();
+        }
+    }
+    ```
 
 === "Multifeed join"
     See example [MultiFeedJoinExample]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/frontpage/multijoin/)
