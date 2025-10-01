@@ -5,6 +5,8 @@
 Event notification is propagated to child instances of event handlers. The notification is sent to any method that is
 annotated with an `@OnTrigger` annotation. Trigger propagation is in topological order.
 
+See sample - [TriggerChildren.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/triggering/TriggerChildren.java)
+
 ```java
 public class TriggerChildren {
     public static class MyNode {
@@ -63,6 +65,8 @@ Child:triggered
 ## Conditional triggering children
 Event notification is propagated to child instances of event handlers if the event handler method returns a true value. 
 A false return value will cause the event processor to swallow the triggering notification.
+
+See sample - [ConditionalTriggerChildren.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/triggering/ConditionalTriggerChildren.java)
 
 ```java
 public class ConditionalTriggerChildren {
@@ -125,9 +129,12 @@ conditional propagate:false
 ```
 
 ## Identify triggering parent
+
 It is possible to identify the parent that has triggered a change by adding an `@OnParentUpdate` annotation to a child 
 instance. The method must accept a single parameter of the type of the parent to observe. The OnParent callback gives
 granular detail of which parent has changed, whereas OnTrigger callbacks signify that at least one parent is triggering.
+
+See sample - [IdentifyTriggerParent.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/triggering/IdentifyTriggerParent.java)
 
 The OnParent callbacks are guaranteed to be received before the OnTrigger callback.
 
@@ -215,6 +222,8 @@ MyNode2 conditional propagate:false
 When a child has multiple parents of the same type then name resolution can be used to identify the parent that has 
 triggered the update. Add the variable name to the `@OnParentyUpdate` annotation to enforce name and type resolution.
 The OnParent callback is invoked according to the same rules as conditional triggering. 
+
+See sample - [IdentifyTriggerParentById.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/triggering/IdentifyTriggerParentById.java)
 
 ```java
 public class IdentifyTriggerParentById {

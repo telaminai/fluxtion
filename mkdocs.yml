@@ -60,7 +60,7 @@ extra:
   # Define variables here
   fluxtion_src_runtime: https://github.com/telaminai/fluxtion/tree/main/fluxtion-runtime/src/main/java/com/telamin/fluxtion/runtime
   fluxtion_example_src: https://github.com/telaminai/fluxtion-examples/tree/main
-  fluxtion_version: 0.9.6
+  fluxtion_version: 0.9.8
   release_date: "2024-09-13"
 
 nav:
@@ -92,6 +92,9 @@ nav:
           - DSL aggregating: reference/functional/aggregating.md
           - DSL windowing: reference/functional/windowing.md
           - DSL groupBy: reference/functional/dataflow-functional-groupby-dsl.md
+          - DSL groupBy windowed: reference/functional/windowed-groupby.md
+          - DSL groupBy map/reduce: reference/functional/groupby-functional-support.md
+          - DSL groupBy joining: reference/functional/joining.md
       - Imperative Dataflow:
           - Imperative introduction: reference/imperative/overview-imperative.md
           - Imperative subscribing: reference/imperative/basics.md
@@ -119,11 +122,11 @@ nav:
         - Dataflow overview: reference/what-is-dataflow.md
         - Event dispatch: reference/event-dispatch-diagrams.md
         - Fundamentals: reference/dataflow-fundamentals.md
-      - Console sink formatting: reference/console-sink-format.md
       - Performance results: reference/performance.md
       - Reference:
           - Alternative comparisons: reference/alternative-comparisons.md
-          - Troubleshooting: troubleshooting/index.md
+          - Console sink formatting: reference/console-sink-format.md
+          - Troubleshooting: troubleshooting/troubleshooting_index.md
           - API javadoc:
             - Fluxtion-runtime: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-runtime/latest/index.html
             - Fluxtion-builder: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-builder/latest/index.html

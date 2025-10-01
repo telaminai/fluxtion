@@ -18,6 +18,8 @@ Supported bindings:
 A Dataflow can be created by subscribing to a node that has been imperatively added to the event processor. When the node
 triggers in a calculation cycle the DataFlow will be triggered. Create a DataFlow from a node with:
 
+See sample - [SubscribeToNodeSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/node/SubscribeToNodeSample.java)
+
 `DataFlow.subscribeToNode(new MyComplexNode())`
 
 If the node referred to in the DataFlow.subscribeToNode method call is not in the event processor it will be bound
@@ -83,16 +85,15 @@ last 4 elements:[C, D, E, F]
 
 
 ## DataFlow to node
-A data flow can be consumed by a normal java class within the event processor. The data flow runtime class is
+A data flow can be consumed by a normal java class within the event processor. The data flow runtime class [FlowSupplier]({{fluxtion_src_runtime}}/dataflow/FlowSupplier.java)
 
-[FlowSupplier]({{fluxtion_src_runtime}}/dataflow/FlowSupplier.java)
+See sample - [FlowSupplierAsMemberVariableSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/node/FlowSupplierAsMemberVariableSample.java)
 
 FlowSupplier is a normal java Supplier the current value can be accessed by calling get(). When the data flow triggers
 the OnTrigger callback method in the child class will be called.
 
-When building the processor, the FlowSupplier is accessed with:
+When building the processor, the FlowSupplier is accessed with: `[DataFlow].flowSupplier()`
 
-`[DataFlow].flowSupplier()`
 
 This example binds a data flow of String's to a java record that has an onTrigger method annotated with `@OnTrigger`
 
@@ -127,6 +128,8 @@ triggered by data flow -> TEST
 ## Push to node
 A data flow can push a value to any normal java class
 
+See sample - [PushSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/node/PushSample.java)
+
 ```java
 public static void main(String[] args) {
     DataFlow processor = DataFlowBuilder
@@ -154,6 +157,8 @@ received push: BBB
 ## Map from node property
 
 A data flow can retrieve a value from any normal java class and map it to the data flow
+
+See sample - [MapFromNodePropertySample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/node/MapNodeSupplierSample.java)
 
 ```java
 public class MapNodeSupplierSample {
@@ -193,6 +198,8 @@ Received - [ 'AAA' 'BBB' ]
 
 A data flow can wrap a user defined function and use it in the data flow. The function can be stateful or stateless, both
 binaary and unary functions are supported.
+
+See sample - [WrapFunctionsSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/node/WrapFunctionsSample.java)
 
 ```java
 public class WrapFunctionsSample {

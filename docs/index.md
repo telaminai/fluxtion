@@ -87,7 +87,7 @@ msg:WORLD
     See example [WindowExample.java]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/frontpage/windowing/WindowExample.java)
 
     ```java
-    //DEPS com.telamin.fluxtion:fluxtion-builder:0.9.6
+    //DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
     //JAVA 25
     
     import com.telamin.fluxtion.builder.DataFlowBuilder;
@@ -135,7 +135,7 @@ msg:WORLD
     See example [TriggerExample.java]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/frontpage/triggering/TriggerExample.java)
 
     ```java
-    //DEPS com.telamin.fluxtion:fluxtion-builder:0.9.6
+    //DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
     //JAVA 25
     
     import com.telamin.fluxtion.builder.DataFlowBuilder;
@@ -184,7 +184,7 @@ msg:WORLD
     See example [SubscribeToNodeSample.java]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/frontpage/imperative/SubscribeToNodeSample.java)
 
     ```java
-    //DEPS com.telamin.fluxtion:fluxtion-builder:0.9.6
+    //DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
     //JAVA 25
     
     import com.telamin.fluxtion.builder.DataFlowBuilder;
@@ -250,7 +250,7 @@ msg:WORLD
     See example [PollFeedExample]({{fluxtion_example_src}}/getting-started/src/main/java/com/telamin/fluxtion/example/tutorial/TutorialPart5.java)
 
     ```java
-    //DEPS com.telamin.fluxtion:fluxtion-builder:0.9.6
+    //DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
     //JAVA 21
     //JAVA_OPTIONS --add-opens java.base/jdk.internal.misc=ALL-UNNAMED
     

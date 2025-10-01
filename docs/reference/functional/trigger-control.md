@@ -20,6 +20,8 @@ addition to the normal triggering operation of the flow node. The values in the 
 
 Child DataFlow nodes are notified when publishTrigger fires or the map function executes in a calculation cycle.
 
+See sample - [TriggerPublishSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/trigger/TriggerPublishSample.java)
+
 ```java
 public class TriggerPublishSample {
     public static void main(String[] args) {
@@ -75,6 +77,8 @@ The values in the parent node are unchanged when publishing.
 
 Child DataFlow nodes are notified when publishTriggerOverride fires.
 
+See sample - [TriggerPublishOverrideSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/trigger/TriggerPublishOverrideSample.java)
+
 ```java
 public class TriggerPublishOverrideSample {
     public static void main(String[] args) {
@@ -128,6 +132,8 @@ a mapping operation.
 
 A map operation only occurs when the update trigger fires. 
 
+See sample - [TriggerUpdateSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/trigger/TriggerUpdateSample.java)
+
 ```java
 public class TriggerUpdateSample {
     public static void main(String[] args) {
@@ -171,6 +177,8 @@ last 4 elements:[C, F]
 In this example the resetTrigger controls when the functional mapping operation of the flow node is reset. The aggregate
 operation is stateful so all the values in the list are removed when then reset trigger fires. The reset operation causes 
 trigger a notification to children of the flow node.
+
+See sample - [TriggerResetSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/trigger/TriggerResetSample.java)
 
 `resetTrigger(DataFlow.subscribeToSignal("resetMe"))`
 
@@ -220,10 +228,11 @@ node triggered -> SubscribeToNodeSample.MyComplexNode(in=F)
 last 4 elements:[E, F]
 ```
 
-###Stateful function reset
+### Stateful function reset
 Stateful functions can be reset by implementing the [Stateful]({{fluxtion_src_runtime}}/dataflow/Stateful.java) interface with a reset 
 method. Configuring the resetTrigger will automatically route calls to the reset method of the stateful function.
 
+See sample - [ResetFunctionSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/trigger/ResetFunctionSample.java)
 
 ```java
 public class ResetFunctionSample {
