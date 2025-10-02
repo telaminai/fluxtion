@@ -53,6 +53,8 @@ window for expiry an event is received. If the window has expired, the following
 This example publishes a random Integer every 10 milliseconds, the int sum calculates the current sum for the window. 
 Every 300 milliseconds the cumulative sum for the window just expired is logged to console.
 
+See sample - [TumblingWindowSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/windowing/TumblingWindowSample.java)
+
 ```java
 public class TumblingWindowSample {
     public static void main(String[] args) throws InterruptedException {
@@ -91,7 +93,7 @@ current tumble sum:1631 timeDelta:3603
 current tumble sum:1161 timeDelta:3905
 ```
 
-###Tumbling trigger based window
+### Tumbling trigger based window
 
 To create a tumbling cart that is none-time based we use the trigger overrides to control resetting and publishing the
 values in the tumbling window:
@@ -103,6 +105,8 @@ publishTriggerOverride(publishSignal)
 
 In this example we have a shopping cart that can have at the most three items. The cart can be cleared with a ClearCart
 event. A GoToCheckout event publishes the contents of the cart down stream if the number of items > 0;
+
+See sample - [TumblingTriggerSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/windowing/TumblingTriggerSample.java)
 
 ```java
 public class TumblingTriggerSample {
@@ -154,7 +158,7 @@ Running the example code above logs to console
 CURRENT CART: [Apples, Camera]
 ```
 
-###Sliding time window
+### Sliding time window
 
 Fluxtion supports a sliding time window for any DataFlow node with this call:
 
@@ -177,6 +181,8 @@ seconds is logged to console.
 
 As the effective window size is 1.2 seconds the sliding window values are approximately 4 times larger than the tumbling
 window example that resets the sum every 300 milliseconds.
+
+See sample - [SlidingWindowSample.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/windowing/SlidingWindowSample.java)
 
 ```java
 public class SlidingWindowSample {

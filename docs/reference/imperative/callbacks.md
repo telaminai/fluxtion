@@ -6,6 +6,8 @@ Register for a post event method callback with the `@AfterEvent` annotation. The
 any event is sent to the event processor. Unlike the `@AfterTrigger` which is only called if the containing instance has
 been triggered.
 
+See sample - [AfterEventCallback.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/callback/AfterEventCallback.java)
+
 ```java
 public class AfterEventCallback {
     public static class MyNode {
@@ -53,6 +55,8 @@ MyNode::afterEvent
 ## After trigger callback
 Register for a post trigger method callback with the `@AfterTrigger` annotation. The callback will only be executed if 
 this class has been triggered on tby an incoming event. Unlike the `@AfterEvent` which is always called on any event.
+
+See sample - [AfterTriggerCallback.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/callback/AfterTriggerCallback.java)
 
 ```java
 public class AfterTriggerCallback {

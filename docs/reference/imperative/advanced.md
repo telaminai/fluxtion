@@ -2,9 +2,12 @@
 ---
 
 ## Collection support
+
 Collections or arrays of references are supported, if any element in the collection fires a change notification the 
 trigger method will be called. The trigger method is invoked only once per event cycle whatever the number of 
 parent's updating. 
+
+See sample - [CollectionSupport.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/advanced/CollectionSupport.java)
 
 Parent change identity can be tracked using the `@OnParentUpdate` annotation.
 
@@ -87,6 +90,8 @@ Child::triggered updateCount:2
 Forking trigger methods is supported. If multiple trigger methods are fired from a single parent they can be forked to 
 run in parallel using the fork join pool. Only when all the forked trigger methods have completed will an event notification
 be propagated to their children. 
+
+See sample - [ForkJoinSupport.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/advanced/ForkJoinSupport.java)
 
 To for a trigger callback use `@OnTrigger(parallelExecution = true)` annotation on the callback method.
 
@@ -181,6 +186,8 @@ duration: 184 milliseconds
 ## Batch support
 Batch callbacks are supported through the BatchHandler interface that the generated EventHandler implements. Any methods 
 that are annotated with, `@OnBatchPause` or `@OnBatchEnd` will receive calls from the matching BatchHandler method. 
+
+See sample - [BatchSupport.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/advanced/BatchSupport.java)
 
 ```java
 public class BatchSupport {

@@ -5,6 +5,8 @@
 An event handler method can prevent its method triggering a notification by setting the propagate attribute to false 
 on any event handler annotation, `@OnEventHandler(propagate = false)`
 
+See sample - [NoPropagateHandler.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/triggeroverride/NoPropagateHandler.java)
+
 ```java
 public class NoPropagateHandler {
     public static class MyNode {
@@ -59,6 +61,8 @@ MyNode::handleIntEvent received:200
 A child can isolate itself from a parent's event notification by marking the reference with a `@NoTriggerReference`
 annotation. This will stop the onTrigger method from firing even when the parent has triggered.
 
+See sample - [NoPropagateHandler.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/triggeroverride/NoPropagateHandler.java)
+
 ```java
 public class NoPropagateHandler {
     public static class MyNode {
@@ -112,6 +116,8 @@ MyNode2::handleIntEvent received:200
 ## Override trigger reference
 A child can force only a single parent to fire its trigger, all other parents will be treated as if they were annotated with 
 `@NoTriggerReference` and removed from the event notification triggers for this class.
+
+See sample - [SingleTriggerOverride.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/triggeroverride/SingleTriggerOverride.java)
 
 ```java
 public class SingleTriggerOverride {
@@ -173,6 +179,8 @@ Child:triggered
 ## Non-dirty triggering
 The condition that causes a trigger callback to fire can be inverted so that an indication of no change from the parent
 will cause the trigger to fire.
+
+See sample - [InvertDirtyTrigger.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/triggeroverride/InvertDirtyTrigger.java)
 
 ```java
 public class InvertDirtyTrigger {
@@ -241,6 +249,8 @@ NonDirtyChild:triggered
 ## Push trigger
 Invert the trigger order so the instance holding the reference receives the event notification before the reference target
 and can push data into the target. Annotate the reference to be a push target with the `@PushReference` annotation.
+
+See sample - [PushTrigger.java]({{fluxtion_example_src}}/reference/src/main/java/com/telamin/fluxtion/example/reference/bindnode/triggering/PushTrigger.java)
 
 The normal order is to trigger the target first, which can perform internal calculations if required. Then the instance
 holding the reference is triggered so it can pull calculated data from the target reference.

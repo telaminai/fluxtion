@@ -55,7 +55,7 @@ public class HelloFluxtion {
 
 More examples and reference:
 - [Why Fluxtion](docs/home/why-fluxtion.md)
-- [Dataflow fundamentals](docs/home/dataflow-fundamentals.md)
+- [Dataflow fundamentals](docs/reference/dataflow-fundamentals.md)
 - [Reference guide](docs/reference/reference-documentation.md)
 
 ## Modules
