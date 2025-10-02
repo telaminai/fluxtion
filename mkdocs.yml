@@ -85,7 +85,7 @@ nav:
       - How-to:
         - Creating an EventFeedAgent: example/event-feed-agent.md
   - Fluxtion programming:
-      - DSL Dataflow:
+      - Functional DSL Dataflow:
           - DSL introduction: reference/functional/overview-functional.md
           - DSL core: reference/functional/dataflow-functional-dsl.md
           - DSL trigger control: reference/functional/trigger-control.md

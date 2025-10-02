@@ -60,6 +60,185 @@ flowchart TD
     N3 --> PUB[PriceLadderPublisher]
     PUB --> OUT[(Downstream consumer)]
 ```
+### Calculation code for nodes
+
+To simulate realistic application logic, each node performs a small set of calculations.
+
+#### MidCalculator
+
+```java
+import com.telamin.fluxtion.example.compile.aot.pricer.PriceLadder;
+import com.telamin.fluxtion.example.compile.aot.pricer.PriceLadderConsumer;
+import com.telamin.fluxtion.runtime.annotations.ExportService;
+
+public class MidCalculator implements @ExportService PriceLadderConsumer {
+
+    private int mid;
+    private PriceLadder priceLadder;
+
+    @Override
+    public boolean newPriceLadder(PriceLadder priceLadder) {
+        mid = (priceLadder.getAskPrices()[0] + priceLadder.getBidPrices()[0]) / 2;
+        this.priceLadder = priceLadder;
+        //If the JMH results seems quick un-comment the lines below to see the effect on the results
+//        try {
+//            Thread.sleep(1);
+//        } catch (InterruptedException e) {
+//            throw new RuntimeException(e);
+//        }
+        return true;
+    }
+
+    public int getMid() {
+        return mid;
+    }
+
+    public PriceLadder getPriceLadder() {
+        return priceLadder;
+    }
+}
+```
+
+#### SkewCalculator
+
+```java
+import com.telamin.fluxtion.example.compile.aot.pricer.PriceCalculator;
+import com.telamin.fluxtion.example.compile.aot.pricer.PriceLadder;
+import com.telamin.fluxtion.runtime.annotations.ExportService;
+import com.telamin.fluxtion.runtime.annotations.OnTrigger;
+
+public class SkewCalculator implements @ExportService(propagate = false)PriceCalculator {
+
+    private final MidCalculator midCalculator;
+    private PriceLadder skewedPriceLadder;
+    private int skew;
+
+    public SkewCalculator(MidCalculator midCalculator) {
+        this.midCalculator = midCalculator;
+    }
+
+    public SkewCalculator() {
+        this(new MidCalculator());
+    }
+
+    @Override
+    public void setSkew(int skew) {
+        this.skew = skew;
+    }
+
+    @OnTrigger
+    public boolean calculateSkewedLadder(){
+        PriceLadder priceLadder = midCalculator.getPriceLadder();
+
+        int[] bidPrices = priceLadder.getBidPrices();
+        for (int i = 0, bidPricesLength = bidPrices.length; i < bidPricesLength; i++) {
+            int bidPrice = bidPrices[i];
+            bidPrices[i] = bidPrice + skew;
+        }
+
+        int[] askPrices = priceLadder.getAskPrices();
+        for (int i = 0, askPricesLength = askPrices.length; i < askPricesLength; i++) {
+            int askPrice = askPrices[i];
+            askPrices[i] = askPrice + skew;
+        }
+
+        return true;
+    }
+
+    public PriceLadder getSkewedPriceLadder() {
+        return midCalculator.getPriceLadder();
+    }
+}
+```
+
+#### LevelsCalculator
+
+```java
+import com.telamin.fluxtion.example.compile.aot.pricer.PriceCalculator;
+import com.telamin.fluxtion.example.compile.aot.pricer.PriceLadder;
+import com.telamin.fluxtion.runtime.annotations.ExportService;
+import com.telamin.fluxtion.runtime.annotations.OnTrigger;
+
+public class LevelsCalculator implements @ExportService(propagate = false)PriceCalculator {
+    
+    private final SkewCalculator SkewCalculator;
+    private PriceLadder skewedPriceLadder;
+    private int maxLevels;
+
+    public LevelsCalculator(SkewCalculator SkewCalculator) {
+        this.SkewCalculator = SkewCalculator;
+    }
+
+    public LevelsCalculator() {
+        this(new SkewCalculator());
+    }
+
+    @Override
+    public void setLevels(int maxLevels) {
+        this.maxLevels = maxLevels;
+    }
+
+    @OnTrigger
+    public boolean calculateLevelsForLadder(){
+        PriceLadder priceLadder = SkewCalculator.getSkewedPriceLadder();
+
+        int[] bidPrices = priceLadder.getBidPrices();
+        int[] bidSizes = priceLadder.getBidSizes();
+        for (int i = maxLevels, bidPricesLength = bidPrices.length; i < bidPricesLength; i++) {
+            bidPrices[i] = 0;
+            bidSizes[i] = 0;
+        }
+
+        int[] askPrices = priceLadder.getAskPrices();
+        int[] askSizes = priceLadder.getAskSizes();
+        for (int i = maxLevels, askPricesLength = askPrices.length; i < askPricesLength; i++) {
+            askPrices[i] = 0;
+            askSizes[i] = 0;
+        }
+
+        return true;
+    }
+
+    public PriceLadder getLevelAdjustedPriceLadder() {
+        return SkewCalculator.getSkewedPriceLadder();
+    }
+}
+```
+
+#### PriceLadderPublisher
+
+```java
+import com.telamin.fluxtion.example.compile.aot.pricer.PriceCalculator;
+import com.telamin.fluxtion.example.compile.aot.pricer.PriceLadder;
+import com.telamin.fluxtion.runtime.annotations.ExportService;
+import com.telamin.fluxtion.runtime.annotations.OnTrigger;
+
+public class PriceLadderPublisher implements @ExportService(propagate = false)PriceCalculator {
+    
+    private final LevelsCalculator LevelsCalculator;
+    private PriceLadder skewedPriceLadder;
+    private PriceDistributor priceDistributor;
+
+    public PriceLadderPublisher(LevelsCalculator LevelsCalculator) {
+        this.LevelsCalculator = LevelsCalculator;
+    }
+
+    public PriceLadderPublisher() {
+        this(new LevelsCalculator());
+    }
+
+    @Override
+    public void setPriceDistributor(PriceDistributor priceDistributor) {
+        this.priceDistributor = priceDistributor;
+    }
+
+    @OnTrigger
+    public boolean publishPriceLadder(){
+        priceDistributor.setPriceLadder(LevelsCalculator.getLevelAdjustedPriceLadder());
+        return true;
+    }
+}
+```
 
 ### Why AOT helps: generated event processor
 
@@ -70,6 +249,7 @@ resulting class:
 - Holds direct references to nodes and runs them in dependency order
 - Avoids general graph traversal and allocation on the hot path
 - Uses straight‑line, branch‑predictable logic
+- Monomorphic dispatch within the event processor allows the jvm to optimises method calls
 
 Generated code for this test: [PriceLadderProcessor.java]({{fluxtion_example_src}}/compiler/aot-compiler/src/main/java/com/telamin/fluxtion/example/compile/aot/generated/PriceLadderProcessor.java)
 
@@ -79,19 +259,66 @@ A conceptual view of event dispatch in the generated processor:
 sequenceDiagram
     autonumber
     participant P as Producer
-    participant EP as AOT EventProcessor
-    participant N1 as MidCalculator
+    participant EP as AOT EventProcessor<br/>PriceLadderConsumer
+    participant N1 as MidCalculator<br/>PriceLadderConsumer
     participant N2 as SkewCalculator
     participant N3 as LevelsCalculator
     participant PUB as Publisher
     participant C as Consumer
 
-    P->>EP: onEvent(PriceLadder)
-    EP->>N1: compute mid
+    P->>EP: newPriceLadder(PriceLadder)
+    EP->>N1: newPriceLadder / compute mid
     EP->>N2: apply skew
     EP->>N3: adjust levels
     EP->>PUB: publish result
     PUB->>C: push updated ladder
+```
+
+#### AOT generated dispatch method for PriceLadder
+
+The Fluxtion compiler calculates the dependency order for each method and generates a bespoke dispatch method for each
+event type. In this case, the event processor dispatches to the exported interface method `PriceLadderConsumer#newPriceLadder(PriceLadder)`, 
+to process PriceLadder events. 
+
+As the MidCalculator exports the service interface `PriceLadderConsumer`, the event processor also implements the
+PriceLadderConsumer interface and proxies calls to the MidCalculator. Client code calls the interface method directly on the processor.
+
+#### Sample dispatch java code
+
+```java
+public class PriceLadderProcessor
+        implements CloneableDataFlow<PriceLadderProcessor>,
+        /*--- @ExportService start ---*/
+        @ExportService PriceCalculator,
+        @ExportService PriceLadderConsumer,
+        @ExportService ServiceListener,
+        /*--- @ExportService end ---*/
+        DataFlow,
+        InternalEventProcessor,
+        BatchHandler {
+            
+    // Code removed for brevity       
+            
+    //EXPORTED SERVICE FUNCTIONS - START
+    @Override
+    public boolean newPriceLadder(com.telamin.fluxtion.example.compile.aot.pricer.PriceLadder arg0) {
+        beforeServiceCall(
+                "public boolean com.telamin.fluxtion.example.compile.aot.node.MidCalculator.newPriceLadder(com.telamin.fluxtion.example.compile.aot.pricer.PriceLadder)");
+        ExportFunctionAuditEvent typedEvent = functionAudit;
+        isDirty_midCalculator_3 = midCalculator_3.newPriceLadder(arg0);
+        if (guardCheck_skewCalculator_2()) {
+            isDirty_skewCalculator_2 = skewCalculator_2.calculateSkewedLadder();
+        }
+        if (guardCheck_levelsCalculator_1()) {
+            isDirty_levelsCalculator_1 = levelsCalculator_1.calculateLevelsForLadder();
+        }
+        if (guardCheck_priceLadderPublisher_0()) {
+            priceLadderPublisher_0.publishPriceLadder();
+        }
+        afterServiceCall();
+        return true;
+    }
+}
 ```
 
 ## Throughput and average time
