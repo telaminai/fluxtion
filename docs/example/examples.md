@@ -181,7 +181,7 @@ joins. A tutorial series (Part 1–5) builds concepts step by step.
 ## Learn more
 
 - [Fluxtion repository](https://github.com/telaminai/fluxtion)
-- [Choosing Fluxtion](../home/choosing-fluxtion.md)
+- [Choosing Fluxtion](../reference/choosing-fluxtion.md)
 - [Quickstart guide](../getting-started/quickstart.md)
 - [Examples repository](https://github.com/telaminai/fluxtion-examples)
 

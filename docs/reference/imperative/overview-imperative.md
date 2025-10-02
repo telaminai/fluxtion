@@ -8,7 +8,7 @@ User classes bound into an [DataFlow]({{fluxtion_src_runtime}}/DataFlow.java)
 register for event callbacks with annotations. The generated EventProcessor
 implements the onEvent method acting as a bridge between external event streams and bound processing logic.
 User code reads the event streams calling onEvent with each new event received, the event processor then notifies
-annotated callback methods according to the [dispatch rules](../../home/dataflow-fundamentals#event-dispatch-rules ).
+annotated callback methods according to the [dispatch rules](../dataflow-fundamentals.md#event-dispatch-rules ).
 
 ## Examples
 The source project for the examples can be found

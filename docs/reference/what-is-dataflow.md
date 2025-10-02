@@ -39,5 +39,5 @@ what is needed.
 
 ## Learn more
 
-- [Fundamentals](dataflow-fundamentals.md)
+- [Fundamentals](../reference/dataflow-fundamentals.md)
 - [Why Fluxtion](why-fluxtion.md)

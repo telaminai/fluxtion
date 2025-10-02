@@ -45,6 +45,6 @@ complex reactive frameworks with a simple, deterministic dataflow model.
 
 ## Next steps
 
-- [Learn the basics](what-is-dataflow.md)
-- [See the fundamentals](dataflow-fundamentals.md)
+- [Learn the basics](../reference/what-is-dataflow.md)
+- [See the fundamentals](../reference/dataflow-fundamentals.md)
 - Pick your intro: [for engineers](intro-engineers.md) or [for managers](intro-managers.md)
