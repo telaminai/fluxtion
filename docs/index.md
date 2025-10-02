@@ -121,6 +121,11 @@ msg:WORLD
                 100, 100, TimeUnit.MILLISECONDS);
     }
     ```
+    
+    copy the code into a WindowExample.java and run it with `jbang WindowExample.java`
+    ```console
+    vi WindowExample.java
+    ```
 
     console output:
     ```console
@@ -170,6 +175,11 @@ msg:WORLD
         //publish
         sumDataFlow.publishSignal("publishSumTrigger");
     }
+    ```
+    
+    copy the code into a Triggering.java and run it with `jbang Triggering.java`
+    ```console
+    vi Triggering.java
     ```
 
     console output:
@@ -222,6 +232,11 @@ msg:WORLD
             return in;
         }
     }
+    ```
+
+    copy the code into a StatefulFunction.java and run it with `jbang StatefulFunction.java`
+    ```console
+    vi StatefulFunction.java
     ```
 
     console output:
@@ -295,6 +310,12 @@ msg:WORLD
             runner.start();
         }
     }
+    ```
+    
+    copy the code into a StatefulFunction.java and run it with `jbang StatefulFunction.java`
+    ```console
+    echo "mon\ntue\nwed" > tutorial4-input.txt
+    vi StatefulFunction.java
     ```
 
     console output:
