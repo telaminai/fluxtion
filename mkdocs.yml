@@ -83,7 +83,7 @@ nav:
   - Examples and how-to:
       - Example repo: example/examples.md
       - How-to:
-          - Logging setup: docs/how-to/logging-setup.md
+          - Log4j2 setup: how-to/logging-setup.md
           - Creating an EventFeedAgent: example/event-feed-agent.md
   - Fluxtion programming:
       - Functional DSL Dataflow:
