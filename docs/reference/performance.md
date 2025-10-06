@@ -280,6 +280,20 @@ The Fluxtion compiler calculates the dependency order for each method and genera
 event type. In this case, the event processor dispatches to the exported interface method `PriceLadderConsumer#newPriceLadder(PriceLadder)`, 
 to process PriceLadder events. 
 
+#### Generaing the event processor AOY
+To generate a DataFlow ahead of time use the closed source utility `Fluxtion.compileAot`
+
+```java
+public class GenerateProcessorsAot {
+    public static void main(String[] args) {
+        Fluxtion.compileAot(
+                "com.telamin.fluxtion.example.compile.aot.generated",
+                "PriceLadderProcessor",
+                new PriceLadderPublisher());
+    }
+}
+```
+
 As the MidCalculator exports the service interface `PriceLadderConsumer`, the event processor also implements the
 PriceLadderConsumer interface and proxies calls to the MidCalculator. Client code calls the interface method directly on the processor.
 
