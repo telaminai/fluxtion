@@ -84,6 +84,7 @@ nav:
       - Example repo: example/examples.md
       - How-to:
           - Log4j2 setup: how-to/logging-setup.md
+          - Junit testing: how-to/unit-testing-dataflow.md
           - Creating an EventFeedAgent: example/event-feed-agent.md
   - Fluxtion programming:
       - Functional DSL Dataflow:

@@ -114,16 +114,15 @@ class MyProcessorTest {
     
     @BeforeEach
     void setUp() {
+        // Create processor instance
+        processor = new MyProcessor();
+        
         // Build DataFlow with your business logic
-        EventProcessor<?> eventProcessor = DataFlowBuilder.newBuilder("myFlow")
-                .addNode(new MyProcessor(), "processor")
-                .buildAndCompile();
+        dataFlow = DataFlowBuilder.subscribeToNode(processor)
+                .console("Received event: {}")
+                .build();
         
-        dataFlow = eventProcessor.getDataFlow();
         dataFlow.init();
-        
-        // Get reference to processor for assertions
-        processor = dataFlow.getNodeById("processor");
     }
     
     @Test
@@ -143,10 +142,12 @@ class MyProcessorTest {
 ### Key Points
 
 1. **Use `@BeforeEach`** to create a fresh DataFlow for each test
-2. **Call `dataFlow.init()`** to initialize the flow before testing
-3. **Get node references** with `dataFlow.getNodeById()` for assertions
-4. **Process events** with `dataFlow.onEvent()`
-5. **Assert immediately** - no waiting needed
+2. **Create processor instances** before building the DataFlow
+3. **Use `DataFlowBuilder.subscribeToNode()`** to build flows with event handlers
+4. **Call `dataFlow.init()`** to initialize the flow before testing
+5. **Register services** with `new Service<>(mockService, ServiceInterface.class)` wrapper
+6. **Process events** with `dataFlow.onEvent()`
+7. **Assert immediately** - no waiting needed due to synchronous processing
 
 ## Testing with Services
 
@@ -170,11 +171,18 @@ public interface InventoryService extends Service<InventoryService> {
 ```java
 public class OrderProcessor {
     
-    @Inject
     private PaymentService paymentService;
-    
-    @Inject
     private InventoryService inventoryService;
+    
+    @ServiceRegistered
+    public void registerServices(PaymentService paymentService, String name) {
+        this.paymentService = paymentService;
+    }
+    
+    @ServiceRegistered
+    public void registerServices(InventoryService inventoryService, String name) {
+        this.inventoryService = inventoryService;
+    }
     
     @OnEventHandler
     public boolean processOrder(Order order) {
@@ -195,6 +203,19 @@ public class OrderProcessor {
 ### Mock Services in Tests
 
 ```java
+import com.telamin.fluxtion.builder.DataFlowBuilder;
+import com.telamin.fluxtion.runtime.DataFlow;
+import com.telamin.fluxtion.runtime.service.Service;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
 @ExtendWith(MockitoExtension.class)
 class OrderProcessorTest {
     
@@ -205,22 +226,23 @@ class OrderProcessorTest {
     private InventoryService inventoryService;
     
     private DataFlow dataFlow;
-    private OrderProcessor processor;
+    private OrderProcessor orderProcessor;
     
     @BeforeEach
     void setUp() {
-        EventProcessor<?> eventProcessor = DataFlowBuilder.newBuilder("orderProcessing")
-                .addNode(new OrderProcessor(), "orderProcessor")
-                .buildAndCompile();
+        // Create OrderProcessor instance
+        orderProcessor = new OrderProcessor();
         
-        dataFlow = eventProcessor.getDataFlow();
+        // Build DataFlow subscribing to Order events
+        dataFlow = DataFlowBuilder.subscribeToNode(orderProcessor)
+                .console("Received order: {}")
+                .build();
+        
         dataFlow.init();
         
-        processor = dataFlow.getNodeById("orderProcessor");
-        
-        // Register mock services
-        dataFlow.registerService(paymentService);
-        dataFlow.registerService(inventoryService);
+        // Register mock services with Service wrapper
+        dataFlow.registerService(new Service<>(paymentService, PaymentService.class));
+        dataFlow.registerService(new Service<>(inventoryService, InventoryService.class));
     }
     
     @Test
@@ -235,7 +257,9 @@ class OrderProcessorTest {
         dataFlow.onEvent(order);
         
         // Assert - verify business logic
-        assertEquals(1, processor.getTotalOrdersProcessed());
+        assertEquals(1, orderProcessor.getTotalOrdersProcessed());
+        assertEquals(100.0, orderProcessor.getTotalRevenue(), 0.01);
+        assertEquals(0, orderProcessor.getFailedOrders());
         
         // Verify service interactions
         verify(inventoryService).checkStock("PROD-456", 2);
@@ -244,7 +268,7 @@ class OrderProcessorTest {
     }
     
     @Test
-    void testOrderFailsWhenOutOfStock() {
+    void testOrderFailsDueToInsufficientInventory() {
         // Arrange - simulate out of stock
         when(inventoryService.checkStock(anyString(), anyInt())).thenReturn(false);
         
@@ -254,7 +278,9 @@ class OrderProcessorTest {
         dataFlow.onEvent(order);
         
         // Assert
-        assertEquals(0, processor.getTotalOrdersProcessed());
+        assertEquals(0, orderProcessor.getTotalOrdersProcessed());
+        assertEquals(0.0, orderProcessor.getTotalRevenue());
+        assertEquals(1, orderProcessor.getFailedOrders());
         
         // Verify payment was never attempted
         verify(inventoryService).checkStock("PROD-456", 10);
@@ -277,6 +303,9 @@ In production, your application might use `DataConnector` to consume events from
 ### Create a Test Event Feed
 
 ```java
+import com.telamin.fluxtion.runtime.input.EventFeed;
+import java.util.List;
+
 @Test
 void testWithEventFeed() {
     // Arrange
@@ -286,30 +315,38 @@ void testWithEventFeed() {
     // Create test data
     List<Order> orders = List.of(
         new Order("ORD-001", "CUST-123", "PROD-456", 2, 50.0),
-        new Order("ORD-002", "CUST-124", "PROD-789", 1, 100.0),
-        new Order("ORD-003", "CUST-125", "PROD-456", 3, 50.0)
+        new Order("ORD-002", "CUST-124", "PROD-789", 1, 100.0)
     );
     
     // Create a simple test event feed
-    EventFeed<Order> testFeed = new EventFeed<>() {
+    EventFeed testFeed = new EventFeed() {
         @Override
-        public void subscribe() {
+        public void registerSubscriber(DataFlow dataFlow) {
             orders.forEach(dataFlow::onEvent);
         }
 
         @Override
-        public void unSubscribe() {
+        public void subscribe(DataFlow dataFlow, Object o) {
+            // No-op for test
+        }
+
+        @Override
+        public void unSubscribe(DataFlow dataFlow, Object o) {
+            // No-op for test
+        }
+
+        @Override
+        public void removeAllSubscriptions(DataFlow dataFlow) {
             // No-op for test
         }
     };
     
-    // Act - add feed and subscribe
+    // Act - add feed to DataFlow
     dataFlow.addEventFeed(testFeed);
-    testFeed.subscribe();
     
     // Assert
-    assertEquals(3, orderProcessor.getTotalOrdersProcessed());
-    assertEquals(350.0, orderProcessor.getTotalRevenue(), 0.01);
+    assertEquals(2, orderProcessor.getTotalOrdersProcessed());
+    assertEquals(200.0, orderProcessor.getTotalRevenue(), 0.01);
 }
 ```
 
@@ -322,76 +359,75 @@ void testWithEventFeed() {
 
 ## Testing with Sinks
 
-In production, your application might publish results to databases, message queues, files, or APIs. In tests, you can capture outputs using `DataFlow.addSink()` and `DataFlow.addIntSink()`.
+In production, your application might publish results to databases, message queues, files, or APIs. In tests, you can capture outputs using `MessageSink` registered as a service.
 
-### Capture Primitive Outputs
+### Capture Object Outputs with MessageSink
+
+The `OrderProcessor` uses a `MessageSink` to publish summaries. In tests, we register a test sink to capture these outputs:
 
 ```java
-@Test
-void testWithIntSink() {
-    // Arrange
-    when(inventoryService.checkStock(anyString(), anyInt())).thenReturn(true);
-    when(paymentService.processPayment(anyString(), anyDouble())).thenReturn(true);
+import com.telamin.fluxtion.runtime.output.MessageSink;
+import java.util.ArrayList;
+import java.util.List;
+
+private final List<OrderSummary> summaries = new ArrayList<>();
+
+@BeforeEach
+void setUp() {
+    // ... create DataFlow ...
     
-    // Add a sink to capture the count
-    AtomicInteger processedCount = new AtomicInteger(0);
-    dataFlow.addIntSink("orderCount", processedCount::set);
-    
-    // Act - process orders and publish to sink
-    dataFlow.onEvent(new Order("ORD-001", "CUST-123", "PROD-456", 2, 50.0));
-    dataFlow.publishIntSignal("orderCount", orderProcessor.getTotalOrdersProcessed());
-    
-    dataFlow.onEvent(new Order("ORD-002", "CUST-124", "PROD-789", 1, 100.0));
-    dataFlow.publishIntSignal("orderCount", orderProcessor.getTotalOrdersProcessed());
-    
-    // Assert - verify captured value
-    assertEquals(2, processedCount.get());
+    // Register MessageSink to capture summaries
+    dataFlow.registerService(summary -> summaries.add((OrderSummary) summary), 
+                           MessageSink.class, "summaries");
 }
-```
 
-### Capture Object Outputs
-
-```java
 @Test
 void testWithObjectSink() {
     // Arrange
     when(inventoryService.checkStock(anyString(), anyInt())).thenReturn(true);
     when(paymentService.processPayment(anyString(), anyDouble())).thenReturn(true);
     
-    // Add a sink to capture summaries
-    List<OrderSummary> summaries = new ArrayList<>();
-    dataFlow.addSink("summaries", summaries::add);
+    Order order = new Order("ORD-001", "CUST-123", "PROD-456", 2, 50.0);
     
-    // Act - process orders and publish summaries
-    dataFlow.onEvent(new Order("ORD-001", "CUST-123", "PROD-456", 2, 50.0));
-    dataFlow.publishObjectSignal(orderProcessor.getSummary());
+    // Act - OrderProcessor automatically publishes to sink
+    dataFlow.onEvent(order);
     
-    dataFlow.onEvent(new Order("ORD-002", "CUST-124", "PROD-789", 1, 100.0));
-    dataFlow.publishObjectSignal(orderProcessor.getSummary());
-    
-    // Assert
-    assertEquals(2, summaries.size());
+    // Assert - verify captured summaries
+    assertEquals(1, summaries.size());
     assertEquals(1, summaries.get(0).getTotalOrdersProcessed());
     assertEquals(100.0, summaries.get(0).getTotalRevenue(), 0.01);
-    assertEquals(2, summaries.get(1).getTotalOrdersProcessed());
-    assertEquals(200.0, summaries.get(1).getTotalRevenue(), 0.01);
 }
 ```
 
-### Available Sink Methods
+### Alternative: Manual Signal Publishing
 
-- `addSink(String id, Consumer<T> sink)` - Capture objects
-- `addIntSink(String id, IntConsumer sink)` - Capture integers
-- `addDoubleSink(String id, DoubleConsumer sink)` - Capture doubles
-- `addLongSink(String id, LongConsumer sink)` - Capture longs
-- `removeSink(String id)` - Remove a sink
+You can also manually publish signals in tests:
+
+```java
+@Test
+void testWithManualPublish() {
+    // Arrange
+    when(inventoryService.checkStock(anyString(), anyInt())).thenReturn(true);
+    when(paymentService.processPayment(anyString(), anyDouble())).thenReturn(true);
+    
+    Order order = new Order("ORD-001", "CUST-123", "PROD-456", 2, 50.0);
+    
+    // Act - process and manually publish
+    dataFlow.onEvent(order);
+    dataFlow.publishObjectSignal(orderProcessor.getSummary());
+    
+    // Assert
+    assertEquals(1, summaries.size());
+    assertEquals(100.0, summaries.get(0).getTotalRevenue(), 0.01);
+}
+```
 
 ### Benefits of Sink Capture
 
 - **Verify outputs** - Ensure correct data is published
 - **No infrastructure** - No databases, queues, or APIs needed
 - **Simple assertions** - Direct access to captured values
-- **Multiple captures** - Test output sequences easily
+- **Automatic capture** - Sinks capture outputs as they're published
 
 ## Testing Multiple Events
 
@@ -551,11 +587,12 @@ For a complete working example with all these patterns, see:
 
 The example includes:
 
-- Order processing business logic
+- Order processing business logic with @ServiceRegistered annotations
 - Service interfaces (PaymentService, InventoryService)
+- MessageSink for output capture
 - Comprehensive test suite with 8 different test scenarios
 - Examples of all testing patterns described in this guide
-- Full Maven project setup
+- Full Maven project setup with JUnit 5 and Mockito
 
 ## Summary
 
@@ -563,9 +600,9 @@ Testing DataFlow applications is straightforward because:
 
 1. **Single-threaded execution** - No async complexity
 2. **Synchronous processing** - Immediate assertions
-3. **Service injection** - Easy mocking with `registerService()`
-4. **Event feed substitution** - Test without infrastructure via `addEventFeed()`
-5. **Sink capture** - Verify outputs with `addSink()` and `addIntSink()`
+3. **Service injection** - Easy mocking with `registerService()` using Service wrapper
+4. **Event feed substitution** - Test without infrastructure via `addEventFeed()` and `EventFeed.registerSubscriber()`
+5. **Sink capture** - Verify outputs with `MessageSink` registered as a service
 6. **Business logic focus** - Test behavior, not infrastructure
 
 This approach results in tests that are:
