@@ -44,6 +44,7 @@ public class FileEventFeed extends BaseEventFeed<String> {
     private long streamOffset;
     private MappedByteBuffer commitPointer;
     private boolean once;
+    private boolean loggedMissing = false;
 
     public FileEventFeed(String filename, String feedName) {
         this(1024, filename, feedName, ReadStrategy.COMMITED);
@@ -224,8 +225,14 @@ public class FileEventFeed extends BaseEventFeed<String> {
                 log.fine(() -> "Skipped to offset " + streamOffset);
                 reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
                 log.info(() -> "Opened %s for reading offset %s".formatted(getFilename(), streamOffset));
+                loggedMissing = false;
             } catch (NoSuchFileException e) {
-                log.severe("Couldn't find file " + getFilename() + " for FileStreamSourceTask, sleeping to wait for it to be created");
+                if (!loggedMissing) {
+                    log.severe("Couldn't find file " + getFilename() + " for FileStreamSourceTask, sleeping to wait for it to be created");
+                } else {
+                    log.fine("Couldn't find file " + getFilename() + " for FileStreamSourceTask, sleeping to wait for it to be created");
+                }
+                loggedMissing = true;
             } catch (IOException e) {
                 log.severe("Error while trying to open file: " + filename + " " + e);
                 throw new RuntimeException(e);

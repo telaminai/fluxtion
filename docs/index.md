@@ -121,6 +121,11 @@ msg:WORLD
                 100, 100, TimeUnit.MILLISECONDS);
     }
     ```
+    
+    copy the code into a WindowExample.java and run it with `jbang WindowExample.java`
+    ```console
+    vi WindowExample.java
+    ```
 
     console output:
     ```console
@@ -170,6 +175,11 @@ msg:WORLD
         //publish
         sumDataFlow.publishSignal("publishSumTrigger");
     }
+    ```
+    
+    copy the code into a Triggering.java and run it with `jbang Triggering.java`
+    ```console
+    vi Triggering.java
     ```
 
     console output:
@@ -224,6 +234,11 @@ msg:WORLD
     }
     ```
 
+    copy the code into a StatefulFunction.java and run it with `jbang StatefulFunction.java`
+    ```console
+    vi StatefulFunction.java
+    ```
+
     console output:
     ```console
     jbang StatefulFunction.java
@@ -251,7 +266,7 @@ msg:WORLD
 
     ```java
     //DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
-    //JAVA 21
+    //JAVA 25
     //JAVA_OPTIONS --add-opens java.base/jdk.internal.misc=ALL-UNNAMED
     
     import com.telamin.fluxtion.builder.DataFlowBuilder;
@@ -295,6 +310,47 @@ msg:WORLD
             runner.start();
         }
     }
+    ```
+    
+    copy the code into a StatefulFunction.java and run it with `jbang StatefulFunction.java`
+    ```console
+    echo "mon\ntue\nwed" > tutorial4-input.txt
+    vi StatefulFunction.java
+    ```
+
+    console output:
+    ```
+    jbang TutorialPart5.java
+    [jbang] Resolving dependencies...
+    [jbang]    com.telamin.fluxtion:fluxtion-builder:0.9.9
+    [jbang] Dependencies resolved
+    [jbang] Building jar for TutorialPart5.java...
+    Oct 02, 2025 12:10:23 PM com.telamin.fluxtion.runtime.connector.DataFlowConnector start
+    INFO: Starting DataFlowRunner
+    Oct 02, 2025 12:10:23 PM com.telamin.fluxtion.runtime.connector.EventFeedToDataFlowAgent lambda$checkForRegistrationUpdates$5
+    INFO: adding sink DefaultEvent(filterId=2147483647, filterString=output, eventTime=1759403423721) to dataflow com.telamin.fluxtion.builder.generation.target.InMemoryEventProcessor@77abba44
+    Oct 02, 2025 12:10:23 PM com.telamin.fluxtion.runtime.connector.FileMessageSink start
+    INFO: Starting FileMessageSink outputFile: ./tutorial4-output.txt
+    Oct 02, 2025 12:10:23 PM com.telamin.fluxtion.runtime.connector.EventFeedToDataFlowAgent checkForRegistrationUpdates
+    INFO: add feed FileEventFeed{name='myFeed'filename='./tutorial4-input.txt'}
+    Oct 02, 2025 12:10:23 PM com.telamin.fluxtion.runtime.connector.EventFeedToDataFlowAgent checkForRegistrationUpdates
+    INFO: adding eventFeed FileEventFeed{name='myFeed'filename='./tutorial4-input.txt'} to dataflow com.telamin.fluxtion.builder.generation.target.InMemoryEventProcessor@77abba44
+    Oct 02, 2025 12:10:23 PM com.telamin.fluxtion.runtime.eventfeed.EventFeedToDataFlowPublisher addDataFlowReceiver
+    INFO: myFeed adding dataflow: com.telamin.fluxtion.builder.generation.target.InMemoryEventProcessor@77abba44
+    Oct 02, 2025 12:10:23 PM com.telamin.fluxtion.runtime.eventfeed.EventFeedToDataFlowPublisher addDataFlowReceiver
+    INFO: myFeed remaining dataflows: 1
+    Oct 02, 2025 12:10:23 PM com.telamin.fluxtion.runtime.connector.FileEventFeed onStart
+    INFO: start FileEventSource myFeed file:./tutorial4-input.txt tail:true once:false, commitRead:false latestRead:false readStrategy:EARLIEST
+    Oct 02, 2025 12:10:23 PM com.telamin.fluxtion.runtime.connector.FileEventFeed connectReader
+    INFO: Opened ./tutorial4-input.txt for reading offset 0
+    read file in:mon
+    write file out:MON
+    
+    read file in:tue
+    write file out:TUE
+    
+    read file in:wed
+    write file out:WED
     ```
 
 === "Multifeed join"
