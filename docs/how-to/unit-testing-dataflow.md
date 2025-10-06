@@ -6,7 +6,7 @@ This guide explains how to effectively unit test Fluxtion DataFlow applications 
 
 DataFlow applications are designed to be easy to test. The key insight is that **a DataFlow is single-threaded** and processes events synchronously, making it straightforward to write deterministic, fast-running unit tests.
 
-For a complete working example, see the [JUnit Testing Demo](../../../fluxtion-examples/sample-apps/junit-testing-demo) sample application.
+For a complete working example, see the [JUnit Testing Demo]({{fluxtion_example_src}}/sample-apps/junit-testing-demo) sample application.
 
 ## Why DataFlow is Easy to Test
 
@@ -583,7 +583,7 @@ All modern Java IDEs (IntelliJ IDEA, Eclipse, VS Code) support running JUnit 5 t
 
 For a complete working example with all these patterns, see:
 
-**[JUnit Testing Demo](../../../fluxtion-examples/sample-apps/junit-testing-demo)**
+**[JUnit Testing Demo]({{fluxtion_example_src}}/sample-apps/junit-testing-demo)**
 
 The example includes:
 
@@ -617,4 +617,4 @@ This approach results in tests that are:
 
 - [JUnit 5 User Guide](https://junit.org/junit5/docs/current/user-guide/)
 - [Mockito Documentation](https://javadoc.io/doc/org.mockito/mockito-core/latest/org/mockito/Mockito.html)
-- [JUnit Testing Demo Example](../../../fluxtion-examples/sample-apps/junit-testing-demo)
+- [JUnit Testing Demo Example]({{fluxtion_example_src}}/sample-apps/junit-testing-demo)
