@@ -4,7 +4,7 @@
 
     <groupId>com.telamin.fluxtion</groupId>
     <artifactId>fluxtion-parent</artifactId>
-    <version>0.9.10-SNAPSHOT</version>
+    <version>0.9.10</version>
     <packaging>pom</packaging>
     <name>telamin :: fluxtion-master</name>
 
@@ -44,7 +44,7 @@
         <connection>scm:git:https://github.com/telaminai/fluxtion.git</connection>
         <developerConnection>scm:git:https://github.com/telaminai/fluxtion.git</developerConnection>
         <url>https://github.com/telaminai/fluxtion.git</url>
-      <tag>HEAD</tag>
+      <tag>v0.9.10</tag>
   </scm>
 
     <build>
