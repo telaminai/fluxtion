@@ -85,6 +85,7 @@ nav:
       - How-to:
           - Log4j2 setup: how-to/logging-setup.md
           - Junit testing: how-to/unit-testing-dataflow.md
+          - State and recovery: how-to/state-and-recovery.md
           - Creating an EventFeedAgent: example/event-feed-agent.md
   - Fluxtion programming:
       - Functional DSL Dataflow:
