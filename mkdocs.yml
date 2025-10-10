@@ -60,8 +60,8 @@ extra:
   # Define variables here
   fluxtion_src_runtime: https://github.com/telaminai/fluxtion/tree/main/fluxtion-runtime/src/main/java/com/telamin/fluxtion/runtime
   fluxtion_example_src: https://github.com/telaminai/fluxtion-examples/tree/main
-  fluxtion_version: 0.9.9
-  release_date: "2024-09-13"
+  fluxtion_version: 0.9.11
+  release_date: "2025-10-10"
 
 nav:
   - Home:
@@ -84,6 +84,9 @@ nav:
       - Example repo: example/examples.md
       - How-to:
           - Log4j2 setup: how-to/logging-setup.md
+          - Junit testing: how-to/unit-testing-dataflow.md
+          - State and recovery: how-to/state-and-recovery.md
+          - Record and replay: how-to/replay-functionality.md
           - Creating an EventFeedAgent: example/event-feed-agent.md
   - Fluxtion programming:
       - Functional DSL Dataflow:

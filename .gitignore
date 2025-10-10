@@ -41,3 +41,4 @@ build/
 /.venv/bin/
 /.venv/include/
 /.venv/lib/
+/.idea/

@@ -4,9 +4,9 @@
 
     <groupId>com.telamin.fluxtion</groupId>
     <artifactId>fluxtion-parent</artifactId>
-    <version>0.9.11-SNAPSHOT</version>
+    <version>0.9.12-SNAPSHOT</version>
     <packaging>pom</packaging>
-    <name>telamin :: fluxtion-master</name>
+    <name>telamin :: fluxtion</name>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
