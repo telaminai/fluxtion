@@ -89,6 +89,7 @@ nav:
           - State and recovery: how-to/state-and-recovery.md
           - Record and replay: how-to/replay-functionality.md
           - Monitoring and metrics: how-to/monitoring-dataflow-runtime.md
+          - Audit logging in DataFlow: how-to/audit-logging-dataflow.md
           - Log4j2 setup: how-to/logging-setup.md
   - Fluxtion programming:
       - Functional DSL Dataflow:
