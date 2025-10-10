@@ -213,6 +213,9 @@ public class LogRecord {
                 if (printEventToString) {
                     sb.append("\n    eventToString: ").append(event.toString());
                 }
+                if (printThreadName) {
+                    sb.append("\n    thread: ").append(Thread.currentThread().getName());
+                }
                 sb.append("\n    nodeLogs: ");
             }
         }

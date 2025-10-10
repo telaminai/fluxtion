@@ -60,6 +60,37 @@ What the app does:
 - For each line, logs a message using Log4j2 (via Lombok's `@Log4j2`).
 - With the JUL bridge active, any JUL-based logs from dependencies are routed to Log4j2 as well.
 
+### Maven libraries
+
+add the following maven dependencies to your project to make use of the Log4j2 YAML configuration, select the version
+that matches your Log4j2 version:
+
+```xml
+<!-- Log4j2: JUL bridge, API, and Core implementation -->
+<dependency>
+    <groupId>org.apache.logging.log4j</groupId>
+    <artifactId>log4j-jul</artifactId>
+    <version>2.23.1</version>
+</dependency>
+<dependency>
+    <groupId>org.apache.logging.log4j</groupId>
+    <artifactId>log4j-api</artifactId>
+    <version>2.23.1</version>
+</dependency>
+<dependency>
+    <groupId>org.apache.logging.log4j</groupId>
+    <artifactId>log4j-core</artifactId>
+    <version>2.23.1</version>
+</dependency>
+<!-- YAML support for Log4j2 configuration files -->
+<dependency>
+    <groupId>com.fasterxml.jackson.dataformat</groupId>
+    <artifactId>jackson-dataformat-yaml</artifactId>
+    <version>2.17.2</version>
+</dependency>
+```
+
+
 ### How to run it
 
 Requirements: Java 21+, Maven.
