@@ -8,6 +8,7 @@
  */
 package com.telamin.fluxtion.builder.generation.model;
 
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 import java.lang.reflect.TypeVariable;
@@ -18,6 +19,7 @@ import java.util.List;
  * @author Greg Higgins
  */
 @Getter
+//@EqualsAndHashCode
 public class Field {
 
     public final String name;

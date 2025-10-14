@@ -121,6 +121,7 @@ public class SimpleEventProcessorModel {
      */
     private final Map<Object, List<MappedField>> constructorArgumentMap;
 
+    private final Map<Field, String> contructorStringMap = new HashMap<>();
     /**
      * Map of bean property mutators for a node.
      */
@@ -311,8 +312,9 @@ public class SimpleEventProcessorModel {
             final String defaultClassName = object.getClass().getCanonicalName();
             final String className = classNameOverride == null ? defaultClassName : classNameOverride;
             final boolean isPublic = dependencyGraph.isPublicNode(object);
-            nodeFields.add(new Field(className, name, object, isPublic));
-            nodeFieldsSortedTopologically.add(new Field(className, name, object, isPublic));
+            Field field = new Field(className, name, object, isPublic);
+            nodeFields.add(field);
+            nodeFieldsSortedTopologically.add(field);
 
         }
         //add the audit listeners
@@ -404,6 +406,7 @@ public class SimpleEventProcessorModel {
                             Modifier.isTransient(input.getModifiers()),
                             Modifier.isStatic(input.getModifiers())
                     );
+                    System.out.println("ignoring field:" + fieldName + " public:" + Modifier.isPublic(input.getModifiers()));
                     return false;
                 }
                 try {
@@ -450,6 +453,10 @@ public class SimpleEventProcessorModel {
 
             if (privateFields.isEmpty() & !hasCstrAnnotations[0]) {
                 LOGGER.debug("{}:default constructor applicable", f.name);
+                String mapToJavaSource = fieldSerializer.mapToJavaConstructorSource(field, nodeFields, importClasses);
+                System.out.println("default constructor applicable for:" + f.name
+                        + " constructor: " + mapToJavaSource);
+                contructorStringMap.put(f, mapToJavaSource);
 //                continue;
             } else {
                 LOGGER.debug("{}:match complex constructor private fields:{}", f.name, privateFields);
@@ -474,6 +481,10 @@ public class SimpleEventProcessorModel {
                 constructorArgumentMap.put(field, collect);
             }
         });
+    }
+
+    public String getConstructirString(Field field){
+        return contructorStringMap.getOrDefault(field, "");
     }
 
     public List<MappedField> constructorArgs(Object field) {

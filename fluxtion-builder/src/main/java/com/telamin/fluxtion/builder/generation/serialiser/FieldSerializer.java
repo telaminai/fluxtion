@@ -87,6 +87,28 @@ public class FieldSerializer implements MapFieldToJavaSource {
         return _mapToJavaSource(primitiveVal, nodeFields, importList);
     }
 
+    @Override
+    public String mapToJavaConstructorSource(Object primitiveVal, List<Field> nodeFields, Set<Class<?>> importList) {
+        Class<?> primitiveValClass = primitiveVal.getClass();
+        FieldContext f = new FieldContext(primitiveVal, nodeFields, importList, this);
+        Function<FieldContext, String> serializeFunction = classSerializerMap.get(primitiveValClass);
+        if (serializeFunction != null) {
+            return serializeFunction.apply(f);
+        }
+        Optional<Class<?>> matchingClass = classSerializerMap.keySet().stream().filter(clazz -> clazz.isAssignableFrom(primitiveValClass)).findFirst();
+        if (matchingClass.isPresent()) {
+            return classSerializerMap.get(matchingClass.get()).apply(f);
+        }
+        if (_nativeTypeSupported(primitiveValClass)) {
+            return _mapToJavaSource(primitiveVal, nodeFields, importList);
+        }
+        Optional<String> optionalSerialise = serviceLoadedFieldSerializerList.stream().filter(s -> s.typeSupported(primitiveValClass)).findFirst().map(m -> m.mapToSource(f));
+        if (optionalSerialise.isPresent()) {
+            return optionalSerialise.get();
+        }
+        return _mapToJavaConstructorSource(primitiveVal, nodeFields, importList);
+    }
+
     public boolean propertySupported(PropertyDescriptor property, Field field, List<Field> nodeFields) {
         return _propertySupported(property, field, nodeFields);
     }
@@ -113,6 +135,23 @@ public class FieldSerializer implements MapFieldToJavaSource {
             }
         }
         if (!foundMatch && original == primitiveVal && clazz.getCanonicalName() != null) {
+            importList.add(clazz);
+            primitiveVal = "new " + (clazz).getSimpleName() + "()";
+        }
+        return primitiveVal.toString();
+    }
+
+    private String _mapToJavaConstructorSource(Object primitiveVal, List<Field> nodeFields, Set<Class<?>> importList) {
+        Class<?> clazz = primitiveVal.getClass();
+        Object original = primitiveVal;
+        if (clazz.isArray()) {
+            primitiveVal = serializeArray(primitiveVal, nodeFields, importList, clazz);
+        } else if (clazz.isEnum()) {
+            primitiveVal = clazz.getSimpleName() + "." + ((Enum<?>) primitiveVal).name();
+            importList.add(clazz);
+        }
+
+        if (original == primitiveVal && clazz.getCanonicalName() != null) {
             importList.add(clazz);
             primitiveVal = "new " + (clazz).getSimpleName() + "()";
         }
