@@ -121,7 +121,7 @@ public class SimpleEventProcessorModel {
      */
     private final Map<Object, List<MappedField>> constructorArgumentMap;
 
-    private final Map<Field, String> contructorStringMap = new HashMap<>();
+    private final Map<Field, String> constructorStringMap = new HashMap<>();
     /**
      * Map of bean property mutators for a node.
      */
@@ -406,7 +406,6 @@ public class SimpleEventProcessorModel {
                             Modifier.isTransient(input.getModifiers()),
                             Modifier.isStatic(input.getModifiers())
                     );
-                    System.out.println("ignoring field:" + fieldName + " public:" + Modifier.isPublic(input.getModifiers()));
                     return false;
                 }
                 try {
@@ -454,9 +453,8 @@ public class SimpleEventProcessorModel {
             if (privateFields.isEmpty() & !hasCstrAnnotations[0]) {
                 LOGGER.debug("{}:default constructor applicable", f.name);
                 String mapToJavaSource = fieldSerializer.mapToJavaConstructorSource(field, nodeFields, importClasses);
-                System.out.println("default constructor applicable for:" + f.name
-                        + " constructor: " + mapToJavaSource);
-                contructorStringMap.put(f, mapToJavaSource);
+                LOGGER.debug("default constructor applicable for:{} constructor:'{}", f.name, mapToJavaSource);
+                constructorStringMap.put(f, mapToJavaSource);
 //                continue;
             } else {
                 LOGGER.debug("{}:match complex constructor private fields:{}", f.name, privateFields);
@@ -479,12 +477,18 @@ public class SimpleEventProcessorModel {
                 }
                 List<MappedField> collect = Arrays.stream(cstrArgList).filter(Objects::nonNull).collect(Collectors.toList());
                 constructorArgumentMap.put(field, collect);
+                //add the
+                String generic = f.isGeneric() ? "<>" : "";
+                String args = collect.stream().map(Field.MappedField::value).collect(Collectors.joining(", "));
+                String cstructpr = " new " + f.getFqn() + generic + "(" + args + ");";
+                LOGGER.debug("constructor: '{}'", cstructpr);
+                constructorStringMap.put(f, cstructpr);
             }
         });
     }
 
-    public String getConstructirString(Field field){
-        return contructorStringMap.getOrDefault(field, "");
+    public String getConstructorString(Field field){
+        return constructorStringMap.getOrDefault(field, "");
     }
 
     public List<MappedField> constructorArgs(Object field) {
