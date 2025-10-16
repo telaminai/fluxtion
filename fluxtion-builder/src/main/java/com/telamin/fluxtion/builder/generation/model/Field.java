@@ -8,9 +8,6 @@
  */
 package com.telamin.fluxtion.builder.generation.model;
 
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-
 import java.lang.reflect.TypeVariable;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,8 +15,6 @@ import java.util.List;
 /**
  * @author Greg Higgins
  */
-@Getter
-//@EqualsAndHashCode
 public class Field {
 
     private final String name;
@@ -51,14 +46,34 @@ public class Field {
                 + '}';
     }
 
+    public String getName() {
+        return name;
+    }
+
+    public String getFqn() {
+        return fqn;
+    }
+
+    public boolean isPublicAccess() {
+        return publicAccess;
+    }
+
+    public Object getInstance() {
+        return instance;
+    }
+
+    public Class<?> getFieldClass() {
+        return fieldClass;
+    }
+
     public static class MappedField extends Field {
 
-        public final String mappedName;
-        public boolean collection;
-        public boolean primitive = false;
-        public Object primitiveVal;
-        public ArrayList<Field> elements;
-        public String derivedVal;
+        private final String mappedName;
+        private final boolean collection;
+        private boolean primitive = false;
+        private Object primitiveVal;
+        private ArrayList<Field> elements;
+        private String derivedVal;
         private Class<?> collectionClass;
 
         public MappedField(String mappedName, Field f) {
@@ -130,7 +145,7 @@ public class Field {
         }
 
         public String value() {
-            return derivedVal;
+            return getDerivedVal();
         }
 
         public void addField(Field field) {
@@ -157,6 +172,14 @@ public class Field {
                     + ", publicAccess=" + isPublicAccess()
                     + ", instance=" + getInstance()
                     + '}';
+        }
+
+        public String getDerivedVal() {
+            return derivedVal;
+        }
+
+        public void setDerivedVal(String derivedVal) {
+            this.derivedVal = derivedVal;
         }
     }
 }

@@ -491,7 +491,7 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
                     }
                     if (directParents.contains(parent)) {
                         final MappedField mappedField = new MappedField(fieldName, getFieldForInstance(parent));
-                        mappedField.derivedVal = fieldSerializer.mapToJavaSource(input.get(field), nodeFields, importClasses);
+                        mappedField.setDerivedVal(fieldSerializer.mapToJavaSource(input.get(field), nodeFields, importClasses));
                         privateFields.add(mappedField);
                     } else if (List.class.isAssignableFrom(parent.getClass()) || Set.class.isAssignableFrom(parent.getClass())) {
                         //
@@ -501,20 +501,20 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
                         for (Object element : collection) {
                             collectionField.addField(getFieldForInstance(element));
                         }
-                        collectionField.derivedVal = fieldSerializer.mapToJavaSource(parent, nodeFields, importClasses);
-                        if (!collectionField.isEmpty() || collectionField.derivedVal.length() > 1) {
+                        collectionField.setDerivedVal(fieldSerializer.mapToJavaSource(parent, nodeFields, importClasses));
+                        if (!collectionField.isEmpty() || collectionField.getDerivedVal().length() > 1) {
                             privateFields.add(collectionField);
                             LOGGER.debug("collection field:{}, val:{}", fieldName, input.get(field));
                         }
                     } else if (fieldSerializer.typeSupported(input.getType())) {
                         LOGGER.debug("primitive field:{}, val:{}", fieldName, input.get(field));
                         MappedField primitiveField = new MappedField(fieldName, input.get(field));
-                        primitiveField.derivedVal = fieldSerializer.mapToJavaSource(input.get(field), nodeFields, importClasses);
+                        primitiveField.setDerivedVal(fieldSerializer.mapToJavaSource(input.get(field), nodeFields, importClasses));
                         privateFields.add(primitiveField);
                     } else if (fieldSerializer.typeSupported(input.get(field).getClass())) {
                         LOGGER.debug("primitive field:{}, val:{}", fieldName, input.get(field));
                         MappedField primitiveField = new MappedField(fieldName, input.get(field));
-                        primitiveField.derivedVal = fieldSerializer.mapToJavaSource(input.get(field), nodeFields, importClasses);
+                        primitiveField.setDerivedVal(fieldSerializer.mapToJavaSource(input.get(field), nodeFields, importClasses));
                         privateFields.add(primitiveField);
                     }
                 } catch (IllegalArgumentException | IllegalAccessException ex) {
