@@ -204,7 +204,7 @@ public class SimpleEventProcessorModel {
     /**
      * Multimap of the guard conditions protecting a node
      */
-    private final Multimap<Object, DirtyFlag> nodeGuardMap;
+    private final Multimap<String, DirtyFlag> nodeGuardMap;
     /**
      * Filter map, override filter mapping for an instance, the String
      * represents the fqn the instance should be mapped to.
@@ -1092,7 +1092,7 @@ public class SimpleEventProcessorModel {
                         methodFlag.requiresInvert = invertedDirtyHandler;
                     }
                     //get the guards for the parent using the multimap
-                    Collection<DirtyFlag> parentDirtyFlags = nodeGuardMap.get(parent);
+                    Collection<DirtyFlag> parentDirtyFlags = nodeGuardMap.get(parentDirtyFlag.getNode().getName());
                     //if parent guard != null add as a guard to multimap, continue
                     //else if guards!=null add to multimap, continue
                     //else clear mutlimap, break
@@ -1109,7 +1109,8 @@ public class SimpleEventProcessorModel {
                     String failMessage = "Failed guard check for trigger method:" + cb;
                     throw new RuntimeException(failMessage);
                 }
-                nodeGuardMap.putAll(node, guardSet);
+
+                nodeGuardMap.putAll(getNameForInstance(node), guardSet);
             }
 
         }
@@ -1145,10 +1146,14 @@ public class SimpleEventProcessorModel {
      * @param node the node to introspect
      * @return collection of dirty flags that guard the node
      */
-    public Collection<DirtyFlag> getNodeGuardConditions(Object node) {
-        final ArrayList<DirtyFlag> guards = new ArrayList<>(nodeGuardMap.get(node));
+    public Collection<DirtyFlag> getNodeGuardConditions(String nodeName) {
+        final ArrayList<DirtyFlag> guards = new ArrayList<>(nodeGuardMap.get(nodeName));
         guards.sort((DirtyFlag o1, DirtyFlag o2) -> comparator.compare(o1.name, o2.name));
         return guards;
+    }
+
+    public Collection<DirtyFlag> getNodeGuardConditions(Object node) {
+        return getNodeGuardConditions(getNameForInstance(node));
     }
 
     /**
@@ -1167,7 +1172,7 @@ public class SimpleEventProcessorModel {
                     ? Collections.emptyList()
                     : Collections.singletonList(getDirtyFlagForNode(cb.instance));
         }
-        return cb.isEventHandler ? Collections.emptySet() : getNodeGuardConditions(cb.instance);
+        return cb.isEventHandler ? Collections.emptySet() : getNodeGuardConditions(cb.getVariableName());
     }
 
     public DirtyFlag getDirtyFlagForUpdateCb(CbMethodHandle cbHandle) {
