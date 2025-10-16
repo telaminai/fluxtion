@@ -233,7 +233,7 @@ public class SimpleEventProcessorModel {
 
     private final FieldSerializer fieldSerializer;
     private List<CbMethodHandle> triggerOnlyCallBacks;
-    private Set<Object> forkedTriggerInstances;
+    private Set<String> forkedTriggerInstances;
 
     public SimpleEventProcessorModel(TopologicallySortedDependencyGraph dependencyGraph) throws Exception {
         this(dependencyGraph, new HashMap<>());
@@ -1303,11 +1303,11 @@ public class SimpleEventProcessorModel {
         return triggerOnlyCallBacks;
     }
 
-    public Set<Object> getForkedTriggerInstances() {
+    public Set<String> getForkedTriggerInstances() {
         if (forkedTriggerInstances == null) {
             forkedTriggerInstances = Collections.unmodifiableSet(getTriggerOnlyCallBacks().stream()
                     .filter(CbMethodHandle::isForkExecution)
-                    .map(CbMethodHandle::getInstance)
+                    .map(CbMethodHandle::getVariableName)
                     .collect(Collectors.toSet()));
         }
         return forkedTriggerInstances;
