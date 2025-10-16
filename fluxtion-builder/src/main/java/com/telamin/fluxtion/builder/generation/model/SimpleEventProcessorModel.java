@@ -487,13 +487,8 @@ public class SimpleEventProcessorModel {
         });
     }
 
-    public String getConstructorString(Field field){
+    public String constructorString(Field field){
         return constructorStringMap.getOrDefault(field, "");
-    }
-
-    public List<MappedField> constructorArgs(Object field) {
-        List<MappedField> args = constructorArgumentMap.get(field);
-        return args == null ? Collections.emptyList() : args;
     }
 
     public List<String> beanProperties(Object field) {
