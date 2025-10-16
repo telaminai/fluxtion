@@ -119,11 +119,11 @@ public class SimpleEventProcessorModel {
     /**
      * Map of a constructor string for a node.
      */
-    private final Map<Field, String> constructorStringMap = new HashMap<>();
+    private final Map<String, String> constructorStringMap = new HashMap<>();
     /**
      * Map of bean property mutators for a node.
      */
-    private final Map<Object, List<String>> beanPropertyMap;
+    private final Map<String, List<String>> beanPropertyMap;
 
     private final Set<Class<?>> importClasses;
 
@@ -342,7 +342,8 @@ public class SimpleEventProcessorModel {
         nodeFields.forEach(f -> {
             try {
                 final Object field = f.instance;
-                LOGGER.debug("mapping property mutators for var:{}", f.name);
+                String fieldName = f.getName();
+                LOGGER.debug("mapping property mutators for var:{}", fieldName);
                 List<String> properties = stream(Introspector.getBeanInfo(f.instance.getClass()).getPropertyDescriptors())
                         .filter((PropertyDescriptor p) -> p.getWriteMethod() != null)
                         .filter((PropertyDescriptor p) -> fieldSerializer.propertySupported(p, f, nodeFields))
@@ -359,8 +360,8 @@ public class SimpleEventProcessorModel {
                         .filter(Objects::nonNull)
                         .collect(Collectors.toList());
 
-                LOGGER.debug("{} properties:{}", f.name, properties);
-                beanPropertyMap.put(field, properties);
+                LOGGER.debug("{} properties:{}", fieldName, properties);
+                beanPropertyMap.put(fieldName, properties);
             } catch (IntrospectionException ex) {
                 LOGGER.warn("could not process bean properties", ex);
             }
@@ -372,7 +373,8 @@ public class SimpleEventProcessorModel {
         nodeFields.forEach(f -> {
             HashSet<MappedField> privateFields = new HashSet<>();
             final Object field = f.instance;
-            LOGGER.debug("mapping constructor for var:{} {}", f.name, f);
+            String parentFieldName = f.getName();
+            LOGGER.debug("mapping constructor for var:{} {}", parentFieldName, f);
             List<?> directParents = dependencyGraph.getDirectParents(field);
             MappedField[] cstrArgList = new MappedField[(directParents.size()) + 200];
             Class<?> fieldClass = field.getClass();
@@ -448,13 +450,13 @@ public class SimpleEventProcessorModel {
             });
 
             if (privateFields.isEmpty() & !hasCstrAnnotations[0]) {
-                LOGGER.debug("{}:default constructor applicable", f.name);
+                LOGGER.debug("{}:default constructor applicable", parentFieldName);
                 String mapToJavaSource = fieldSerializer.mapToJavaConstructorSource(field, nodeFields, importClasses);
-                LOGGER.debug("default constructor applicable for:{} constructor:'{}", f.name, mapToJavaSource);
-                constructorStringMap.put(f, mapToJavaSource);
+                LOGGER.debug("default constructor applicable for:{} constructor:'{}", parentFieldName, mapToJavaSource);
+                constructorStringMap.put(parentFieldName, mapToJavaSource);
 //                continue;
             } else {
-                LOGGER.debug("{}:match complex constructor private fields:{}", f.name, privateFields);
+                LOGGER.debug("{}:match complex constructor private fields:{}", parentFieldName, privateFields);
                 if (ReflectionUtils.getConstructors(fieldClass, matchConstructorNameAndType(cstrArgList, privateFields)).isEmpty()) {
                     Set<Constructor> constructors = ReflectionUtils.getConstructors(fieldClass, matchConstructorType(cstrArgList, privateFields));
                     if (constructors.isEmpty()) {
@@ -477,13 +479,13 @@ public class SimpleEventProcessorModel {
                 String args = collect.stream().map(Field.MappedField::value).collect(Collectors.joining(", "));
                 String cstructpr = " new " + f.getFqn() + generic + "(" + args + ");";
                 LOGGER.debug("constructor: '{}'", cstructpr);
-                constructorStringMap.put(f, cstructpr);
+                constructorStringMap.put(parentFieldName, cstructpr);
             }
         });
     }
 
-    public String constructorString(Field field){
-        return constructorStringMap.getOrDefault(field, "");
+    public String constructorString(String fieldName){
+        return constructorStringMap.getOrDefault(fieldName, "");
     }
 
     public List<String> beanProperties(Object field) {
