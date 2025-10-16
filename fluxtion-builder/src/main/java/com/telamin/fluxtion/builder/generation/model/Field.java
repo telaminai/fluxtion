@@ -26,12 +26,14 @@ public class Field {
     public final String fqn;
     public final boolean publicAccess;
     public final Object instance;
+    private final Class<?> fieldClass;
 
     public Field(String fqn, String name, Object instance, boolean publicAccess) {
         this.fqn = fqn;
         this.name = name;
         this.instance = instance;
         this.publicAccess = publicAccess;
+        this.fieldClass = instance == null ? null : instance.getClass();
     }
 
     public boolean isGeneric() {

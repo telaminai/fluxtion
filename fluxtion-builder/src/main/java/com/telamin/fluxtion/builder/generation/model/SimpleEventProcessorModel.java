@@ -177,7 +177,7 @@ public class SimpleEventProcessorModel {
      * Map of callback methods of a node's direct dependents that will be
      * notified when the dependency changes.
      */
-    private final Map<Object, List<CbMethodHandle>> parentUpdateListenerMethodMap;
+    private final Map<String, List<CbMethodHandle>> parentUpdateListenerMethodMap;
 
     /**
      * Map of update callbacks, object is the node in the SEP, the value is the
@@ -722,7 +722,8 @@ public class SimpleEventProcessorModel {
     private void createParentCallBacks(Multimap<Object, CbMethodHandle> parentListenerMultiMap, Multimap<Object, CbMethodHandle> parentListenerMultiMapUnmatched) throws Exception {
         List<Object> topologicalHandlers = dependencyGraph.getSortedDependents();
         for (Object parent : topologicalHandlers) {
-            parentUpdateListenerMethodMap.put(parent, new ArrayList<>());
+            String nodeName = getNameForInstance(parent);
+            parentUpdateListenerMethodMap.put(nodeName, new ArrayList<>());
             List<?> directChildren = dependencyGraph.getDirectChildren(parent);
             Collection<CbMethodHandle> childCbList = parentListenerMultiMap.get(parent);
             Set<Object> mappedCbs = childCbList.stream().map(cb -> cb.instance).collect(Collectors.toSet());
@@ -733,8 +734,10 @@ public class SimpleEventProcessorModel {
                     .filter(Objects::nonNull)
                     .forEach((bestParentCB) -> parentListenerMultiMap.put(parent, bestParentCB));
         }
-        parentListenerMultiMap.keySet().forEach((parent) ->
-                parentUpdateListenerMethodMap.put(parent, new ArrayList<>(parentListenerMultiMap.get(parent)))
+        parentListenerMultiMap.keySet().forEach((parent) -> {
+                    String nodeName = getNameForInstance(parent);
+                    parentUpdateListenerMethodMap.put(nodeName, new ArrayList<>(parentListenerMultiMap.get(parent)));
+                }
         );
         parentUpdateListenerMethodMap.values().forEach(dependencyGraph::sortNodeList);
     }
@@ -1046,7 +1049,7 @@ public class SimpleEventProcessorModel {
 
     private boolean noDirtyFlagNeeded(Field node) {
         boolean notRequired = dependencyGraph.getDirectChildrenListeningForEvent(node.instance).isEmpty()
-                && parentUpdateListenerMethodMap.get(node.instance).isEmpty();
+                && parentUpdateListenerMethodMap.get(node.getName()).isEmpty();
         Method[] methodList = node.instance.getClass().getDeclaredMethods();
         for (Method method : methodList) {
             if (annotationScannerCache.annotationInHierarchy(method, AfterTrigger.class)) {
@@ -1326,7 +1329,7 @@ public class SimpleEventProcessorModel {
         return Collections.unmodifiableMap(dependencyGraph.getExportedFunctionMap());
     }
 
-    public Map<Object, List<CbMethodHandle>> getParentUpdateListenerMethodMap() {
+    public Map<String, List<CbMethodHandle>> getParentUpdateListenerMethodMap() {
         return Collections.unmodifiableMap(parentUpdateListenerMethodMap);
     }
 

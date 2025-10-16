@@ -474,7 +474,7 @@ public class InMemoryEventProcessor implements CloneableDataFlow, DataFlow, Inte
         forkedTaskBitset.clear();
 
         //set up array of all callback methods
-        final Map<Object, List<CbMethodHandle>> parentUpdateListenerMethodMap = simpleEventProcessorModel.getParentUpdateListenerMethodMap();
+        final Map<String, List<CbMethodHandle>> parentUpdateListenerMethodMap = simpleEventProcessorModel.getParentUpdateListenerMethodMap();
         final Map<Object, Node> instance2NodeMap = new HashMap<>(dispatchMapForGraph.size());
         for (int i = 0; i < dispatchMapForGraph.size(); i++) {
             CbMethodHandle cbMethodHandle = dispatchMapForGraph.get(i);
@@ -486,13 +486,13 @@ public class InMemoryEventProcessor implements CloneableDataFlow, DataFlow, Inte
                 node = new ForkTriggerTaskNode(
                         i,
                         cbMethodHandle,
-                        new ArrayList<>(parentUpdateListenerMethodMap.getOrDefault(cbMethodHandle.instance, Collections.emptyList()))
+                        new ArrayList<>(parentUpdateListenerMethodMap.getOrDefault(cbMethodHandle.getVariableName(), Collections.emptyList()))
                 );
             } else {
                 node = new Node(
                         i,
                         cbMethodHandle,
-                        new ArrayList<>(parentUpdateListenerMethodMap.getOrDefault(cbMethodHandle.instance, Collections.emptyList()))
+                        new ArrayList<>(parentUpdateListenerMethodMap.getOrDefault(cbMethodHandle.getVariableName(), Collections.emptyList()))
                 );
             }
             eventHandlers.add(node);
