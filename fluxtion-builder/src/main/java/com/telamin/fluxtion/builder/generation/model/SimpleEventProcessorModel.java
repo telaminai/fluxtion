@@ -351,31 +351,31 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
                         new Field(value.getClass().getCanonicalName(), name, value, true)
                 )
         );
-        nodeFields.sort((Field o1, Field o2) -> comparator.compare((o1.fqn + o1.name), (o2.fqn + o2.name)));
+        nodeFields.sort((Field o1, Field o2) -> comparator.compare((o1.getFqn() + o1.getName()), (o2.getFqn() + o2.getName())));
         //sort by topological order
         registrationListenerFields.sort((Field o1, Field o2) -> {
             int idx1 = nodeFieldsSortedTopologically.indexOf(o1);
             int idx2 = nodeFieldsSortedTopologically.indexOf(o2);
-            if (o1.instance instanceof Clock) {
+            if (o1.getInstance() instanceof Clock) {
                 return -1;
             }
-            if (o2.instance instanceof Clock) {
+            if (o2.getInstance() instanceof Clock) {
                 return 1;
             }
             if (idx1 > -1 || idx2 > -1) {
                 return idx2 - idx1;
             }
-            return comparator.compare((o1.fqn + o1.name), (o2.fqn + o2.name));
+            return comparator.compare((o1.getFqn() + o1.getName()), (o2.getFqn() + o2.getName()));
         });
     }
 
     private void generatePropertyAssignments() {
         nodeFields.forEach(f -> {
             try {
-                final Object field = f.instance;
+                final Object field = f.getInstance();
                 String fieldName = f.getName();
                 LOGGER.debug("mapping property mutators for var:{}", fieldName);
-                List<String> properties = stream(Introspector.getBeanInfo(f.instance.getClass()).getPropertyDescriptors())
+                List<String> properties = stream(Introspector.getBeanInfo(f.getInstance().getClass()).getPropertyDescriptors())
                         .filter((PropertyDescriptor p) -> p.getWriteMethod() != null)
                         .filter((PropertyDescriptor p) -> fieldSerializer.propertySupported(p, f, nodeFields))
                         .filter(p -> {
@@ -446,7 +446,7 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
     private void generateComplexConstructors() {
         nodeFields.forEach(f -> {
             HashSet<MappedField> privateFields = new HashSet<>();
-            final Object field = f.instance;
+            final Object field = f.getInstance();
             String parentFieldName = f.getName();
             LOGGER.debug("mapping constructor for var:{} {}", parentFieldName, f);
             List<?> directParents = dependencyGraph.getDirectParents(field);
@@ -1065,9 +1065,9 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
     }
 
     private boolean noDirtyFlagNeeded(Field node) {
-        boolean notRequired = dependencyGraph.getDirectChildrenListeningForEvent(node.instance).isEmpty()
+        boolean notRequired = dependencyGraph.getDirectChildrenListeningForEvent(node.getInstance()).isEmpty()
                 && parentUpdateListenerMethodMap.get(node.getName()).isEmpty();
-        Method[] methodList = node.instance.getClass().getDeclaredMethods();
+        Method[] methodList = node.getInstance().getClass().getDeclaredMethods();
         for (Method method : methodList) {
             if (annotationScannerCache.annotationInHierarchy(method, AfterTrigger.class)) {
                 notRequired = false;
@@ -1082,12 +1082,12 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
                 if (noDirtyFlagNeeded(node)) {
                     continue;
                 }
-                CbMethodHandle cbHandle = node2UpdateMethodMap.get(node.instance);
+                CbMethodHandle cbHandle = node2UpdateMethodMap.get(node.getInstance());
                 if (cbHandle != null && cbHandle.method.getReturnType() == boolean.class) {
-                    DirtyFlag flag = new DirtyFlag(node, "isDirty_" + node.name);
+                    DirtyFlag flag = new DirtyFlag(node, "isDirty_" + node.getName());
                     dirtyFieldMap.put(node.getName(), flag);
                 } else if (cbHandle != null && cbHandle.method.getReturnType() == void.class) {
-                    DirtyFlag flag = new DirtyFlag(node, "isDirty_" + node.name, true);
+                    DirtyFlag flag = new DirtyFlag(node, "isDirty_" + node.getName(), true);
                     dirtyFieldMap.put(node.getName(), flag);
                 }
             }
@@ -1210,7 +1210,7 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
     public Field getFieldForInstance(Object object) {
         Field ret = null;
         for (Field nodeField : nodeFields) {
-            if (nodeField.instance == object) {
+            if (nodeField.getInstance() == object) {
                 ret = nodeField;
                 break;
             }
@@ -1220,11 +1220,11 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
 
     public String getNameForInstance(Object object) {
         Field ret = getFieldForInstance(object);
-        return ret == null ? null : ret.name;
+        return ret == null ? null : ret.getName();
     }
 
     public Field getFieldForName(String name) {
-        return nodeFields.stream().filter(f -> f.name.equals(name)).findFirst().orElse(null);
+        return nodeFields.stream().filter(f -> f.getName().equals(name)).findFirst().orElse(null);
     }
 
     /**

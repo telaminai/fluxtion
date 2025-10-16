@@ -440,7 +440,7 @@ public class InMemoryEventProcessor implements CloneableDataFlow, DataFlow, Inte
         if (fieldByName == null) {
             throw new NoSuchFieldException(id);
         }
-        return (T) fieldByName.instance;
+        return (T) fieldByName.getInstance();
     }
 
     /**

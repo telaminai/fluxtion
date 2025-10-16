@@ -22,10 +22,10 @@ import java.util.List;
 //@EqualsAndHashCode
 public class Field {
 
-    public final String name;
-    public final String fqn;
-    public final boolean publicAccess;
-    public final Object instance;
+    private final String name;
+    private final String fqn;
+    private final boolean publicAccess;
+    private final Object instance;
     private final Class<?> fieldClass;
 
     public Field(String fqn, String name, Object instance, boolean publicAccess) {
@@ -115,7 +115,7 @@ public class Field {
                 }
                 return primitiveVal.getClass();
             } else {
-                return instance.getClass();
+                return getInstance().getClass();
             }
         }
 
@@ -125,7 +125,7 @@ public class Field {
             } else if (primitive) {
                 return primitiveVal.getClass();
             } else {
-                return instance.getClass();
+                return getInstance().getClass();
             }
         }
 
@@ -151,15 +151,12 @@ public class Field {
         public String toString() {
             return "MappedField{"
                     + "mappedName=" + mappedName
-                    + ", name=" + name
+                    + ", name=" + getName()
                     + ", collection=" + collection
-                    + ", fqn=" + fqn
-                    + ", publicAccess=" + publicAccess
-                    + ", instance=" + instance
+                    + ", fqn=" + getFqn()
+                    + ", publicAccess=" + isPublicAccess()
+                    + ", instance=" + getInstance()
                     + '}';
         }
-
-
     }
-
 }

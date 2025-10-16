@@ -76,7 +76,7 @@ public interface ClassUtils {
     }
 
     static boolean isPropertyTransient(PropertyDescriptor property, Field field) throws SecurityException {
-        final Class<?> fieldClass = field.instance.getClass();
+        final Class<?> fieldClass = field.getInstance().getClass();
         final String name = property.getName();
         final java.lang.reflect.Field fieldOfProperty;
         final Set<java.lang.reflect.Field> allFields = ReflectionUtils.getAllFields(fieldClass, ReflectionUtils.withName(name));

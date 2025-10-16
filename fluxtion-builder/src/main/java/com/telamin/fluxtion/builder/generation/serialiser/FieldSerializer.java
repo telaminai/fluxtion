@@ -128,8 +128,8 @@ public class FieldSerializer implements MapFieldToJavaSource {
             importList.add(clazz);
         }
         for (Field nodeField : nodeFields) {
-            if (nodeField.instance == primitiveVal) {
-                primitiveVal = nodeField.name;
+            if (nodeField.getInstance() == primitiveVal) {
+                primitiveVal = nodeField.getName();
                 foundMatch = true;
                 break;
             }
@@ -167,8 +167,8 @@ public class FieldSerializer implements MapFieldToJavaSource {
         for (int i = 0; i < length; i++) {
             Object arrayElement = Array.get(primitiveVal, i);
             for (Field nodeField : nodeFields) {
-                if (nodeField.instance.equals(arrayElement)) {
-                    arrayElement = (nodeField.instance);
+                if (nodeField.getInstance().equals(arrayElement)) {
+                    arrayElement = (nodeField.getInstance());
                     break;
                 }
             }
@@ -182,12 +182,12 @@ public class FieldSerializer implements MapFieldToJavaSource {
         String ret = null;
         if (!ClassUtils.isPropertyTransient(property, field)) {
             try {
-                Object value = property.getReadMethod().invoke(field.instance);
+                Object value = property.getReadMethod().invoke(field.getInstance());
                 String mappedValue = mapToJavaSource(value, nodeFields, importList);
                 String writeMethod = property.getWriteMethod().getName();
                 for (Field nodeField : nodeFields) {
-                    if (nodeField.instance == value) {
-                        mappedValue = nodeField.name;
+                    if (nodeField.getInstance() == value) {
+                        mappedValue = nodeField.getName();
                         break;
                     }
                 }
@@ -203,11 +203,11 @@ public class FieldSerializer implements MapFieldToJavaSource {
         try {
             boolean isTransient = ClassUtils.isPropertyTransient(property, field);
             final boolean writeMethod = property.getWriteMethod() != null;
-            final boolean hasValue = property.getReadMethod() != null && property.getReadMethod().invoke(field.instance) != null;
+            final boolean hasValue = property.getReadMethod() != null && property.getReadMethod().invoke(field.getInstance()) != null;
             boolean isNode = false;
             if (hasValue) {
                 for (Field nodeField : nodeFields) {
-                    if (nodeField.instance == property.getReadMethod().invoke(field.instance)) {
+                    if (nodeField.getInstance() == property.getReadMethod().invoke(field.getInstance())) {
                         isNode = true;
                         break;
                     }
@@ -222,7 +222,7 @@ public class FieldSerializer implements MapFieldToJavaSource {
 
     //bit of a hack to get generic declarations working
     public String buildTypeDeclaration(Field field, Function<Class<?>, String> classNameConverter) {
-        Object instance = field.instance;
+        Object instance = field.getInstance();
         if (instance instanceof GroupingFactory) {
             GroupingFactory groupByKeyFactory = (GroupingFactory) instance;
             Method method = groupByKeyFactory.getKeyFunction().method();
