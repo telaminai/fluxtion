@@ -117,10 +117,8 @@ public class SimpleEventProcessorModel {
     private final TopologicallySortedDependencyGraph dependencyGraph;
 
     /**
-     * Map of constructor argument lists for a node.
+     * Map of a constructor string for a node.
      */
-    private final Map<Object, List<MappedField>> constructorArgumentMap;
-
     private final Map<Field, String> constructorStringMap = new HashMap<>();
     /**
      * Map of bean property mutators for a node.
@@ -188,7 +186,7 @@ public class SimpleEventProcessorModel {
      * support is configured for the whole SEP and the node supports dirty
      * notification.
      */
-    private final Map<Field, DirtyFlag> dirtyFieldMap;
+    private final Map<String, DirtyFlag> dirtyFieldMap;
 
     /**
      * Multimap of the guard conditions protecting a node
@@ -241,7 +239,6 @@ public class SimpleEventProcessorModel {
         this.filterProducer = new DefaultFilterDescriptionProducer();
         this.nodeClassMap = nodeClassMap == null ? Collections.emptyMap() : nodeClassMap;
         this.annotationScannerCache = new SuperMethodAnnotationScannerCache();
-        constructorArgumentMap = new HashMap<>();
         beanPropertyMap = new HashMap<>();
         initialiseMethods = new ArrayList<>();
         startMethods = new ArrayList<>();
@@ -476,8 +473,6 @@ public class SimpleEventProcessorModel {
                     }
                 }
                 List<MappedField> collect = Arrays.stream(cstrArgList).filter(Objects::nonNull).collect(Collectors.toList());
-                constructorArgumentMap.put(field, collect);
-                //add the
                 String generic = f.isGeneric() ? "<>" : "";
                 String args = collect.stream().map(Field.MappedField::value).collect(Collectors.joining(", "));
                 String cstructpr = " new " + f.getFqn() + generic + "(" + args + ");";
@@ -1006,10 +1001,10 @@ public class SimpleEventProcessorModel {
                 CbMethodHandle cbHandle = node2UpdateMethodMap.get(node.instance);
                 if (cbHandle != null && cbHandle.method.getReturnType() == boolean.class) {
                     DirtyFlag flag = new DirtyFlag(node, "isDirty_" + node.name);
-                    dirtyFieldMap.put(node, flag);
+                    dirtyFieldMap.put(node.getName(), flag);
                 } else if (cbHandle != null && cbHandle.method.getReturnType() == void.class) {
                     DirtyFlag flag = new DirtyFlag(node, "isDirty_" + node.name, true);
-                    dirtyFieldMap.put(node, flag);
+                    dirtyFieldMap.put(node.getName(), flag);
                 }
             }
             //build the guard conditions for nodes. loop in topological order
@@ -1070,7 +1065,7 @@ public class SimpleEventProcessorModel {
     }
 
     public DirtyFlag getDirtyFlagForNode(Object node) {
-        return dirtyFieldMap.get(getFieldForInstance(node));
+        return dirtyFieldMap.get(getNameForInstance(node));
     }
 
     /**
@@ -1114,7 +1109,7 @@ public class SimpleEventProcessorModel {
     public DirtyFlag getDirtyFlagForUpdateCb(CbMethodHandle cbHandle) {
         DirtyFlag flag = null;
         if (supportDirtyFiltering() && cbHandle != null) {
-            flag = dirtyFieldMap.get(getFieldForInstance(cbHandle.instance));
+            flag = dirtyFieldMap.get(getNameForInstance(cbHandle.instance));
             if (cbHandle.method.getReturnType() != boolean.class && flag != null) {
                 //trap the case where eventhandler and onEvent in same class
                 //and onEvent does not return true
@@ -1133,6 +1128,11 @@ public class SimpleEventProcessorModel {
             }
         }
         return ret;
+    }
+
+    public String getNameForInstance(Object object) {
+        Field ret = getFieldForInstance(object);
+        return ret == null ? null : ret.name;
     }
 
     public Field getFieldForName(String name) {
@@ -1261,7 +1261,7 @@ public class SimpleEventProcessorModel {
         return Collections.unmodifiableMap(parentUpdateListenerMethodMap);
     }
 
-    public Map<Field, DirtyFlag> getDirtyFieldMap() {
+    public Map<String, DirtyFlag> getDirtyFieldMap() {
         return Collections.unmodifiableMap(dirtyFieldMap);
     }
 
