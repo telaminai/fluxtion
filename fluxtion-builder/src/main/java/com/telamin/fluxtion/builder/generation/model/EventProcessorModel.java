@@ -57,7 +57,7 @@ public interface EventProcessorModel {
 
     // utilities used in generation
     String getMappedClass(String className);
-    FieldSerializer getFieldSerializer();
+    String getTypeDeclaration(String variableName);
     String constructorString(String fieldName);
     List<String> beanProperties(String field);
     List<String> publicProperties(String field);

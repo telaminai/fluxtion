@@ -125,6 +125,8 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
      * Map of bean property mutators for a node.
      */
     private final Map<String, List<String>> beanPropertyMap;
+
+    private final Map<String, String> typeMap = new HashMap<>();
     /**
      * A map representing public members in the SimpleEventProcessorModel class.
      * The keys are strings that represent the names or identifiers of public
@@ -294,11 +296,25 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
         generateComplexConstructors();
         generatePropertyAssignments();
         generatePublicMemberAssignments();
+        buildTypeDeclarations();
         lifeCycleHandlers();
         eventHandlers();
         buildDirtySupport();
         filterList();
         LOGGER.debug("complete model");
+    }
+
+    private void buildTypeDeclarations() {
+        nodeFieldsSortedTopologically.forEach(f -> {
+            String variableName = f.getName();
+            String type = getFieldSerializer().buildTypeDeclaration(f, c -> c.getCanonicalName());
+            typeMap.put(variableName, type);
+        });
+    }
+
+    @Override
+    public String getTypeDeclaration(String variableName) {
+        return typeMap.getOrDefault(variableName, "");
     }
 
     public void generateMetaModelInMemory(boolean supportDirtyFiltering) throws Exception {
@@ -424,6 +440,7 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
 
         LOGGER.debug("publicMemberMap:{}", publicMemberMap);
     }
+
 
     @SuppressWarnings("unchecked")
     private void generateComplexConstructors() {
@@ -1146,7 +1163,6 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
      * Parents can be traced all the way to the root for dirty support,
      * effectively inheriting dirty support down the call tree.
      *
-     * @param node the node to introspect
      * @return collection of dirty flags that guard the node
      */
     public Collection<DirtyFlag> getNodeGuardConditions(String nodeName) {
@@ -1181,7 +1197,7 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
     public DirtyFlag getDirtyFlagForUpdateCb(CbMethodHandle cbHandle) {
         DirtyFlag flag = null;
         if (supportDirtyFiltering() && cbHandle != null) {
-            flag = dirtyFieldMap.get(getNameForInstance(cbHandle.instance));
+            flag = dirtyFieldMap.get(cbHandle.getVariableName());
             if (cbHandle.method.getReturnType() != boolean.class && flag != null) {
                 //trap the case where eventhandler and onEvent in same class
                 //and onEvent does not return true
