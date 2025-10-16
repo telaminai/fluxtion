@@ -40,6 +40,7 @@ import java.beans.PropertyDescriptor;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
@@ -124,6 +125,18 @@ public class SimpleEventProcessorModel {
      * Map of bean property mutators for a node.
      */
     private final Map<String, List<String>> beanPropertyMap;
+    /**
+     * A map representing public members in the SimpleEventProcessorModel class.
+     * The keys are strings that represent the names or identifiers of public
+     * members, and the values are lists of strings that provide additional
+     * information or descriptors related to those public members.
+     * <p>
+     * This map is used internally to manage and retrieve details about public
+     * member entities, allowing for effective processing and interaction within
+     * the event processing model. Its contents are populated and utilized during
+     * the generation of the model's metadata and assignments for public members.
+     */
+    private final Map<String, List<String>> publicMemberMap;
 
     private final Set<Class<?>> importClasses;
 
@@ -240,6 +253,7 @@ public class SimpleEventProcessorModel {
         this.nodeClassMap = nodeClassMap == null ? Collections.emptyMap() : nodeClassMap;
         this.annotationScannerCache = new SuperMethodAnnotationScannerCache();
         beanPropertyMap = new HashMap<>();
+        publicMemberMap = new HashMap<>();
         initialiseMethods = new ArrayList<>();
         startMethods = new ArrayList<>();
         startCompleteMethods = new ArrayList<>();
@@ -279,6 +293,7 @@ public class SimpleEventProcessorModel {
         generateDependentFields();
         generateComplexConstructors();
         generatePropertyAssignments();
+        generatePublicMemberAssignments();
         lifeCycleHandlers();
         eventHandlers();
         buildDirtySupport();
@@ -366,6 +381,48 @@ public class SimpleEventProcessorModel {
                 LOGGER.warn("could not process bean properties", ex);
             }
         });
+    }
+
+    private void generatePublicMemberAssignments() {
+        nodeFields.forEach(f -> {
+            final Object nodeInstance = f.getInstance();
+            String fieldName = f.getName();
+            AtomicReference<String> varName = new AtomicReference<>();
+
+            // Get all public fields using reflection
+            List<String> publicFieldAssignments = Arrays.stream(nodeInstance.getClass().getFields())
+                    .filter(field -> !Modifier.isStatic(field.getModifiers()))
+                    .filter(field -> !Modifier.isTransient(field.getModifiers()))
+                    .filter(field -> !Modifier.isFinal(field.getModifiers()))
+                    .filter(field -> field.getAnnotation(FluxtionIgnore.class) == null)
+                    .map(field -> {
+                        try {
+                            varName.set("");
+                            field.setAccessible(true);
+                            varName.set(field.getName());
+                            return field.get(nodeInstance);
+                        } catch (Exception e) {
+                            LOGGER.warn("could not access field:" + field + " value via reflection", e);
+                            return null;
+                        }
+                    })
+                    .filter(Objects::nonNull)
+                    .map(field -> {
+                        try {
+                            return varName.get() + " = " + fieldSerializer.mapToJavaSource(field, nodeFields, importClasses);
+                        } catch (Exception e) {
+                            LOGGER.warn("could not map field:" + field + " to mapToJavaConstructorSource", e);
+                            return null;
+                        }
+                    })
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+
+            LOGGER.debug("{} properties:{}", fieldName, publicFieldAssignments);
+            publicMemberMap.put(fieldName, publicFieldAssignments);
+        });
+
+        LOGGER.debug("publicMemberMap:{}", publicMemberMap);
     }
 
     @SuppressWarnings("unchecked")
@@ -477,19 +534,24 @@ public class SimpleEventProcessorModel {
                 List<MappedField> collect = Arrays.stream(cstrArgList).filter(Objects::nonNull).collect(Collectors.toList());
                 String generic = f.isGeneric() ? "<>" : "";
                 String args = collect.stream().map(Field.MappedField::value).collect(Collectors.joining(", "));
-                String cstructpr = " new " + f.getFqn() + generic + "(" + args + ");";
-                LOGGER.debug("constructor: '{}'", cstructpr);
-                constructorStringMap.put(parentFieldName, cstructpr);
+                String constructorString = " new " + f.getFqn() + generic + "(" + args + ");";
+                LOGGER.debug("constructor: '{}'", constructorString);
+                constructorStringMap.put(parentFieldName, constructorString);
             }
         });
     }
 
-    public String constructorString(String fieldName){
+    public String constructorString(String fieldName) {
         return constructorStringMap.getOrDefault(fieldName, "");
     }
 
-    public List<String> beanProperties(Object field) {
+    public List<String> beanProperties(String field) {
         List<String> args = beanPropertyMap.get(field);
+        return args == null ? Collections.emptyList() : args;
+    }
+
+    public List<String> publicProperties(String field) {
+        List<String> args = publicMemberMap.get(field);
         return args == null ? Collections.emptyList() : args;
     }
 
