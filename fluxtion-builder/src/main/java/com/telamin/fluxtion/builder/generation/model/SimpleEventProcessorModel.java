@@ -55,7 +55,7 @@ import static java.util.Arrays.stream;
  * @author Greg Higgins
  */
 @Slf4j
-public class SimpleEventProcessorModel {
+public class SimpleEventProcessorModel implements EventProcessorModel {
 
     private final Logger LOGGER = LoggerFactory.getLogger(SimpleEventProcessorModel.class);
 
