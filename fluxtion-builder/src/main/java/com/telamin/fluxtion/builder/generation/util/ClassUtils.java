@@ -51,8 +51,8 @@ public interface ClassUtils {
      */
     static CbMethodHandle findBestParentCB(Object parent, Collection<CbMethodHandle> cbs) {
         Set<Class<?>> classList = cbs.stream()
-                .filter(cb -> cb.method.getParameterTypes()[0].isAssignableFrom(parent.getClass()))
-                .map(cb -> cb.method.getParameterTypes()[0])
+                .filter(cb -> cb.getMethod().getParameterTypes()[0].isAssignableFrom(parent.getClass()))
+                .map(cb -> cb.getMethod().getParameterTypes()[0])
                 .collect(Collectors.toSet());
         if (classList.isEmpty()) {
             return null;
@@ -69,7 +69,7 @@ public interface ClassUtils {
         }).findFirst();
 
         Optional<CbMethodHandle> findFirst = cbs.stream()
-                .filter(cb -> cb.method.getParameterTypes()[0] == bestMatch.orElse(null))
+                .filter(cb -> cb.getMethod().getParameterTypes()[0] == bestMatch.orElse(null))
                 .findFirst();
         return findFirst.orElse(null);
 

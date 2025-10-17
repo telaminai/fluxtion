@@ -30,28 +30,29 @@ public class CbMethodHandle {
      * The callback method.
      */
     @Getter
-    public final Method method;
+    private final Method method;
     /**
      * the instance the method will operate on.
      */
     @Getter
-    public final Object instance;
+    private final Object instance;
     /**
      * the variable name of the instance in the SEP.
      */
     @Getter
-    public final String variableName;
+    private final String variableName;
 
     /**
      * the parameter type of the callback - can be null
      */
     @Getter
-    public final Class<?> parameterClass;
+    private final Class<?> parameterClass;
 
     /**
      * indicates is an {@link OnEventHandler} method
      */
-    public final boolean isEventHandler;
+    @Getter
+    private final boolean eventHandler;
     /**
      * Is a multi arg event handler
      */
@@ -59,10 +60,10 @@ public class CbMethodHandle {
     private final boolean exportedHandler;
 
     @Getter
-    public final boolean postEventHandler;
+    private final boolean postEventHandler;
 
     @Getter
-    public final boolean invertedDirtyHandler;
+    private final boolean invertedDirtyHandler;
 
     @Getter
     private final boolean guardedParent;
@@ -77,12 +78,12 @@ public class CbMethodHandle {
         this(method, instance, variableName, null, false, false);
     }
 
-    public CbMethodHandle(Method method, Object instance, String variableName, Class<?> parameterClass, boolean isEventHandler, boolean exportedHandler) {
+    public CbMethodHandle(Method method, Object instance, String variableName, Class<?> parameterClass, boolean eventHandler, boolean exportedHandler) {
         this.method = method;
         this.instance = instance;
         this.variableName = variableName;
         this.parameterClass = parameterClass;
-        this.isEventHandler = isEventHandler;
+        this.eventHandler = eventHandler;
         this.postEventHandler = method.getAnnotation(AfterTrigger.class) != null;
         OnTrigger onTriggerAnnotation = method.getAnnotation(OnTrigger.class);
         OnParentUpdate onParentUpdateAnnotation = method.getAnnotation(OnParentUpdate.class);
@@ -95,11 +96,6 @@ public class CbMethodHandle {
         this.guardedParent = onParentUpdateAnnotation != null && onParentUpdateAnnotation.guarded();
         this.noPropagateEventHandler = onEventHandlerAnnotation != null && !onEventHandlerAnnotation.propagate();
     }
-
-    public boolean isEventHandler() {
-        return isEventHandler;
-    }
-
 
     public String getMethodTarget() {
         if (Modifier.isStatic(getMethod().getModifiers())) {
@@ -123,7 +119,7 @@ public class CbMethodHandle {
                 ", instance=" + instance +
                 ", variableName='" + variableName + '\'' +
                 ", parameterClass=" + parameterClass +
-                ", isEventHandler=" + isEventHandler +
+                ", isEventHandler=" + eventHandler +
                 ", isExportHandler=" + exportedHandler +
                 ", isPostEventHandler=" + postEventHandler +
                 ", isInvertedDirtyHandler=" + invertedDirtyHandler +

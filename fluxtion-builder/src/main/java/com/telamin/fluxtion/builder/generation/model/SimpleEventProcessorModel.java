@@ -743,7 +743,7 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
             parentUpdateListenerMethodMap.put(nodeName, new ArrayList<>());
             List<?> directChildren = dependencyGraph.getDirectChildren(parent);
             Collection<CbMethodHandle> childCbList = parentListenerMultiMap.get(parent);
-            Set<Object> mappedCbs = childCbList.stream().map(cb -> cb.instance).collect(Collectors.toSet());
+            Set<Object> mappedCbs = childCbList.stream().map(cb -> cb.getInstance()).collect(Collectors.toSet());
             directChildren.stream()
                     .filter((child) -> !mappedCbs.contains(child))
                     .map(parentListenerMultiMapUnmatched::get)
@@ -1083,10 +1083,10 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
                     continue;
                 }
                 CbMethodHandle cbHandle = node2UpdateMethodMap.get(node.getInstance());
-                if (cbHandle != null && cbHandle.method.getReturnType() == boolean.class) {
+                if (cbHandle != null && cbHandle.getMethod().getReturnType() == boolean.class) {
                     DirtyFlag flag = new DirtyFlag(node, "isDirty_" + node.getName());
                     dirtyFieldMap.put(node.getName(), flag);
-                } else if (cbHandle != null && cbHandle.method.getReturnType() == void.class) {
+                } else if (cbHandle != null && cbHandle.getMethod().getReturnType() == void.class) {
                     DirtyFlag flag = new DirtyFlag(node, "isDirty_" + node.getName(), true);
                     dirtyFieldMap.put(node.getName(), flag);
                 }
@@ -1098,7 +1098,7 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
                     continue;
                 }
                 CbMethodHandle cb = node2UpdateMethodMap.get(node);
-                final boolean invertedDirtyHandler = cb != null && cb.invertedDirtyHandler;
+                final boolean invertedDirtyHandler = cb != null && cb.isInvertedDirtyHandler();
                 final boolean failIfNotGuarded = cb != null && cb.failBuildOnUnguardedTrigger();
                 //get parents of node and loop through
                 Set<DirtyFlag> guardSet = new HashSet<>();
@@ -1186,19 +1186,19 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
      * @return collection of dirty flags that guard the node
      */
     public Collection<DirtyFlag> getNodeGuardConditions(CbMethodHandle cb) {
-        if (cb.postEventHandler && dependencyGraph.getDirectParents(cb.instance).isEmpty()) {
-            return getDirtyFlagForNode(cb.instance) == null
+        if (cb.isPostEventHandler() && dependencyGraph.getDirectParents(cb.getInstance()).isEmpty()) {
+            return getDirtyFlagForNode(cb.getInstance()) == null
                     ? Collections.emptyList()
-                    : Collections.singletonList(getDirtyFlagForNode(cb.instance));
+                    : Collections.singletonList(getDirtyFlagForNode(cb.getInstance()));
         }
-        return cb.isEventHandler ? Collections.emptySet() : getNodeGuardConditions(cb.getVariableName());
+        return cb.isEventHandler() ? Collections.emptySet() : getNodeGuardConditions(cb.getVariableName());
     }
 
     public DirtyFlag getDirtyFlagForUpdateCb(CbMethodHandle cbHandle) {
         DirtyFlag flag = null;
         if (supportDirtyFiltering() && cbHandle != null) {
             flag = dirtyFieldMap.get(cbHandle.getVariableName());
-            if (cbHandle.method.getReturnType() != boolean.class && flag != null) {
+            if (cbHandle.getMethod().getReturnType() != boolean.class && flag != null) {
                 //trap the case where eventhandler and onEvent in same class
                 //and onEvent does not return true
                 flag.alwaysDirty = true;
