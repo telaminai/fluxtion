@@ -10,9 +10,11 @@
 package com.telamin.fluxtion.builder.generation.model;
 
 import com.telamin.fluxtion.builder.filter.FilterDescription;
-import com.telamin.fluxtion.builder.generation.serialiser.FieldSerializer;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Minimal interface exposing only the methods required by JavaSourceGenerator.
@@ -33,9 +35,9 @@ public interface EventProcessorModel {
     boolean isDispatchOnlyVersion();
 
     // node and field accessors
-    List<Field> getNodeFields();
-    List<Field> getTopologicallySortedNodeFields();
-    List<Field> getNodeRegistrationListenerFields();
+    List<SourceField> getNodeFields();
+    List<SourceField> getTopologicallySortedNodeFields();
+    List<SourceField> getNodeRegistrationListenerFields();
 
     // dispatch and filtering
     Map<Class<?>, Map<FilterDescription, List<CbMethodHandle>>> getDispatchMap();

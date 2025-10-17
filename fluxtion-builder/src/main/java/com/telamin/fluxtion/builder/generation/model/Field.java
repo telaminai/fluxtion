@@ -8,6 +8,8 @@
  */
 package com.telamin.fluxtion.builder.generation.model;
 
+import com.telamin.fluxtion.runtime.audit.Auditor;
+
 import java.lang.reflect.TypeVariable;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,13 +17,15 @@ import java.util.List;
 /**
  * @author Greg Higgins
  */
-public class Field {
+public class Field implements SourceField {
 
     private final String name;
     private final String fqn;
     private final boolean publicAccess;
     private final Object instance;
     private final Class<?> fieldClass;
+    private final boolean auditor;
+    private final boolean auditInvocations;
 
     public Field(String fqn, String name, Object instance, boolean publicAccess) {
         this.fqn = fqn;
@@ -29,8 +33,16 @@ public class Field {
         this.instance = instance;
         this.publicAccess = publicAccess;
         this.fieldClass = instance == null ? null : instance.getClass();
+        if (instance instanceof Auditor) {
+            auditor = true;
+            auditInvocations = ((Auditor) instance).auditInvocations();
+        } else {
+            auditor = false;
+            auditInvocations = false;
+        }
     }
 
+    @Override
     public boolean isGeneric() {
         TypeVariable<? extends Class<?>>[] typeParameters = instance.getClass().getTypeParameters();
         return typeParameters.length > 0;
@@ -46,14 +58,17 @@ public class Field {
                 + '}';
     }
 
+    @Override
     public String getName() {
         return name;
     }
 
+    @Override
     public String getFqn() {
         return fqn;
     }
 
+    @Override
     public boolean isPublicAccess() {
         return publicAccess;
     }
@@ -62,8 +77,19 @@ public class Field {
         return instance;
     }
 
+    @Override
     public Class<?> getFieldClass() {
         return fieldClass;
+    }
+
+    @Override
+    public boolean isAuditor() {
+        return auditor;
+    }
+
+    @Override
+    public boolean isAuditInvocations() {
+        return auditInvocations;
     }
 
     public static class MappedField extends Field {

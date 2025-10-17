@@ -1258,15 +1258,26 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
         return supportDirtyFiltering;
     }
 
-    public List<Field> getNodeFields() {
+    @Override
+    public List<SourceField> getNodeFields() {
         return Collections.unmodifiableList(nodeFields);
     }
 
-    public List<Field> getTopologicallySortedNodeFields() {
+    public List<Field> getNodeInstanceFields() {
+        return Collections.unmodifiableList(nodeFields);
+    }
+
+    @Override
+    public List<SourceField> getTopologicallySortedNodeFields() {
         return Collections.unmodifiableList(nodeFieldsSortedTopologically);
     }
 
-    public List<Field> getNodeRegistrationListenerFields() {
+    @Override
+    public List<SourceField> getNodeRegistrationListenerFields() {
+        return Collections.unmodifiableList(registrationListenerFields);
+    }
+
+    public List<Field> getNodeRegistrationListenerInstanceFields() {
         return Collections.unmodifiableList(registrationListenerFields);
     }
 
