@@ -651,16 +651,16 @@ public class InMemoryEventProcessor implements CloneableDataFlow, DataFlow, Inte
 
     private void registerAuditors() {
         //register auditors
-        List<Object> auditorFields = simpleEventProcessorModel.getNodeRegistrationListenerInstanceFields().stream()
+        List<Object> auditorFields = simpleEventProcessorModel.getNodeRegistrationListenerFields().stream()
                 .map(Field::getInstance).collect(Collectors.toList());
         auditors.clear();
-        auditors.addAll(simpleEventProcessorModel.getNodeRegistrationListenerInstanceFields().stream()
+        auditors.addAll(simpleEventProcessorModel.getNodeRegistrationListenerFields().stream()
                 .map(Field::getInstance)
                 .map(Auditor.class::cast)
                 .collect(Collectors.toList())
         );
         auditors.forEach(Auditor::init);
-        simpleEventProcessorModel.getNodeInstanceFields().stream()
+        simpleEventProcessorModel.getNodeFields().stream()
                 .filter(f -> !auditorFields.contains(f.getInstance()))
                 .forEach(f -> auditors.forEach(a -> a.nodeRegistered(f.getInstance(), f.getName())));
         forkTriggerTaskNodes.stream()

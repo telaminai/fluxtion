@@ -1269,25 +1269,20 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
     }
 
     @Override
-    public List<SourceField> getNodeFields() {
-        return Collections.unmodifiableList(nodeFields);
-    }
-
-    public List<Field> getNodeInstanceFields() {
+    @SuppressWarnings("unchecked")
+    public List<Field> getNodeFields() {
         return Collections.unmodifiableList(nodeFields);
     }
 
     @Override
-    public List<SourceField> getTopologicallySortedNodeFields() {
+    @SuppressWarnings("unchecked")
+    public List<Field> getTopologicallySortedNodeFields() {
         return Collections.unmodifiableList(nodeFieldsSortedTopologically);
     }
 
     @Override
-    public List<SourceField> getNodeRegistrationListenerFields() {
-        return Collections.unmodifiableList(registrationListenerFields);
-    }
-
-    public List<Field> getNodeRegistrationListenerInstanceFields() {
+    @SuppressWarnings("unchecked")
+    public List<Field> getNodeRegistrationListenerFields() {
         return Collections.unmodifiableList(registrationListenerFields);
     }
 

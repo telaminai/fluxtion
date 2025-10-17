@@ -35,9 +35,9 @@ public interface EventProcessorModel {
     boolean isDispatchOnlyVersion();
 
     // node and field accessors
-    List<SourceField> getNodeFields();
-    List<SourceField> getTopologicallySortedNodeFields();
-    List<SourceField> getNodeRegistrationListenerFields();
+    <T extends SourceField> List<T> getNodeFields();
+    <T extends SourceField> List<T> getTopologicallySortedNodeFields();
+    <T extends SourceField> List<T> getNodeRegistrationListenerFields();
 
     // dispatch and filtering
     Map<Class<?>, Map<FilterDescription, List<CbMethodHandle>>> getDispatchMap();
