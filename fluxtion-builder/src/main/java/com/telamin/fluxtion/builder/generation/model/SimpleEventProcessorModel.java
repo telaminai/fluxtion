@@ -181,6 +181,8 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
      */
     private final Map<String, List<CbMethodHandle>> parentUpdateListenerMethodMap;
 
+    private final Map<String, List<?>> directParentMap = new HashMap<>();
+
     /**
      * Map of update callbacks, object is the node in the SEP, the value is the
      * update method.
@@ -1079,6 +1081,7 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
     private void buildDirtySupport() throws Exception {
         if (supportDirtyFiltering()) {
             for (Field node : nodeFields) {
+                directParentMap.put(node.getName(), dependencyGraph.getDirectParents(node.getInstance()));
                 if (noDirtyFlagNeeded(node)) {
                     continue;
                 }
@@ -1150,7 +1153,11 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
     }
 
     public DirtyFlag getDirtyFlagForNode(Object node) {
-        return dirtyFieldMap.get(getNameForInstance(node));
+        return getDirtyFlagForNode(getNameForInstance(node));
+    }
+
+    public DirtyFlag getDirtyFlagForNode(String nodeName) {
+        return dirtyFieldMap.get(nodeName);
     }
 
     /**
@@ -1186,10 +1193,13 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
      * @return collection of dirty flags that guard the node
      */
     public Collection<DirtyFlag> getNodeGuardConditions(CbMethodHandle cb) {
-        if (cb.isPostEventHandler() && dependencyGraph.getDirectParents(cb.getInstance()).isEmpty()) {
-            return getDirtyFlagForNode(cb.getInstance()) == null
+
+        if (
+                cb.isPostEventHandler()
+                && directParentMap.getOrDefault(cb.getVariableName(), Collections.emptyList()).isEmpty()) {
+            return getDirtyFlagForNode(cb.getVariableName()) == null
                     ? Collections.emptyList()
-                    : Collections.singletonList(getDirtyFlagForNode(cb.getInstance()));
+                    : Collections.singletonList(getDirtyFlagForNode(cb.getVariableName()));
         }
         return cb.isEventHandler() ? Collections.emptySet() : getNodeGuardConditions(cb.getVariableName());
     }
