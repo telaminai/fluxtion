@@ -12,6 +12,7 @@ import com.telamin.fluxtion.runtime.event.Event;
 import lombok.ToString;
 
 import java.lang.reflect.Method;
+import java.io.ObjectStreamException;
 import java.util.Objects;
 
 /**
@@ -25,7 +26,9 @@ import java.util.Objects;
  * @author Greg Higgins
  */
 @ToString
-public class FilterDescription {
+public class FilterDescription implements java.io.Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     public static final FilterDescription NO_FILTER = new FilterDescription("NO_FILTER");
     public static final FilterDescription INVERSE_FILTER = new FilterDescription("INVERSE_FILTER");
@@ -74,7 +77,10 @@ public class FilterDescription {
      */
     public String variableName;
 
-    private Method exportFunction;
+    private transient Method exportFunction;
+
+    // Serializable copy of export function signature for code generation equivalence after serialization
+    public String exportFunctionSignature;
 
     public static FilterDescription build(Object input) {
         FilterDescription result = DEFAULT_FILTER;
@@ -181,10 +187,28 @@ public class FilterDescription {
 
     public void setExportFunction(Method exportFunction) {
         this.exportFunction = exportFunction;
+        this.exportFunctionSignature = exportFunction == null ? null : exportFunction.toGenericString();
     }
 
     public Method getExportFunction() {
         return exportFunction;
+    }
+
+    public String getExportFunctionSignature() {
+        return exportFunctionSignature;
+    }
+
+    private Object readResolve() throws ObjectStreamException {
+        if ("DEFAULT".equals(nullId)) {
+            return DEFAULT_FILTER;
+        }
+        if ("NO_FILTER".equals(nullId)) {
+            return NO_FILTER;
+        }
+        if ("INVERSE_FILTER".equals(nullId)) {
+            return INVERSE_FILTER;
+        }
+        return this;
     }
 
     @Override

@@ -22,7 +22,8 @@ import java.util.Objects;
 /**
  * @author Greg Higgins
  */
-public class CbMethodHandle implements SourceCbMethodHandle {
+public class CbMethodHandle implements SourceCbMethodHandle, java.io.Serializable {
+    private static final long serialVersionUID = 1L;
 
     public enum CallBackType {TRIGGER, EVENT_HANDLER, EXPORT_FUNCTION;}
 
@@ -31,12 +32,12 @@ public class CbMethodHandle implements SourceCbMethodHandle {
      * The callback method.
      */
     @Getter
-    private final Method method;
+    private final transient Method method;
     /**
      * the instance the method will operate on.
      */
     @Getter
-    private final Object instance;
+    private final transient Object instance;
     /**
      * the variable name of the instance in the SEP.
      */

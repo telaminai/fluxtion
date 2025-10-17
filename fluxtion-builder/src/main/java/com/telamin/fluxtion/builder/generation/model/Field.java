@@ -11,7 +11,6 @@ package com.telamin.fluxtion.builder.generation.model;
 import com.telamin.fluxtion.runtime.audit.Auditor;
 
 import java.io.Serializable;
-import java.lang.reflect.TypeVariable;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -19,6 +18,8 @@ import java.util.List;
  * @author Greg Higgins
  */
 public class Field implements SourceField, Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private final String name;
     private final String fqn;
@@ -42,7 +43,7 @@ public class Field implements SourceField, Serializable {
             auditor = false;
             auditInvocations = false;
         }
-        this.generic = instance.getClass().getTypeParameters().length > 0;
+        this.generic = instance != null && instance.getClass().getTypeParameters().length > 0;
     }
 
     @Override

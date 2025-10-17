@@ -58,7 +58,9 @@ import static java.util.Arrays.stream;
 @Slf4j
 public class SimpleEventProcessorModel implements EventProcessorModel, Serializable {
 
-    private final Logger LOGGER = LoggerFactory.getLogger(SimpleEventProcessorModel.class);
+    private static final long serialVersionUID = 1L;
+
+    private transient final Logger LOGGER = LoggerFactory.getLogger(SimpleEventProcessorModel.class);
 
     /**
      * the nodes managed by this SEP in an alphabetically sorted list. There is
@@ -116,7 +118,7 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
     /**
      * The dependency model for this SEP
      */
-    private final TopologicallySortedDependencyGraph dependencyGraph;
+    private transient final TopologicallySortedDependencyGraph dependencyGraph;
 
     /**
      * Map of a constructor string for a node.
@@ -182,22 +184,22 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
      */
     private final Map<String, List<CbMethodHandle>> parentUpdateListenerMethodMap;
 
-    private final Map<String, List<?>> directParentMap = new HashMap<>();
+    private transient final Map<String, List<?>> directParentMap = new HashMap<>();
 
     /**
      * Map of update callbacks, object is the node in the SEP, the value is the
      * update method.
      */
-    private final Map<Object, CbMethodHandle> node2UpdateMethodMap;
+    private transient final Map<Object, CbMethodHandle> node2UpdateMethodMap;
 
     private final ArrayList<FilterDescription> filterDescriptionList;
 
-    private final FilterDescriptionProducer filterProducer;
+    private transient final FilterDescriptionProducer filterProducer;
 
     /**
      * Caches results from reflection scanning to speed up model generation
      */
-    private final SuperMethodAnnotationScannerCache annotationScannerCache;
+    private transient final SuperMethodAnnotationScannerCache annotationScannerCache;
 
     /**
      * Map of a sep node fields to dirty field. Mappings only exist when dirty
@@ -214,18 +216,18 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
      * Filter map, override filter mapping for an instance, the String
      * represents the fqn the instance should be mapped to.
      */
-    private final Map<Object, Integer> filterMap;
+    private transient final Map<Object, Integer> filterMap;
 
     /**
      * Node class map, overrides the class of a node
      */
-    private final Map<Object, String> nodeClassMap;
+    private transient final Map<Object, String> nodeClassMap;
 
     /**
      * Comparator for alphanumeric support, where integers are sorted by value
      * not alphabetically.
      */
-    private final NaturalOrderComparator<?> comparator;
+    private transient final NaturalOrderComparator<?> comparator;
 
     /**
      * Is this model configured to generate support for dirty notifications and
@@ -236,7 +238,7 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
     @Getter
     private boolean dispatchOnlyVersion = false;
 
-    private final FieldSerializer fieldSerializer;
+    private transient final FieldSerializer fieldSerializer;
     private List<CbMethodHandle> triggerOnlyCallBacks;
     private Set<String> forkedTriggerInstances;
 
