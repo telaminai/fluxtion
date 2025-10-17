@@ -22,14 +22,14 @@ import java.util.Set;
 public interface EventProcessorModel {
 
     // lifecycle callback accessors
-    List<CbMethodHandle> getInitialiseMethods();
-    List<CbMethodHandle> getStartMethods();
-    List<CbMethodHandle> getStartCompleteMethods();
-    List<CbMethodHandle> getStopMethods();
-    List<CbMethodHandle> getBatchPauseMethods();
-    List<CbMethodHandle> getEventEndMethods();
-    List<CbMethodHandle> getBatchEndMethods();
-    List<CbMethodHandle> getTearDownMethods();
+    <T extends SourceCbMethodHandle> List<T> getInitialiseMethods();
+    <T extends SourceCbMethodHandle> List<T> getStartMethods();
+    <T extends SourceCbMethodHandle> List<T> getStartCompleteMethods();
+    <T extends SourceCbMethodHandle> List<T> getStopMethods();
+    <T extends SourceCbMethodHandle> List<T> getBatchPauseMethods();
+    <T extends SourceCbMethodHandle> List<T> getEventEndMethods();
+    <T extends SourceCbMethodHandle> List<T> getBatchEndMethods();
+    <T extends SourceCbMethodHandle> List<T> getTearDownMethods();
 
     // configuration flags
     boolean isDispatchOnlyVersion();
@@ -40,22 +40,22 @@ public interface EventProcessorModel {
     <T extends SourceField> List<T> getNodeRegistrationListenerFields();
 
     // dispatch and filtering
-    Map<Class<?>, Map<FilterDescription, List<CbMethodHandle>>> getDispatchMap();
-    Map<Class<?>, Map<FilterDescription, List<CbMethodHandle>>> getPostDispatchMap();
-    Map<Class<?>, Map<FilterDescription, List<CbMethodHandle>>> getHandlerOnlyDispatchMap();
-    List<CbMethodHandle> getAllPostEventCallBacks();
-    List<CbMethodHandle> getTriggerOnlyCallBacks();
+    <T extends SourceCbMethodHandle> Map<Class<?>, Map<FilterDescription, List<T>>> getDispatchMap();
+    <T extends SourceCbMethodHandle> Map<Class<?>, Map<FilterDescription, List<T>>> getPostDispatchMap();
+    <T extends SourceCbMethodHandle> Map<Class<?>, Map<FilterDescription, List<T>>> getHandlerOnlyDispatchMap();
+    <T extends SourceCbMethodHandle> List<T> getAllPostEventCallBacks();
+    <T extends SourceCbMethodHandle> List<T> getTriggerOnlyCallBacks();
     Set<String> getForkedTriggerInstances();
     List<FilterDescription> getFilterDescriptionList();
 
     // dirty flag / guards
     Map<String, DirtyFlag> getDirtyFieldMap();
-    DirtyFlag getDirtyFlagForUpdateCb(CbMethodHandle cbHandle);
+    DirtyFlag getDirtyFlagForUpdateCb(SourceCbMethodHandle cbHandle);
     Collection<DirtyFlag> getNodeGuardConditions(String nodeName);
-    Collection<DirtyFlag> getNodeGuardConditions(CbMethodHandle cbHandle);
+    Collection<DirtyFlag> getNodeGuardConditions(SourceCbMethodHandle cbHandle);
 
     // parent listeners
-    Map<String, List<CbMethodHandle>> getParentUpdateListenerMethodMap();
+    <T extends SourceCbMethodHandle> Map<String, List<T>> getParentUpdateListenerMethodMap();
 
     // utilities used in generation
     String getMappedClass(String className);

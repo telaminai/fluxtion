@@ -1192,7 +1192,7 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
      * @param cb method callback
      * @return collection of dirty flags that guard the node
      */
-    public Collection<DirtyFlag> getNodeGuardConditions(CbMethodHandle cb) {
+    public Collection<DirtyFlag> getNodeGuardConditions(SourceCbMethodHandle cb) {
 
         if (
                 cb.isPostEventHandler()
@@ -1204,11 +1204,11 @@ public class SimpleEventProcessorModel implements EventProcessorModel {
         return cb.isEventHandler() ? Collections.emptySet() : getNodeGuardConditions(cb.getVariableName());
     }
 
-    public DirtyFlag getDirtyFlagForUpdateCb(CbMethodHandle cbHandle) {
+    public DirtyFlag getDirtyFlagForUpdateCb(SourceCbMethodHandle cbHandle) {
         DirtyFlag flag = null;
         if (supportDirtyFiltering() && cbHandle != null) {
             flag = dirtyFieldMap.get(cbHandle.getVariableName());
-            if (cbHandle.getMethod().getReturnType() != boolean.class && flag != null) {
+            if (cbHandle.getReturnType() != boolean.class && flag != null) {
                 //trap the case where eventhandler and onEvent in same class
                 //and onEvent does not return true
                 flag.alwaysDirty = true;

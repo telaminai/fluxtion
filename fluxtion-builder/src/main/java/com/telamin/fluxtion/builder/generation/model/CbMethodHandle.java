@@ -22,9 +22,10 @@ import java.util.Objects;
 /**
  * @author Greg Higgins
  */
-public class CbMethodHandle {
+public class CbMethodHandle implements SourceCbMethodHandle {
 
     public enum CallBackType {TRIGGER, EVENT_HANDLER, EXPORT_FUNCTION;}
+
 
     /**
      * The callback method.
@@ -57,8 +58,17 @@ public class CbMethodHandle {
      * Is a multi arg event handler
      */
     @Getter
+    private final String methodTarget;
+    @Getter
+    private final String methodName;
+    @Getter
+    private final int parameterCount;
+    @Getter
+    private final Class<?> returnType;
+    @Getter
     private final boolean exportedHandler;
-
+    @Getter
+    private final String methodString;
     @Getter
     private final boolean postEventHandler;
 
@@ -95,19 +105,19 @@ public class CbMethodHandle {
         this.failBuildOnUnguardedTrigger = onTriggerAnnotation != null && onTriggerAnnotation.failBuildIfMissingBooleanReturn();
         this.guardedParent = onParentUpdateAnnotation != null && onParentUpdateAnnotation.guarded();
         this.noPropagateEventHandler = onEventHandlerAnnotation != null && !onEventHandlerAnnotation.propagate();
+        this.methodTarget = Modifier.isStatic(getMethod().getModifiers()) ? instance.getClass().getSimpleName() : variableName;
+        this.methodName = method.getName();
+        this.parameterCount = method.getParameterCount();
+        this.returnType = method.getReturnType();
+        this.methodString = method.toString();
     }
 
-    public String getMethodTarget() {
-        if (Modifier.isStatic(getMethod().getModifiers())) {
-            return instance.getClass().getSimpleName();
-        }
-        return variableName;
-    }
-
+    @Override
     public String invokeLambdaString() {
-        return getMethodTarget() + "::" + getMethod().getName();
+        return getMethodTarget() + "::" + getMethodName();
     }
 
+    @Override
     public String forkVariableName() {
         return "fork_" + getVariableName();
     }
@@ -147,10 +157,10 @@ public class CbMethodHandle {
             return false;
         }
         final CbMethodHandle other = (CbMethodHandle) obj;
-        if (!Objects.equals(this.method, other.method)) {
+        if (!Objects.equals(this.methodString, other.methodString)) {
             return false;
         }
-        return Objects.equals(this.instance, other.instance);
+        return Objects.equals(this.variableName, other.variableName);
     }
 
     public boolean failBuildOnUnguardedTrigger() {
