@@ -184,7 +184,7 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
      */
     private final Map<String, List<CbMethodHandle>> parentUpdateListenerMethodMap;
 
-    private transient final Map<String, List<?>> directParentMap = new HashMap<>();
+    private final Map<String, List<String>> directParentMap = new HashMap<>();
 
     /**
      * Map of update callbacks, object is the node in the SEP, the value is the
@@ -227,7 +227,7 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
      * Comparator for alphanumeric support, where integers are sorted by value
      * not alphabetically.
      */
-    private transient final NaturalOrderComparator<?> comparator;
+    private final NaturalOrderComparator<?> comparator;
 
     /**
      * Is this model configured to generate support for dirty notifications and
@@ -1084,7 +1084,10 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
     private void buildDirtySupport() throws Exception {
         if (supportDirtyFiltering()) {
             for (Field node : nodeFields) {
-                directParentMap.put(node.getName(), dependencyGraph.getDirectParents(node.getInstance()));
+                List<String> parentNameList = dependencyGraph.getDirectParents(node.getInstance()).stream()
+                        .map(this::getNameForInstance)
+                        .collect(Collectors.toList());
+                directParentMap.put(node.getName(), parentNameList);
                 if (noDirtyFlagNeeded(node)) {
                     continue;
                 }

@@ -8,6 +8,7 @@
  */
 package com.telamin.fluxtion.builder.generation.util;
 
+import java.io.Serializable;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Map;
@@ -15,7 +16,7 @@ import java.util.Map;
 /**
  * @author Greg Higgins
  */
-public class NaturalOrderComparator<T> implements Comparator<T> {
+public class NaturalOrderComparator<T> implements Comparator<T>, Serializable {
 
     private final Map<Object, String> inst2Name;
 
