@@ -9,7 +9,9 @@
 
 package com.telamin.fluxtion.builder.generation.model;
 
-public interface SourceCbMethodHandle {
+import java.io.Serializable;
+
+public interface SourceCbMethodHandle extends Serializable {
     String getMethodTarget();
 
     String getMethodName();

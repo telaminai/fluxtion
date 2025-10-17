@@ -42,6 +42,7 @@ import org.slf4j.LoggerFactory;
 import org.xml.sax.SAXException;
 
 import javax.xml.transform.TransformerConfigurationException;
+import java.io.Serializable;
 import java.lang.reflect.*;
 import java.lang.reflect.Field;
 import java.util.*;
@@ -55,7 +56,7 @@ import static org.apache.commons.lang3.StringUtils.isBlank;
  *
  * @author Greg Higgins
  */
-public class TopologicallySortedDependencyGraph implements NodeRegistry {
+public class TopologicallySortedDependencyGraph implements NodeRegistry, Serializable {
 
     //TODO check there are no variable name clashes
     private final Logger LOGGER = LoggerFactory.getLogger(TopologicallySortedDependencyGraph.class);

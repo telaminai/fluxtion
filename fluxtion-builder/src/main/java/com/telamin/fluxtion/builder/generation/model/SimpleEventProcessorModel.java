@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory;
 import java.beans.IntrospectionException;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
+import java.io.Serializable;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.Map.Entry;
@@ -55,7 +56,7 @@ import static java.util.Arrays.stream;
  * @author Greg Higgins
  */
 @Slf4j
-public class SimpleEventProcessorModel implements EventProcessorModel {
+public class SimpleEventProcessorModel implements EventProcessorModel, Serializable {
 
     private final Logger LOGGER = LoggerFactory.getLogger(SimpleEventProcessorModel.class);
 

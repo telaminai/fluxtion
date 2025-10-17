@@ -11,6 +11,7 @@ package com.telamin.fluxtion.builder.generation.model;
 
 import com.telamin.fluxtion.builder.filter.FilterDescription;
 
+import java.io.Serializable;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +20,7 @@ import java.util.Set;
 /**
  * Minimal interface exposing only the methods required by JavaSourceGenerator.
  */
-public interface EventProcessorModel {
+public interface EventProcessorModel extends Serializable {
 
     // lifecycle callback accessors
     <T extends SourceCbMethodHandle> List<T> getInitialiseMethods();

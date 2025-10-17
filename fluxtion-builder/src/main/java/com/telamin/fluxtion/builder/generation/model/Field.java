@@ -10,6 +10,7 @@ package com.telamin.fluxtion.builder.generation.model;
 
 import com.telamin.fluxtion.runtime.audit.Auditor;
 
+import java.io.Serializable;
 import java.lang.reflect.TypeVariable;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,15 +18,16 @@ import java.util.List;
 /**
  * @author Greg Higgins
  */
-public class Field implements SourceField {
+public class Field implements SourceField, Serializable {
 
     private final String name;
     private final String fqn;
     private final boolean publicAccess;
-    private final Object instance;
+    private final transient Object instance;
     private final Class<?> fieldClass;
     private final boolean auditor;
     private final boolean auditInvocations;
+    private final boolean generic;
 
     public Field(String fqn, String name, Object instance, boolean publicAccess) {
         this.fqn = fqn;
@@ -40,12 +42,12 @@ public class Field implements SourceField {
             auditor = false;
             auditInvocations = false;
         }
+        this.generic = instance.getClass().getTypeParameters().length > 0;
     }
 
     @Override
     public boolean isGeneric() {
-        TypeVariable<? extends Class<?>>[] typeParameters = instance.getClass().getTypeParameters();
-        return typeParameters.length > 0;
+        return generic;
     }
 
     @Override
