@@ -1214,7 +1214,7 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
         DirtyFlag flag = null;
         if (supportDirtyFiltering() && cbHandle != null) {
             flag = dirtyFieldMap.get(cbHandle.getVariableName());
-            if (cbHandle.getReturnType() != boolean.class && flag != null) {
+            if (!cbHandle.getReturnType().equalsIgnoreCase(boolean.class.getCanonicalName()) && flag != null) {
                 //trap the case where eventhandler and onEvent in same class
                 //and onEvent does not return true
                 flag.alwaysDirty = true;

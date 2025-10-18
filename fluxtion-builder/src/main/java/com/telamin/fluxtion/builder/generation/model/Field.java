@@ -25,7 +25,7 @@ public class Field implements SourceField, Serializable {
     private final String fqn;
     private final boolean publicAccess;
     private final transient Object instance;
-    private final Class<?> fieldClass;
+    private final String fieldClass;
     private final boolean auditor;
     private final boolean auditInvocations;
     private final boolean generic;
@@ -35,7 +35,7 @@ public class Field implements SourceField, Serializable {
         this.name = name;
         this.instance = instance;
         this.publicAccess = publicAccess;
-        this.fieldClass = instance == null ? null : instance.getClass();
+        this.fieldClass = instance == null ? null : instance.getClass().getCanonicalName();
         if (instance instanceof Auditor) {
             auditor = true;
             auditInvocations = ((Auditor) instance).auditInvocations();
@@ -81,7 +81,7 @@ public class Field implements SourceField, Serializable {
     }
 
     @Override
-    public Class<?> getFieldClass() {
+    public String getFieldClass() {
         return fieldClass;
     }
 

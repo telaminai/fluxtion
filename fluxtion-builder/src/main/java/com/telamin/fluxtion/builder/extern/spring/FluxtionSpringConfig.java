@@ -7,20 +7,20 @@
  * permission, please contact the copyright holders and delete this file.
  */
 
-package com.telamin.fluxtion.builder.generation.model;
+package com.telamin.fluxtion.builder.extern.spring;
 
-public interface SourceField {
-    boolean isGeneric();
 
-    String getName();
+import com.telamin.fluxtion.runtime.audit.Auditor;
+import com.telamin.fluxtion.runtime.audit.EventLogControlEvent;
+import lombok.Getter;
+import lombok.Setter;
 
-    String getFqn();
+import java.util.ArrayList;
+import java.util.List;
 
-    boolean isPublicAccess();
-
-    String getFieldClass();
-
-    boolean isAuditor();
-
-    boolean isAuditInvocations();
+@Getter
+@Setter
+public class FluxtionSpringConfig {
+    private List<Auditor> auditors = new ArrayList<>();
+    private EventLogControlEvent.LogLevel logLevel;
 }

@@ -7,20 +7,16 @@
  * permission, please contact the copyright holders and delete this file.
  */
 
-package com.telamin.fluxtion.builder.generation.model;
+package com.telamin.fluxtion.builder.compile.util;
 
-public interface SourceField {
-    boolean isGeneric();
+import org.yaml.snakeyaml.LoaderOptions;
+import org.yaml.snakeyaml.Yaml;
 
-    String getName();
+public interface YamlFactory {
 
-    String getFqn();
-
-    boolean isPublicAccess();
-
-    String getFieldClass();
-
-    boolean isAuditor();
-
-    boolean isAuditInvocations();
+    static Yaml newYaml() {
+        LoaderOptions options = new LoaderOptions();
+        options.setTagInspector(tag -> true);
+        return new Yaml(options);
+    }
 }

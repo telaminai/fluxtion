@@ -179,5 +179,5 @@ public class SimpleEventProcessorModelSerializationTest {
     }
 
     private static String safe(String s) { return s == null ? "" : s; }
-    private static String className(Class<?> c) { return c == null ? "" : c.getName(); }
+    private static String className(String c) { return c == null ? "" : c; }
 }

@@ -7,20 +7,19 @@
  * permission, please contact the copyright holders and delete this file.
  */
 
-package com.telamin.fluxtion.builder.generation.model;
+package com.telamin.fluxtion.builder.compile.util;
 
-public interface SourceField {
-    boolean isGeneric();
 
-    String getName();
+import com.telamin.fluxtion.Fluxtion;
+import com.telamin.fluxtion.runtime.node.ObjectEventHandlerNode;
 
-    String getFqn();
+public class GenerateDefaultEventProcessor {
 
-    boolean isPublicAccess();
-
-    String getFieldClass();
-
-    boolean isAuditor();
-
-    boolean isAuditInvocations();
+    public static void main(String[] args) {
+        Fluxtion.compileAot(c -> {
+                    c.addNode(new ObjectEventHandlerNode());
+                },
+                "com.fluxtion.runtime",
+                "DefaultEventProcessorPrototype");
+    }
 }

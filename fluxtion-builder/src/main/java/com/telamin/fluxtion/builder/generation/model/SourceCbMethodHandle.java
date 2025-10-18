@@ -18,11 +18,11 @@ public interface SourceCbMethodHandle extends Serializable {
 
     int getParameterCount();
 
-    Class<?> getReturnType();
+    String getReturnType();
 
     String getVariableName();
 
-    Class<?> getParameterClass();
+    String getParameterClass();
 
     boolean isEventHandler();
 

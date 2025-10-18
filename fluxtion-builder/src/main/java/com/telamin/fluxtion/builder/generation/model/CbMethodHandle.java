@@ -48,7 +48,7 @@ public class CbMethodHandle implements SourceCbMethodHandle, java.io.Serializabl
      * the parameter type of the callback - can be null
      */
     @Getter
-    private final Class<?> parameterClass;
+    private final String parameterClass;
 
     /**
      * indicates is an {@link OnEventHandler} method
@@ -65,7 +65,7 @@ public class CbMethodHandle implements SourceCbMethodHandle, java.io.Serializabl
     @Getter
     private final int parameterCount;
     @Getter
-    private final Class<?> returnType;
+    private final String returnType;
     @Getter
     private final boolean exportedHandler;
     @Getter
@@ -93,7 +93,7 @@ public class CbMethodHandle implements SourceCbMethodHandle, java.io.Serializabl
         this.method = method;
         this.instance = instance;
         this.variableName = variableName;
-        this.parameterClass = parameterClass;
+        this.parameterClass = parameterClass == null ? null : parameterClass.getCanonicalName();
         this.eventHandler = eventHandler;
         this.postEventHandler = method.getAnnotation(AfterTrigger.class) != null;
         OnTrigger onTriggerAnnotation = method.getAnnotation(OnTrigger.class);
@@ -109,7 +109,7 @@ public class CbMethodHandle implements SourceCbMethodHandle, java.io.Serializabl
         this.methodTarget = Modifier.isStatic(getMethod().getModifiers()) ? instance.getClass().getSimpleName() : variableName;
         this.methodName = method.getName();
         this.parameterCount = method.getParameterCount();
-        this.returnType = method.getReturnType();
+        this.returnType = method.getReturnType().getCanonicalName();
         this.methodString = method.toString();
     }
 

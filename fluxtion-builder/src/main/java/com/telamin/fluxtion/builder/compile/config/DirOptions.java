@@ -6,21 +6,13 @@
  * permission of the copyright holders.  If you encounter this file and do not have
  * permission, please contact the copyright holders and delete this file.
  */
+package com.telamin.fluxtion.builder.compile.config;
 
-package com.telamin.fluxtion.builder.generation.model;
-
-public interface SourceField {
-    boolean isGeneric();
-
-    String getName();
-
-    String getFqn();
-
-    boolean isPublicAccess();
-
-    String getFieldClass();
-
-    boolean isAuditor();
-
-    boolean isAuditInvocations();
+/**
+ * @author Greg Higgins greg.higgins@v12technology.com
+ */
+public enum DirOptions {
+    TEST_DIR_OUTPUT,
+    JAVA_GENDIR_OUTPUT,
+    JAVA_SRCDIR_OUTPUT
 }
