@@ -15,7 +15,7 @@ import java.util.Objects;
  *
  * @author Greg Higgins
  */
-public class DirtyFlag {
+public class DirtyFlag implements java.io.Serializable{
     public final Field node;
     public final String name;
     public boolean alwaysDirty;

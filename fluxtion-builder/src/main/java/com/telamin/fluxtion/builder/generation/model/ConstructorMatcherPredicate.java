@@ -71,7 +71,7 @@ class ConstructorMatcherPredicate implements Predicate<Constructor> {
             //possible match
             int matchCount = 0;
             for (MappedField mappedInstance : privateFields) {
-                String varName = mappedInstance.mappedName;
+                String varName = mappedInstance.getMappedName();
                 Class<?> parentClass = mappedInstance.parentClass();
                 Class<?> realClass = mappedInstance.realClass();
                 LOGGER.debug("match field var:{}, type:{}", varName, parentClass);
@@ -146,7 +146,7 @@ class ConstructorMatcherPredicate implements Predicate<Constructor> {
                 .collect(Collectors.toSet());
 
         Set<MappedField> filteredFields = privateFields.stream()
-                .filter(m -> !mappedNames.contains(m.mappedName))
+                .filter(m -> !mappedNames.contains(m.getMappedName()))
                 .collect(Collectors.toSet());
 
         List<String> output = filteredFields.stream()

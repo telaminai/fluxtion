@@ -16,4 +16,6 @@ import java.util.Set;
 
 public interface MapFieldToJavaSource {
     String mapToJavaSource(Object primitiveVal, List<Field> nodeFields, Set<Class<?>> importList);
+
+    String mapToJavaConstructorSource(Object primitiveVal, List<Field> nodeFields, Set<Class<?>> importList);
 }

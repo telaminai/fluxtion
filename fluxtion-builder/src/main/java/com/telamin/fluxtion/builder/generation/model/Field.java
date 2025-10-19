@@ -8,33 +8,48 @@
  */
 package com.telamin.fluxtion.builder.generation.model;
 
-import lombok.Getter;
+import com.telamin.fluxtion.runtime.audit.Auditor;
 
-import java.lang.reflect.TypeVariable;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * @author Greg Higgins
  */
-@Getter
-public class Field {
+public class Field implements SourceField, Serializable {
 
-    public final String name;
-    public final String fqn;
-    public final boolean publicAccess;
-    public final Object instance;
+    private static final long serialVersionUID = 1L;
+
+    private final String name;
+    private final String fqn;
+    private final boolean publicAccess;
+    private final transient Object instance;
+    private final String fieldClassName;
+    private final boolean auditor;
+    private final boolean auditInvocations;
+    private final boolean generic;
 
     public Field(String fqn, String name, Object instance, boolean publicAccess) {
         this.fqn = fqn;
         this.name = name;
         this.instance = instance;
         this.publicAccess = publicAccess;
+//        this.fieldClass = instance == null ? null : instance.getClass();
+        this.fieldClassName = instance == null ? null : instance.getClass().getCanonicalName();
+        if (instance instanceof Auditor) {
+            auditor = true;
+            auditInvocations = ((Auditor) instance).auditInvocations();
+        } else {
+            auditor = false;
+            auditInvocations = false;
+        }
+        this.generic = instance != null && instance.getClass().getTypeParameters().length > 0;
     }
 
+    @Override
     public boolean isGeneric() {
-        TypeVariable<? extends Class<?>>[] typeParameters = instance.getClass().getTypeParameters();
-        return typeParameters.length > 0;
+        return generic;
     }
 
     @Override
@@ -47,14 +62,48 @@ public class Field {
                 + '}';
     }
 
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public String getFqn() {
+        return fqn;
+    }
+
+    @Override
+    public boolean isPublicAccess() {
+        return publicAccess;
+    }
+
+    public Object getInstance() {
+        return instance;
+    }
+
+    @Override
+    public String getFieldClassName() {
+        return fieldClassName;
+    }
+
+    @Override
+    public boolean isAuditor() {
+        return auditor;
+    }
+
+    @Override
+    public boolean isAuditInvocations() {
+        return auditInvocations;
+    }
+
     public static class MappedField extends Field {
 
-        public final String mappedName;
-        public boolean collection;
-        public boolean primitive = false;
-        public Object primitiveVal;
-        public ArrayList<Field> elements;
-        public String derivedVal;
+        private final String mappedName;
+        private final boolean collection;
+        private boolean primitive = false;
+        private Object primitiveVal;
+        private ArrayList<Field> elements;
+        private String derivedVal;
         private Class<?> collectionClass;
 
         public MappedField(String mappedName, Field f) {
@@ -111,7 +160,7 @@ public class Field {
                 }
                 return primitiveVal.getClass();
             } else {
-                return instance.getClass();
+                return getInstance().getClass();
             }
         }
 
@@ -121,12 +170,12 @@ public class Field {
             } else if (primitive) {
                 return primitiveVal.getClass();
             } else {
-                return instance.getClass();
+                return getInstance().getClass();
             }
         }
 
         public String value() {
-            return derivedVal;
+            return getDerivedVal();
         }
 
         public void addField(Field field) {
@@ -147,15 +196,20 @@ public class Field {
         public String toString() {
             return "MappedField{"
                     + "mappedName=" + mappedName
-                    + ", name=" + name
+                    + ", name=" + getName()
                     + ", collection=" + collection
-                    + ", fqn=" + fqn
-                    + ", publicAccess=" + publicAccess
-                    + ", instance=" + instance
+                    + ", fqn=" + getFqn()
+                    + ", publicAccess=" + isPublicAccess()
+                    + ", instance=" + getInstance()
                     + '}';
         }
 
+        public String getDerivedVal() {
+            return derivedVal;
+        }
 
+        public void setDerivedVal(String derivedVal) {
+            this.derivedVal = derivedVal;
+        }
     }
-
 }
