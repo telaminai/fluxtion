@@ -14,7 +14,7 @@ package com.telamin.fluxtion.builder.generation.model;
  *
  * @author Greg Higgins
  */
-class ParentFilter {
+class ParentFilter implements java.io.Serializable{
 
     public Class<?> parentType;
     public String parentName;

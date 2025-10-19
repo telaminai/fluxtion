@@ -288,7 +288,7 @@ public class InMemoryEventProcessor implements CloneableDataFlow, DataFlow, Inte
 
     private Object checkForDefaultEventHandling(Object event) {
         Object mapped = event;
-        if (isDefaultHandling && !simpleEventProcessorModel.getDispatchMap().containsKey(event.getClass())) {
+        if (isDefaultHandling && !simpleEventProcessorModel.getDispatchMap().containsKey(event.getClass().getName())) {
             mapped = new Object();
         }
         return mapped;
@@ -415,16 +415,16 @@ public class InMemoryEventProcessor implements CloneableDataFlow, DataFlow, Inte
 
 
     private void invokeRunnable(CbMethodHandle callBackHandle) {
-        callBackHandle.method.setAccessible(true);
+        callBackHandle.getMethod().setAccessible(true);
         if (currentEvent != null) {
             auditors.stream()
                     .filter(Auditor::auditInvocations)
                     .forEachOrdered(a -> a.nodeInvoked(
-                            callBackHandle.instance, callBackHandle.getVariableName(), callBackHandle.getMethod().getName(), currentEvent
+                            callBackHandle.getInstance(), callBackHandle.getVariableName(), callBackHandle.getMethod().getName(), currentEvent
                     ));
         }
         try {
-            callBackHandle.method.invoke(callBackHandle.instance);
+            callBackHandle.getMethod().invoke(callBackHandle.getInstance());
         } catch (IllegalAccessException | InvocationTargetException e) {
             throw new RuntimeException(e);
         }
@@ -440,7 +440,7 @@ public class InMemoryEventProcessor implements CloneableDataFlow, DataFlow, Inte
         if (fieldByName == null) {
             throw new NoSuchFieldException(id);
         }
-        return (T) fieldByName.instance;
+        return (T) fieldByName.getInstance();
     }
 
     /**
@@ -453,7 +453,7 @@ public class InMemoryEventProcessor implements CloneableDataFlow, DataFlow, Inte
      */
     @SneakyThrows
     private void buildDispatch() {
-        isDefaultHandling = simpleEventProcessorModel.getDispatchMap().containsKey(Object.class);
+        isDefaultHandling = simpleEventProcessorModel.getDispatchMap().containsKey(Object.class.getName());
         List<CbMethodHandle> dispatchMapForGraph = new ArrayList<>(simpleEventProcessorModel.getDispatchMapForGraph());
         AtomicInteger counter = new AtomicInteger();
         if (log.isDebugEnabled()) {
@@ -474,7 +474,7 @@ public class InMemoryEventProcessor implements CloneableDataFlow, DataFlow, Inte
         forkedTaskBitset.clear();
 
         //set up array of all callback methods
-        final Map<Object, List<CbMethodHandle>> parentUpdateListenerMethodMap = simpleEventProcessorModel.getParentUpdateListenerMethodMap();
+        final Map<String, List<CbMethodHandle>> parentUpdateListenerMethodMap = simpleEventProcessorModel.getParentUpdateListenerMethodMap();
         final Map<Object, Node> instance2NodeMap = new HashMap<>(dispatchMapForGraph.size());
         for (int i = 0; i < dispatchMapForGraph.size(); i++) {
             CbMethodHandle cbMethodHandle = dispatchMapForGraph.get(i);
@@ -486,17 +486,17 @@ public class InMemoryEventProcessor implements CloneableDataFlow, DataFlow, Inte
                 node = new ForkTriggerTaskNode(
                         i,
                         cbMethodHandle,
-                        new ArrayList<>(parentUpdateListenerMethodMap.getOrDefault(cbMethodHandle.instance, Collections.emptyList()))
+                        new ArrayList<>(parentUpdateListenerMethodMap.getOrDefault(cbMethodHandle.getVariableName(), Collections.emptyList()))
                 );
             } else {
                 node = new Node(
                         i,
                         cbMethodHandle,
-                        new ArrayList<>(parentUpdateListenerMethodMap.getOrDefault(cbMethodHandle.instance, Collections.emptyList()))
+                        new ArrayList<>(parentUpdateListenerMethodMap.getOrDefault(cbMethodHandle.getVariableName(), Collections.emptyList()))
                 );
             }
             eventHandlers.add(node);
-            instance2NodeMap.put(node.callbackHandle.instance, node);
+            instance2NodeMap.put(node.callbackHandle.getInstance(), node);
         }
         //allocate OnEvent dependents
         for (Node handler : eventHandlers) {
@@ -543,7 +543,7 @@ public class InMemoryEventProcessor implements CloneableDataFlow, DataFlow, Inte
         //calculate event handler bitset id's for an event without filtering
         simpleEventProcessorModel.getDispatchMap().forEach((key, value) ->
                 noFilterEventHandlerToBitsetMap.put(
-                        ClassUtils.mapPrimitiveToWrapper(key),
+                        ClassUtils.resolveClassFromName(key),
                         value.getOrDefault(FilterDescription.DEFAULT_FILTER, Collections.emptyList()).stream()
                                 .filter(Objects::nonNull)
                                 .filter(CbMethodHandle::isEventHandler)
@@ -683,12 +683,12 @@ public class InMemoryEventProcessor implements CloneableDataFlow, DataFlow, Inte
             forkedTriggerTask = new ForkedTriggerTask(
                     () -> {
                         try {
-                            return (Boolean) callbackHandle.method.invoke(callbackHandle.instance);
+                            return (Boolean) callbackHandle.getMethod().invoke(callbackHandle.getInstance());
                         } catch (IllegalAccessException | InvocationTargetException e) {
                             throw new RuntimeException(e);
                         }
                     },
-                    callbackHandle.variableName
+                    callbackHandle.getVariableName()
             );
         }
 
@@ -724,9 +724,9 @@ public class InMemoryEventProcessor implements CloneableDataFlow, DataFlow, Inte
                         auditors.stream()
                                 .filter(Auditor::auditInvocations)
                                 .forEachOrdered(a -> a.nodeInvoked(
-                                        cb.instance, cb.getVariableName(), cb.getMethod().getName(), triggerEvent
+                                        cb.getInstance(), cb.getVariableName(), cb.getMethod().getName(), triggerEvent
                                 ));
-                        cb.method.invoke(cb.instance, callbackHandle.instance);
+                        cb.getMethod().invoke(cb.getInstance(), callbackHandle.getInstance());
                     }
                 }
             } else {
@@ -761,13 +761,13 @@ public class InMemoryEventProcessor implements CloneableDataFlow, DataFlow, Inte
             auditors.stream()
                     .filter(Auditor::auditInvocations)
                     .forEachOrdered(a -> a.nodeInvoked(
-                            callbackHandle.instance, callbackHandle.getVariableName(), callbackHandle.getMethod().getName(), e
+                            callbackHandle.getInstance(), callbackHandle.getVariableName(), callbackHandle.getMethod().getName(), e
                     ));
 
-            if (callbackHandle.isEventHandler) {
-                result = callbackHandle.method.invoke(callbackHandle.instance, e);
+            if (callbackHandle.isEventHandler()) {
+                result = callbackHandle.getMethod().invoke(callbackHandle.getInstance(), e);
             } else {
-                result = callbackHandle.method.invoke(callbackHandle.instance);
+                result = callbackHandle.getMethod().invoke(callbackHandle.getInstance());
             }
             dirty = result == null || ((Boolean) result);
             dependents.forEach(n -> n.parentUpdated(dirty));
@@ -778,9 +778,9 @@ public class InMemoryEventProcessor implements CloneableDataFlow, DataFlow, Inte
                     auditors.stream()
                             .filter(Auditor::auditInvocations)
                             .forEachOrdered(a -> a.nodeInvoked(
-                                    cb.instance, cb.getVariableName(), cb.getMethod().getName(), e
+                                    cb.getInstance(), cb.getVariableName(), cb.getMethod().getName(), e
                             ));
-                    cb.method.invoke(cb.instance, callbackHandle.instance);
+                    cb.getMethod().invoke(cb.getInstance(), callbackHandle.getInstance());
                 }
             }
         }
@@ -801,7 +801,7 @@ public class InMemoryEventProcessor implements CloneableDataFlow, DataFlow, Inte
                 auditors.stream()
                         .filter(Auditor::auditInvocations)
                         .forEachOrdered(a -> a.nodeInvoked(
-                                callbackHandle.instance, callbackHandle.getVariableName(), onEventCompleteMethod.getName(), currentEvent
+                                callbackHandle.getInstance(), callbackHandle.getVariableName(), onEventCompleteMethod.getName(), currentEvent
                         ));
                 onEventCompleteMethod.invoke(callbackHandle.getInstance());
                 eventCompleteInvokeSet.add(onEventCompleteMethodPointer);
@@ -815,7 +815,7 @@ public class InMemoryEventProcessor implements CloneableDataFlow, DataFlow, Inte
         }
 
         private void parentUpdated(boolean parentDirty) {
-            if (callbackHandle.invertedDirtyHandler) {
+            if (callbackHandle.isInvertedDirtyHandler()) {
                 parentDirty = !parentDirty;
             }
             if (parentDirty) {
@@ -840,11 +840,11 @@ public class InMemoryEventProcessor implements CloneableDataFlow, DataFlow, Inte
         public void init() {
             dirtyBitset.clear(position);
             dirty = false;
-            callbackHandle.method.setAccessible(true);
+            callbackHandle.getMethod().setAccessible(true);
             if (callbackHandle.isNoPropagateEventHandler()) {
                 parentListeners.clear();
             } else {
-                parentListeners.forEach(cb -> cb.method.setAccessible(true));
+                parentListeners.forEach(cb -> cb.getMethod().setAccessible(true));
             }
             onEventCompleteMethod = ReflectionUtils.getAllMethods(
                     callbackHandle.getInstance().getClass(),

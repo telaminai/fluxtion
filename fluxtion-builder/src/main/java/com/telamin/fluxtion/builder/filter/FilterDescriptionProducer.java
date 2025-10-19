@@ -28,15 +28,15 @@ public interface FilterDescriptionProducer {
 
     default FilterDescription getFilterDescription(Class<? extends Event> event, int filterId) {
         FilterDescription filter = new FilterDescription(event, filterId);
-        filter.comment = null;
-        filter.variableName = null;
+        filter.setComment(null);
+        filter.setVariableName(null);
         return filter;
     }
 
     default FilterDescription getFilterDescription(Class<? extends Event> event, String filterString) {
         FilterDescription filter = new FilterDescription(event, filterString);
-        filter.comment = null;
-        filter.variableName = null;
+        filter.setComment(null);
+        filter.setVariableName(null);
         return filter;
     }
 

@@ -87,6 +87,28 @@ public class FieldSerializer implements MapFieldToJavaSource {
         return _mapToJavaSource(primitiveVal, nodeFields, importList);
     }
 
+    @Override
+    public String mapToJavaConstructorSource(Object primitiveVal, List<Field> nodeFields, Set<Class<?>> importList) {
+        Class<?> primitiveValClass = primitiveVal.getClass();
+        FieldContext f = new FieldContext(primitiveVal, nodeFields, importList, this);
+        Function<FieldContext, String> serializeFunction = classSerializerMap.get(primitiveValClass);
+        if (serializeFunction != null) {
+            return serializeFunction.apply(f);
+        }
+        Optional<Class<?>> matchingClass = classSerializerMap.keySet().stream().filter(clazz -> clazz.isAssignableFrom(primitiveValClass)).findFirst();
+        if (matchingClass.isPresent()) {
+            return classSerializerMap.get(matchingClass.get()).apply(f);
+        }
+        if (_nativeTypeSupported(primitiveValClass)) {
+            return _mapToJavaSource(primitiveVal, nodeFields, importList);
+        }
+        Optional<String> optionalSerialise = serviceLoadedFieldSerializerList.stream().filter(s -> s.typeSupported(primitiveValClass)).findFirst().map(m -> m.mapToSource(f));
+        if (optionalSerialise.isPresent()) {
+            return optionalSerialise.get();
+        }
+        return _mapToJavaConstructorSource(primitiveVal, nodeFields, importList);
+    }
+
     public boolean propertySupported(PropertyDescriptor property, Field field, List<Field> nodeFields) {
         return _propertySupported(property, field, nodeFields);
     }
@@ -106,13 +128,30 @@ public class FieldSerializer implements MapFieldToJavaSource {
             importList.add(clazz);
         }
         for (Field nodeField : nodeFields) {
-            if (nodeField.instance == primitiveVal) {
-                primitiveVal = nodeField.name;
+            if (nodeField.getInstance() == primitiveVal) {
+                primitiveVal = nodeField.getName();
                 foundMatch = true;
                 break;
             }
         }
         if (!foundMatch && original == primitiveVal && clazz.getCanonicalName() != null) {
+            importList.add(clazz);
+            primitiveVal = "new " + (clazz).getSimpleName() + "()";
+        }
+        return primitiveVal.toString();
+    }
+
+    private String _mapToJavaConstructorSource(Object primitiveVal, List<Field> nodeFields, Set<Class<?>> importList) {
+        Class<?> clazz = primitiveVal.getClass();
+        Object original = primitiveVal;
+        if (clazz.isArray()) {
+            primitiveVal = serializeArray(primitiveVal, nodeFields, importList, clazz);
+        } else if (clazz.isEnum()) {
+            primitiveVal = clazz.getSimpleName() + "." + ((Enum<?>) primitiveVal).name();
+            importList.add(clazz);
+        }
+
+        if (original == primitiveVal && clazz.getCanonicalName() != null) {
             importList.add(clazz);
             primitiveVal = "new " + (clazz).getSimpleName() + "()";
         }
@@ -128,8 +167,8 @@ public class FieldSerializer implements MapFieldToJavaSource {
         for (int i = 0; i < length; i++) {
             Object arrayElement = Array.get(primitiveVal, i);
             for (Field nodeField : nodeFields) {
-                if (nodeField.instance.equals(arrayElement)) {
-                    arrayElement = (nodeField.instance);
+                if (nodeField.getInstance().equals(arrayElement)) {
+                    arrayElement = (nodeField.getInstance());
                     break;
                 }
             }
@@ -143,12 +182,12 @@ public class FieldSerializer implements MapFieldToJavaSource {
         String ret = null;
         if (!ClassUtils.isPropertyTransient(property, field)) {
             try {
-                Object value = property.getReadMethod().invoke(field.instance);
+                Object value = property.getReadMethod().invoke(field.getInstance());
                 String mappedValue = mapToJavaSource(value, nodeFields, importList);
                 String writeMethod = property.getWriteMethod().getName();
                 for (Field nodeField : nodeFields) {
-                    if (nodeField.instance == value) {
-                        mappedValue = nodeField.name;
+                    if (nodeField.getInstance() == value) {
+                        mappedValue = nodeField.getName();
                         break;
                     }
                 }
@@ -164,11 +203,11 @@ public class FieldSerializer implements MapFieldToJavaSource {
         try {
             boolean isTransient = ClassUtils.isPropertyTransient(property, field);
             final boolean writeMethod = property.getWriteMethod() != null;
-            final boolean hasValue = property.getReadMethod() != null && property.getReadMethod().invoke(field.instance) != null;
+            final boolean hasValue = property.getReadMethod() != null && property.getReadMethod().invoke(field.getInstance()) != null;
             boolean isNode = false;
             if (hasValue) {
                 for (Field nodeField : nodeFields) {
-                    if (nodeField.instance == property.getReadMethod().invoke(field.instance)) {
+                    if (nodeField.getInstance() == property.getReadMethod().invoke(field.getInstance())) {
                         isNode = true;
                         break;
                     }
@@ -183,7 +222,7 @@ public class FieldSerializer implements MapFieldToJavaSource {
 
     //bit of a hack to get generic declarations working
     public String buildTypeDeclaration(Field field, Function<Class<?>, String> classNameConverter) {
-        Object instance = field.instance;
+        Object instance = field.getInstance();
         if (instance instanceof GroupingFactory) {
             GroupingFactory groupByKeyFactory = (GroupingFactory) instance;
             Method method = groupByKeyFactory.getKeyFunction().method();
