@@ -25,7 +25,6 @@ public class Field implements SourceField, Serializable {
     private final String fqn;
     private final boolean publicAccess;
     private final transient Object instance;
-//    private final transient Class<?> fieldClass;
     private final String fieldClassName;
     private final boolean auditor;
     private final boolean auditInvocations;

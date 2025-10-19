@@ -12,6 +12,7 @@ import com.telamin.fluxtion.runtime.event.Event;
 import lombok.ToString;
 
 import java.io.ObjectStreamException;
+import java.io.Serial;
 import java.lang.reflect.Method;
 import java.util.Objects;
 
@@ -28,35 +29,22 @@ import java.util.Objects;
 @ToString
 public class FilterDescription implements java.io.Serializable {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
     public static final FilterDescription NO_FILTER = FilterDescription.buildNullFilter("NO_FILTER");
     public static final FilterDescription INVERSE_FILTER = FilterDescription.buildNullFilter("INVERSE_FILTER");
     public static final FilterDescription DEFAULT_FILTER = FilterDescription.buildNullFilter("DEFAULT");
 
-    /**
-     * Value used by the SEP to determine which decision branch to navigate. If
-     * integer filtering is used.
-     */
-    public final int value;
+    private final int value;
 
-    /**
-     * Value used by the SEP to determine which decision branch to navigate. If
-     * String filtering is used
-     */
-    public final String stringValue;
+    private final String stringValue;
 
     private final String nullId;
 
-    /**
-     * boolean value indicating String or integer based filtering.
-     */
-    public final boolean isIntFilter;
+    private final boolean isIntFilter;
 
-    /**
-     * Indicates presence of filtering, false value means match all values.
-     */
-    public final boolean isFiltered;
+    private final boolean isFiltered;
 
     /**
      * the event class for this filter.
@@ -65,24 +53,14 @@ public class FilterDescription implements java.io.Serializable {
 
     private String eventClassName;
 
-    /**
-     * Human readable comment to be associated with this filter in the generated
-     * code of the SEP. Depending upon the target language this value may be
-     * mutated to suit the target language rules.
-     */
-    public String comment;
+    private String comment;
 
-    /**
-     * User suggested identifier for this filter in the generated SEP code.
-     * Depending upon the target language this value may be mutated to suit the
-     * relevant rules.
-     */
-    public String variableName;
+    private String variableName;
 
     private transient Method exportFunction;
 
     // Serializable copy of export function signature for code generation equivalence after serialization
-    public String exportFunctionSignature;
+    private String exportFunctionSignature;
 
     public FilterDescription(String eventClass) {
         this.value = 0;
@@ -161,11 +139,11 @@ public class FilterDescription implements java.io.Serializable {
     }
 
     public FilterDescription changeClass(Class<? extends Event> newClass) {
-        FilterDescription fd = new FilterDescription(newClass, stringValue);
-        if (!isFiltered) {
+        FilterDescription fd = new FilterDescription(newClass, getStringValue());
+        if (!isFiltered()) {
             fd = new FilterDescription(newClass);
-        } else if (isIntFilter) {
-            fd = new FilterDescription(newClass, value);
+        } else if (isIntFilter()) {
+            fd = new FilterDescription(newClass, getValue());
         } else if (this == NO_FILTER) {
             return NO_FILTER;
         } else if (this == INVERSE_FILTER) {
@@ -176,10 +154,18 @@ public class FilterDescription implements java.io.Serializable {
         return fd;
     }
 
+    /**
+     * Value used by the SEP to determine which decision branch to navigate. If
+     * integer filtering is used.
+     */
     public int getValue() {
         return value;
     }
 
+    /**
+     * Value used by the SEP to determine which decision branch to navigate. If
+     * String filtering is used
+     */
     public String getStringValue() {
         return stringValue;
     }
@@ -188,10 +174,16 @@ public class FilterDescription implements java.io.Serializable {
         return nullId;
     }
 
+    /**
+     * boolean value indicating String or integer based filtering.
+     */
     public boolean isIntFilter() {
         return isIntFilter;
     }
 
+    /**
+     * Indicates presence of filtering, false value means match all values.
+     */
     public boolean isFiltered() {
         return isFiltered;
     }
@@ -204,10 +196,20 @@ public class FilterDescription implements java.io.Serializable {
         return eventClassName;
     }
 
+    /**
+     * Human readable comment to be associated with this filter in the generated
+     * code of the SEP. Depending upon the target language this value may be
+     * mutated to suit the target language rules.
+     */
     public String getComment() {
         return comment;
     }
 
+    /**
+     * User suggested identifier for this filter in the generated SEP code.
+     * Depending upon the target language this value may be mutated to suit the
+     * relevant rules.
+     */
     public String getVariableName() {
         return variableName;
     }
@@ -219,7 +221,7 @@ public class FilterDescription implements java.io.Serializable {
 
     public void setExportFunction(Method exportFunction) {
         this.exportFunction = exportFunction;
-        this.exportFunctionSignature = exportFunction == null ? null : exportFunction.toGenericString();
+        this.setExportFunctionSignature(exportFunction == null ? null : exportFunction.toGenericString());
     }
 
     public Method getExportFunction() {
@@ -228,6 +230,18 @@ public class FilterDescription implements java.io.Serializable {
 
     public String getExportFunctionSignature() {
         return exportFunctionSignature;
+    }
+
+    public void setComment(String comment) {
+        this.comment = comment;
+    }
+
+    public void setVariableName(String variableName) {
+        this.variableName = variableName;
+    }
+
+    public void setExportFunctionSignature(String exportFunctionSignature) {
+        this.exportFunctionSignature = exportFunctionSignature;
     }
 
     private Object readResolve() throws ObjectStreamException {
@@ -246,12 +260,12 @@ public class FilterDescription implements java.io.Serializable {
     @Override
     public int hashCode() {
         int hash = 5;
-        if (isIntFilter) {
-            hash = 89 * hash + this.value;
+        if (isIntFilter()) {
+            hash = 89 * hash + this.getValue();
         } else {
-            hash = 89 * hash + Objects.hashCode(this.stringValue);
+            hash = 89 * hash + Objects.hashCode(this.getStringValue());
         }
-        hash = 89 * hash + (this.isIntFilter ? 1 : 0);
+        hash = 89 * hash + (this.isIntFilter() ? 1 : 0);
         hash = 89 * hash + Objects.hashCode(this.eventClass);
         return hash;
     }
@@ -265,13 +279,13 @@ public class FilterDescription implements java.io.Serializable {
             return false;
         }
         final FilterDescription other = (FilterDescription) obj;
-        if (isIntFilter && this.value != other.value) {
+        if (isIntFilter() && this.getValue() != other.getValue()) {
             return false;
         }
-        if (!isIntFilter && !Objects.equals(this.stringValue, other.stringValue)) {
+        if (!isIntFilter() && !Objects.equals(this.getStringValue(), other.getStringValue())) {
             return false;
         }
-        if (this.isIntFilter != other.isIntFilter) {
+        if (this.isIntFilter() != other.isIntFilter()) {
             return false;
         }
         if (!Objects.equals(this.nullId, other.nullId)) {

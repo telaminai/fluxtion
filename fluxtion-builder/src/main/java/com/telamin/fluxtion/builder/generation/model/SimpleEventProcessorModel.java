@@ -1446,7 +1446,7 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
             Map<FilterDescription, List<CbMethodHandle>> cbMap = dispatchMap.get(eventId);
             Set<FilterDescription> filterIdSet = cbMap.keySet();
             for (FilterDescription filterDescription : filterIdSet) {
-                int filterId = filterDescription.value;
+                int filterId = filterDescription.getValue();
                 result.append("\t\tFilter Id:").append(filterId).append("\n");
                 List<CbMethodHandle> cbList = cbMap.get(filterDescription);
                 for (CbMethodHandle cbMethod : cbList) {
@@ -1464,7 +1464,7 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
             Map<FilterDescription, List<CbMethodHandle>> cbMap = postDispatchMap.get(eventId);
             Set<FilterDescription> filterIdSet = cbMap.keySet();
             for (FilterDescription filterDescription : filterIdSet) {
-                int filterId = filterDescription.value;
+                int filterId = filterDescription.getValue();
                 result.append("\t\tFilter Id:").append(filterId).append("\n");
                 List<CbMethodHandle> cbList = cbMap.get(filterDescription);
                 for (CbMethodHandle cbMethod : cbList) {
