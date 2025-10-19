@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory;
 import java.beans.IntrospectionException;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
+import java.io.Serial;
 import java.io.Serializable;
 import java.lang.reflect.*;
 import java.util.*;
@@ -58,6 +59,7 @@ import static java.util.Arrays.stream;
 @Slf4j
 public class SimpleEventProcessorModel implements EventProcessorModel, Serializable {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
     private transient final Logger LOGGER = LoggerFactory.getLogger(SimpleEventProcessorModel.class);
@@ -143,7 +145,8 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
      */
     private final Map<String, List<String>> publicMemberMap;
 
-    private final Set<Class<?>> importClasses;
+    private transient final Set<Class<?>> importClasses;
+    private final Set<String> importClassStrings = new HashSet<>();
 
     /**
      * A topologically sorted list of all {@link CbMethodHandle} in this graph. These methods are
@@ -162,21 +165,24 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
      * is the class of the Event. Integer is the filter Id. These methods are
      * annotated with {@link OnTrigger} or {@link OnEventHandler}
      */
-    private final Map<Class<?>, Map<FilterDescription, List<CbMethodHandle>>> dispatchMap;
+    private final Map<String, Map<FilterDescription, List<CbMethodHandle>>> dispatchMap;
 
     /**
      * The dispatch map for post event handling, grouped by event filter id's.
      * Class is the class of the Event. Integer is the filter Id. These methods
      * are annotated with {@link AfterTrigger}
      */
-    private final Map<Class<?>, Map<FilterDescription, List<CbMethodHandle>>> postDispatchMap;
+    private final Map<String, Map<FilterDescription, List<CbMethodHandle>>> postDispatchMap;
 
     /**
      * The dispatch map for event handling, grouped by event filter id's. Class
      * is the class of the Event. Integer is the filter Id. These methods are
      * annotated with {@link OnEventHandler}. Methods annotated with {@link OnTrigger} are not in this dispatchMap
      */
-    private Map<Class<?>, Map<FilterDescription, List<CbMethodHandle>>> handlerOnlyDispatchMap;
+    private Map<String, Map<FilterDescription, List<CbMethodHandle>>> handlerOnlyDispatchMap;
+    private transient final Map<String, Class<?>> eventClassNameMap = new HashMap<>();
+    private final Map<String, String> class2CanonicalNameMap = new HashMap<>();
+    private final List<String> hierachySortedClassList = new ArrayList<>();
 
     /**
      * Map of callback methods of a node's direct dependents that will be
@@ -306,6 +312,7 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
         eventHandlers();
         buildDirtySupport();
         filterList();
+        buildCLassMetaData();
         LOGGER.debug("complete model");
     }
 
@@ -875,7 +882,7 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
         }
 
         //merge inverse and no filter to default
-        Set<Class<?>> eventClassSet = dispatchMap.keySet();
+        Collection<Class<?>> eventClassSet = eventClassNameMap.values();
         for (Class<?> eventClass : eventClassSet) {
             Map<FilterDescription, List<CbMethodHandle>> handlerMap = getHandlerMap(eventClass);
             List<CbMethodHandle> noFilterList = handlerMap.get(FilterDescription.NO_FILTER) == null ?
@@ -1001,12 +1008,10 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
         Collections.reverse(allPostEventCallBacks);
 
         handlerOnlyDispatchMap = new HashMap<>();
-        Set<Class<?>> keySet = dispatchMap.keySet();
-        HashSet<Class<?>> classSet = new HashSet<>(keySet);
-        ArrayList<Class<?>> clazzList = new ArrayList<>(classSet);
-        clazzList.sort(Comparator.comparing(Class::getName));
+        List<String> clazzList = new ArrayList<>(new HashSet<>(dispatchMap.keySet()));
+        clazzList.sort(Comparator.naturalOrder());
 
-        for (Class evenClazz : clazzList) {
+        for (String evenClazz : clazzList) {
             Map<FilterDescription, List<CbMethodHandle>> originalFilterMap = dispatchMap.get(evenClazz);
             HashMap<FilterDescription, List<CbMethodHandle>> filterDispatchMap = new HashMap<>();
             handlerOnlyDispatchMap.put(evenClazz, filterDispatchMap);
@@ -1027,18 +1032,20 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
 
     @SuppressWarnings("unchecked")
     private void buildSubClassHandlers() {
-        Set<Class<?>> eventClassSet = dispatchMap.keySet();
+        Collection<Class<?>> eventClassSet = eventClassNameMap.values();
         for (Class<?> eventClass : eventClassSet) {
             LOGGER.debug("------- START superclass merge Class:" + eventClass.getSimpleName() + " START -----------");
             Map<FilterDescription, List<CbMethodHandle>> targetHandlerMap = getHandlerMap(eventClass);
             LOGGER.debug("targetHandlerMap before merge:{}", targetHandlerMap);
-            dispatchMap.entrySet().stream().filter((Entry<Class<?>, Map<FilterDescription, List<CbMethodHandle>>> e) -> {
-                        Class<?> key = e.getKey();
-                        final boolean match = key.isAssignableFrom(eventClass) && eventClass != key;
-                        if (match) {
-                            LOGGER.debug(key.getSimpleName() + " IS superclass of:" + eventClass.getSimpleName());
-                        } else {
-                            LOGGER.debug(key.getSimpleName() + " NOT superclass of:" + eventClass.getSimpleName());
+            dispatchMap.entrySet().stream().filter(e -> {
+                        Class<?> keyClass = eventClassNameMap.get(e.getKey());
+                        final boolean match = keyClass != null && keyClass.isAssignableFrom(eventClass) && eventClass != keyClass;
+                        if (keyClass != null) {
+                            if (match) {
+                                LOGGER.debug(keyClass.getSimpleName() + " IS superclass of:" + eventClass.getSimpleName());
+                            } else {
+                                LOGGER.debug(keyClass.getSimpleName() + " NOT superclass of:" + eventClass.getSimpleName());
+                            }
                         }
                         return match;
                     })
@@ -1062,11 +1069,21 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
     }
 
     private Map<FilterDescription, List<CbMethodHandle>> getHandlerMap(Class<?> eventClass) {
-        return dispatchMap.computeIfAbsent(eventClass, k -> new HashMap<>());
+        String name = eventClass.getName();
+        String canonicalName = eventClass.getCanonicalName();
+        eventClassNameMap.putIfAbsent(name, eventClass);
+        class2CanonicalNameMap.put(name, canonicalName);
+
+        return dispatchMap.computeIfAbsent(name, k -> new HashMap<>());
     }
 
     private Map<FilterDescription, List<CbMethodHandle>> getPostHandlerMap(Class<?> eventClass) {
-        return postDispatchMap.computeIfAbsent(eventClass, k -> new HashMap<>());
+        String name = eventClass.getName();
+        String canonicalName = eventClass.getCanonicalName();
+        eventClassNameMap.putIfAbsent(name, eventClass);
+        class2CanonicalNameMap.put(name, canonicalName);
+
+        return postDispatchMap.computeIfAbsent(name, k -> new HashMap<>());
     }
 
     private boolean noDirtyFlagNeeded(Field node) {
@@ -1156,6 +1173,34 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
         filterDescriptionList.addAll(uniqueFilterSet);
         filterDescriptionList.remove(FilterDescription.NO_FILTER);
         LOGGER.debug("filterList:" + filterDescriptionList);
+    }
+
+    private void buildCLassMetaData() {
+        importClasses.stream()
+                .map(Class::getCanonicalName)
+                .forEach(importClassStrings::add);
+
+        HashSet<Class<?>> classSet = new HashSet<>(eventClassNameMap.values());
+        classSet.remove(ExportFunctionMarker.class);
+        List<Class<?>> clazzList = ClassUtils.sortClassHierarchy(classSet);
+        for (int i = 0; i < clazzList.size(); i++) {
+            Class<?> clazz = clazzList.get(i);
+            hierachySortedClassList.add(clazz.getName());
+        }
+    }
+
+    @Override
+    public List<String> sortByClassHierarchy(Collection<String> classSet) {
+
+        List<String> sortedClassList = new ArrayList<>();
+
+        for (String clazz : hierachySortedClassList) {
+            if (classSet.contains(clazz)) {
+                sortedClassList.add(clazz);
+            }
+        }
+
+        return sortedClassList;
     }
 
     public DirtyFlag getDirtyFlagForNode(Object node) {
@@ -1270,6 +1315,11 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
         return dependencyGraph.getConfig().getClass2replace().getOrDefault(className, className);
     }
 
+    @Override
+    public String getCanonicalName(String className) {
+        return class2CanonicalNameMap.getOrDefault(className, className).replace('$', '.');
+    }
+
     private boolean supportDirtyFiltering() {
         return supportDirtyFiltering;
     }
@@ -1351,15 +1401,15 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
         return forkedTriggerInstances;
     }
 
-    public Map<Class<?>, Map<FilterDescription, List<CbMethodHandle>>> getDispatchMap() {
+    public Map<String, Map<FilterDescription, List<CbMethodHandle>>> getDispatchMap() {
         return Collections.unmodifiableMap(dispatchMap);
     }
 
-    public Map<Class<?>, Map<FilterDescription, List<CbMethodHandle>>> getPostDispatchMap() {
+    public Map<String, Map<FilterDescription, List<CbMethodHandle>>> getPostDispatchMap() {
         return Collections.unmodifiableMap(postDispatchMap);
     }
 
-    public Map<Class<?>, Map<FilterDescription, List<CbMethodHandle>>> getHandlerOnlyDispatchMap() {
+    public Map<String, Map<FilterDescription, List<CbMethodHandle>>> getHandlerOnlyDispatchMap() {
         return Collections.unmodifiableMap(handlerOnlyDispatchMap);
     }
 
@@ -1383,15 +1433,15 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
         return fieldSerializer;
     }
 
-    public Set<Class<?>> getImportClasses() {
-        return Collections.unmodifiableSet(importClasses);
+    public Set<String> getImportClasses() {
+        return Collections.unmodifiableSet(importClassStrings);
     }
 
     private String dispatchMapToString() {
         StringBuilder result = new StringBuilder("DispatchMap[\n");
 
-        Set<Class<?>> keySet = dispatchMap.keySet();
-        for (Class<?> eventId : keySet) {
+        Set<String> keySet = dispatchMap.keySet();
+        for (String eventId : keySet) {
             result.append("\tEvent Id:").append(eventId).append("\n");
             Map<FilterDescription, List<CbMethodHandle>> cbMap = dispatchMap.get(eventId);
             Set<FilterDescription> filterIdSet = cbMap.keySet();
@@ -1408,10 +1458,10 @@ public class SimpleEventProcessorModel implements EventProcessorModel, Serializa
 
         //post dispatch
         result.append("PostDispatchMap[\n");
-        keySet = postDispatchMap.keySet();
-        for (Class<?> eventId : keySet) {
+        Set<String> postKeys = postDispatchMap.keySet();
+        for (String eventId : postKeys) {
             result.append("\tEvent Id:").append(eventId).append("\n");
-            Map<FilterDescription, List<CbMethodHandle>> cbMap = dispatchMap.get(eventId);
+            Map<FilterDescription, List<CbMethodHandle>> cbMap = postDispatchMap.get(eventId);
             Set<FilterDescription> filterIdSet = cbMap.keySet();
             for (FilterDescription filterDescription : filterIdSet) {
                 int filterId = filterDescription.value;

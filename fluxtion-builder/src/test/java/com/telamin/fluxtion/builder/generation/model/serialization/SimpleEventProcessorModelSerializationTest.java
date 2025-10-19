@@ -64,38 +64,38 @@ public class SimpleEventProcessorModelSerializationTest {
         }
     }
 
-    private static void assertModelsEquivalent(EventProcessorModel a, EventProcessorModel b) {
+    private static void assertModelsEquivalent(EventProcessorModel original, EventProcessorModel clone) {
         // lifecycle lists
-        assertCbListEq(a.getInitialiseMethods(), b.getInitialiseMethods());
-        assertCbListEq(a.getStartMethods(), b.getStartMethods());
-        assertCbListEq(a.getStartCompleteMethods(), b.getStartCompleteMethods());
-        assertCbListEq(a.getStopMethods(), b.getStopMethods());
-        assertCbListEq(a.getBatchPauseMethods(), b.getBatchPauseMethods());
-        assertCbListEq(a.getEventEndMethods(), b.getEventEndMethods());
-        assertCbListEq(a.getBatchEndMethods(), b.getBatchEndMethods());
-        assertCbListEq(a.getTearDownMethods(), b.getTearDownMethods());
+        assertCbListEq(original.getInitialiseMethods(), clone.getInitialiseMethods());
+        assertCbListEq(original.getStartMethods(), clone.getStartMethods());
+        assertCbListEq(original.getStartCompleteMethods(), clone.getStartCompleteMethods());
+        assertCbListEq(original.getStopMethods(), clone.getStopMethods());
+        assertCbListEq(original.getBatchPauseMethods(), clone.getBatchPauseMethods());
+        assertCbListEq(original.getEventEndMethods(), clone.getEventEndMethods());
+        assertCbListEq(original.getBatchEndMethods(), clone.getBatchEndMethods());
+        assertCbListEq(original.getTearDownMethods(), clone.getTearDownMethods());
 
         // dispatch-related
-        assertCbListEq(a.getAllPostEventCallBacks(), b.getAllPostEventCallBacks());
-        assertCbListEq(a.getTriggerOnlyCallBacks(), b.getTriggerOnlyCallBacks());
-        assertDispatchMapEq(a.getDispatchMap(), b.getDispatchMap());
-        assertDispatchMapEq(a.getPostDispatchMap(), b.getPostDispatchMap());
-        assertDispatchMapEq(a.getHandlerOnlyDispatchMap(), b.getHandlerOnlyDispatchMap());
+        assertCbListEq(original.getAllPostEventCallBacks(), clone.getAllPostEventCallBacks());
+        assertCbListEq(original.getTriggerOnlyCallBacks(), clone.getTriggerOnlyCallBacks());
+        assertDispatchMapEq(original.getDispatchMap(), clone.getDispatchMap());
+        assertDispatchMapEq(original.getPostDispatchMap(), clone.getPostDispatchMap());
+        assertDispatchMapEq(original.getHandlerOnlyDispatchMap(), clone.getHandlerOnlyDispatchMap());
 
         // fields
-        assertFieldListEq(a.getNodeFields(), b.getNodeFields());
-        assertFieldListEq(a.getTopologicallySortedNodeFields(), b.getTopologicallySortedNodeFields());
-        assertFieldListEq(a.getNodeRegistrationListenerFields(), b.getNodeRegistrationListenerFields());
+        assertFieldListEq(original.getNodeFields(), clone.getNodeFields());
+        assertFieldListEq(original.getTopologicallySortedNodeFields(), clone.getTopologicallySortedNodeFields());
+        assertFieldListEq(original.getNodeRegistrationListenerFields(), clone.getNodeRegistrationListenerFields());
 
         // flags and filter descriptions
-        MatcherAssert.assertThat(a.isDispatchOnlyVersion(), Matchers.is(b.isDispatchOnlyVersion()));
-        MatcherAssert.assertThat(mapList(a.getFilterDescriptionList()), Matchers.is(mapList(b.getFilterDescriptionList())));
+        MatcherAssert.assertThat(original.isDispatchOnlyVersion(), Matchers.is(clone.isDispatchOnlyVersion()));
+        MatcherAssert.assertThat(mapList(original.getFilterDescriptionList()), Matchers.is(mapList(clone.getFilterDescriptionList())));
 
         // forked triggers
-        MatcherAssert.assertThat(sorted(a.getForkedTriggerInstances()), Matchers.is(sorted(b.getForkedTriggerInstances())));
+        MatcherAssert.assertThat(sorted(original.getForkedTriggerInstances()), Matchers.is(sorted(clone.getForkedTriggerInstances())));
 
         // dirty map keys (values are complex, compare keys only)
-        MatcherAssert.assertThat(sorted(a.getDirtyFieldMap().keySet()), Matchers.is(sorted(b.getDirtyFieldMap().keySet())));
+        MatcherAssert.assertThat(sorted(original.getDirtyFieldMap().keySet()), Matchers.is(sorted(clone.getDirtyFieldMap().keySet())));
     }
 
     private static <T extends SourceCbMethodHandle> void assertCbListEq(List<T> l1, List<T> l2) {
@@ -133,7 +133,7 @@ public class SimpleEventProcessorModelSerializationTest {
                         safe(f.getName()),
                         safe(f.getFqn()),
                         Boolean.toString(f.isPublicAccess()),
-                        className(f.getFieldClass()),
+                        className(f.getFieldClassName()),
                         Boolean.toString(f.isAuditor()),
                         Boolean.toString(f.isAuditInvocations()),
                         Boolean.toString(f.isGeneric())
@@ -142,23 +142,23 @@ public class SimpleEventProcessorModelSerializationTest {
                 .collect(Collectors.toList());
     }
 
-    private static <T extends SourceCbMethodHandle> void assertDispatchMapEq(Map<Class<?>, Map<FilterDescription, List<T>>> m1,
-                                                                             Map<Class<?>, Map<FilterDescription, List<T>>> m2) {
+    private static <T extends SourceCbMethodHandle> void assertDispatchMapEq(Map<String, Map<FilterDescription, List<T>>> m1,
+                                                                             Map<String, Map<FilterDescription, List<T>>> m2) {
         List<String> a = flattenDispatch(m1);
         List<String> b = flattenDispatch(m2);
         MatcherAssert.assertThat(a, Matchers.is(b));
     }
 
-    private static <T extends SourceCbMethodHandle> List<String> flattenDispatch(Map<Class<?>, Map<FilterDescription, List<T>>> m) {
+    private static <T extends SourceCbMethodHandle> List<String> flattenDispatch(Map<String, Map<FilterDescription, List<T>>> m) {
         List<String> out = new ArrayList<>();
-        List<Class<?>> keys = new ArrayList<>(m.keySet());
-        keys.sort(Comparator.comparing(Class::getName));
-        for (Class<?> k : keys) {
+        List<String> keys = new ArrayList<>(m.keySet());
+        keys.sort(Comparator.naturalOrder());
+        for (String k : keys) {
             List<FilterDescription> filters = new ArrayList<>(m.get(k).keySet());
             filters.sort(Comparator.comparing(SimpleEventProcessorModelSerializationTest::filterKey));
             for (FilterDescription fd : filters) {
                 List<String> mappedCbs = mapCbList(m.get(k).getOrDefault(fd, Collections.emptyList()));
-                out.add(k.getName() + "->" + filterKey(fd) + "->" + mappedCbs);
+                out.add(k + "->" + filterKey(fd) + "->" + mappedCbs);
             }
         }
         return out;
@@ -166,7 +166,7 @@ public class SimpleEventProcessorModelSerializationTest {
 
     private static String filterKey(FilterDescription fd) {
         if (fd == null) return "null";
-        String cls = fd.getEventClass() == null ? "null" : fd.getEventClass().getName();
+        String cls = fd.getEventClassName() == null ? "null" : fd.getEventClassName();
         return cls + ":" + (fd.isIntFilter() ? Integer.toString(fd.getValue()) : "-") + ":" + Objects.toString(fd.getStringValue(), "-");
     }
 

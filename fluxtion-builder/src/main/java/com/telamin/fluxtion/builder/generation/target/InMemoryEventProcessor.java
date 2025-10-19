@@ -288,7 +288,7 @@ public class InMemoryEventProcessor implements CloneableDataFlow, DataFlow, Inte
 
     private Object checkForDefaultEventHandling(Object event) {
         Object mapped = event;
-        if (isDefaultHandling && !simpleEventProcessorModel.getDispatchMap().containsKey(event.getClass())) {
+        if (isDefaultHandling && !simpleEventProcessorModel.getDispatchMap().containsKey(event.getClass().getName())) {
             mapped = new Object();
         }
         return mapped;
@@ -453,7 +453,7 @@ public class InMemoryEventProcessor implements CloneableDataFlow, DataFlow, Inte
      */
     @SneakyThrows
     private void buildDispatch() {
-        isDefaultHandling = simpleEventProcessorModel.getDispatchMap().containsKey(Object.class);
+        isDefaultHandling = simpleEventProcessorModel.getDispatchMap().containsKey(Object.class.getName());
         List<CbMethodHandle> dispatchMapForGraph = new ArrayList<>(simpleEventProcessorModel.getDispatchMapForGraph());
         AtomicInteger counter = new AtomicInteger();
         if (log.isDebugEnabled()) {
@@ -543,7 +543,7 @@ public class InMemoryEventProcessor implements CloneableDataFlow, DataFlow, Inte
         //calculate event handler bitset id's for an event without filtering
         simpleEventProcessorModel.getDispatchMap().forEach((key, value) ->
                 noFilterEventHandlerToBitsetMap.put(
-                        ClassUtils.mapPrimitiveToWrapper(key),
+                        ClassUtils.resolveClassFromName(key),
                         value.getOrDefault(FilterDescription.DEFAULT_FILTER, Collections.emptyList()).stream()
                                 .filter(Objects::nonNull)
                                 .filter(CbMethodHandle::isEventHandler)

@@ -11,8 +11,8 @@ package com.telamin.fluxtion.builder.filter;
 import com.telamin.fluxtion.runtime.event.Event;
 import lombok.ToString;
 
-import java.lang.reflect.Method;
 import java.io.ObjectStreamException;
+import java.lang.reflect.Method;
 import java.util.Objects;
 
 /**
@@ -30,9 +30,9 @@ public class FilterDescription implements java.io.Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    public static final FilterDescription NO_FILTER = new FilterDescription("NO_FILTER");
-    public static final FilterDescription INVERSE_FILTER = new FilterDescription("INVERSE_FILTER");
-    public static final FilterDescription DEFAULT_FILTER = new FilterDescription("DEFAULT");
+    public static final FilterDescription NO_FILTER = FilterDescription.buildNullFilter("NO_FILTER");
+    public static final FilterDescription INVERSE_FILTER = FilterDescription.buildNullFilter("INVERSE_FILTER");
+    public static final FilterDescription DEFAULT_FILTER = FilterDescription.buildNullFilter("DEFAULT");
 
     /**
      * Value used by the SEP to determine which decision branch to navigate. If
@@ -56,12 +56,14 @@ public class FilterDescription implements java.io.Serializable {
     /**
      * Indicates presence of filtering, false value means match all values.
      */
-    public boolean isFiltered;
+    public final boolean isFiltered;
 
     /**
      * the event class for this filter.
      */
-    public Class<? extends Event> eventClass;
+    private transient Class<? extends Event> eventClass;
+
+    private String eventClassName;
 
     /**
      * Human readable comment to be associated with this filter in the generated
@@ -82,6 +84,16 @@ public class FilterDescription implements java.io.Serializable {
     // Serializable copy of export function signature for code generation equivalence after serialization
     public String exportFunctionSignature;
 
+    public FilterDescription(String eventClass) {
+        this.value = 0;
+        this.eventClass = null;
+        this.stringValue = "";
+        this.isIntFilter = true;
+        this.isFiltered = false;
+        this.nullId = "";
+        this.eventClassName = eventClass;
+    }
+
     public static FilterDescription build(Object input) {
         FilterDescription result = DEFAULT_FILTER;
         if (input instanceof Event) {
@@ -97,13 +109,18 @@ public class FilterDescription implements java.io.Serializable {
         return result;
     }
 
+    public static FilterDescription buildNullFilter(String nullValue) {
+        return new FilterDescription(null, "", 0, nullValue, false, true);
+    }
+
     public FilterDescription(Class<? extends Event> eventClass) {
         this.value = 0;
         this.eventClass = eventClass;
         this.stringValue = "";
         this.isIntFilter = true;
         this.isFiltered = false;
-        nullId = "";
+        this.nullId = "";
+        this.eventClassName = eventClass == null ? null : eventClass.getName();
     }
 
     public FilterDescription(Class<? extends Event> eventClass, int value) {
@@ -112,7 +129,8 @@ public class FilterDescription implements java.io.Serializable {
         this.stringValue = "";
         this.isIntFilter = true;
         this.isFiltered = true;
-        nullId = "";
+        this.nullId = "";
+        this.eventClassName = eventClass == null ? null : eventClass.getName();
     }
 
     public FilterDescription(Class<? extends Event> eventClass, String value) {
@@ -121,7 +139,25 @@ public class FilterDescription implements java.io.Serializable {
         this.isIntFilter = false;
         this.isFiltered = true;
         this.value = 0;
-        nullId = "";
+        this.nullId = "";
+        this.eventClassName = eventClass == null ? null : eventClass.getName();
+    }
+
+    public FilterDescription(
+            Class<? extends Event> eventClass,
+            String stringValue,
+            int value,
+            String nullId,
+            boolean isIntFilter,
+            boolean isFiltered
+    ) {
+        this.value = value;
+        this.stringValue = stringValue;
+        this.nullId = nullId;
+        this.isIntFilter = isIntFilter;
+        this.isFiltered = isFiltered;
+        this.eventClass = eventClass;
+        this.eventClassName = eventClass == null ? null : eventClass.getName();
     }
 
     public FilterDescription changeClass(Class<? extends Event> newClass) {
@@ -138,15 +174,6 @@ public class FilterDescription implements java.io.Serializable {
             return DEFAULT_FILTER;
         }
         return fd;
-    }
-
-    private FilterDescription(String value) {
-        this.stringValue = "";
-        this.eventClass = null;
-        this.isIntFilter = false;
-        this.isFiltered = true;
-        this.value = 0;
-        nullId = value;
     }
 
     public int getValue() {
@@ -173,6 +200,10 @@ public class FilterDescription implements java.io.Serializable {
         return eventClass;
     }
 
+    public String getEventClassName() {
+        return eventClassName;
+    }
+
     public String getComment() {
         return comment;
     }
@@ -183,6 +214,7 @@ public class FilterDescription implements java.io.Serializable {
 
     public void setEventClass(Class<? extends Event> eventClass) {
         this.eventClass = eventClass;
+        this.eventClassName = eventClass == null ? null : eventClass.getName();
     }
 
     public void setExportFunction(Method exportFunction) {
@@ -245,8 +277,6 @@ public class FilterDescription implements java.io.Serializable {
         if (!Objects.equals(this.nullId, other.nullId)) {
             return false;
         }
-        return Objects.equals(this.eventClass, other.eventClass);
+        return Objects.equals(this.eventClassName, other.eventClassName);
     }
-
-
 }

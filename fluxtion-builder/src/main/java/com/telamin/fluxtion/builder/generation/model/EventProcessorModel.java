@@ -41,9 +41,9 @@ public interface EventProcessorModel extends Serializable {
     <T extends SourceField> List<T> getNodeRegistrationListenerFields();
 
     // dispatch and filtering
-    <T extends SourceCbMethodHandle> Map<Class<?>, Map<FilterDescription, List<T>>> getDispatchMap();
-    <T extends SourceCbMethodHandle> Map<Class<?>, Map<FilterDescription, List<T>>> getPostDispatchMap();
-    <T extends SourceCbMethodHandle> Map<Class<?>, Map<FilterDescription, List<T>>> getHandlerOnlyDispatchMap();
+    <T extends SourceCbMethodHandle> Map<String, Map<FilterDescription, List<T>>> getDispatchMap();
+    <T extends SourceCbMethodHandle> Map<String, Map<FilterDescription, List<T>>> getPostDispatchMap();
+    <T extends SourceCbMethodHandle> Map<String, Map<FilterDescription, List<T>>> getHandlerOnlyDispatchMap();
     <T extends SourceCbMethodHandle> List<T> getAllPostEventCallBacks();
     <T extends SourceCbMethodHandle> List<T> getTriggerOnlyCallBacks();
     Set<String> getForkedTriggerInstances();
@@ -52,6 +52,7 @@ public interface EventProcessorModel extends Serializable {
     // dirty flag / guards
     Map<String, DirtyFlag> getDirtyFieldMap();
     DirtyFlag getDirtyFlagForUpdateCb(SourceCbMethodHandle cbHandle);
+    List<String> sortByClassHierarchy(Collection<String> classSet);
     Collection<DirtyFlag> getNodeGuardConditions(String nodeName);
     Collection<DirtyFlag> getNodeGuardConditions(SourceCbMethodHandle cbHandle);
 
@@ -60,10 +61,11 @@ public interface EventProcessorModel extends Serializable {
 
     // utilities used in generation
     String getMappedClass(String className);
+    String getCanonicalName(String className);
     String getTypeDeclaration(String variableName);
     String constructorString(String fieldName);
     List<String> beanProperties(String field);
     List<String> publicProperties(String field);
     String getNameForInstance(Object object);
-    Set<Class<?>> getImportClasses();
+    Set<String> getImportClasses();
 }
