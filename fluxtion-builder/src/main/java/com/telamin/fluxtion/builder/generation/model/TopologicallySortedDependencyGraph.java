@@ -42,6 +42,7 @@ import org.slf4j.LoggerFactory;
 import org.xml.sax.SAXException;
 
 import javax.xml.transform.TransformerConfigurationException;
+import java.io.Serializable;
 import java.lang.reflect.*;
 import java.lang.reflect.Field;
 import java.util.*;
@@ -55,7 +56,7 @@ import static org.apache.commons.lang3.StringUtils.isBlank;
  *
  * @author Greg Higgins
  */
-public class TopologicallySortedDependencyGraph implements NodeRegistry {
+public class TopologicallySortedDependencyGraph implements NodeRegistry, Serializable {
 
     //TODO check there are no variable name clashes
     private final Logger LOGGER = LoggerFactory.getLogger(TopologicallySortedDependencyGraph.class);
@@ -400,7 +401,7 @@ public class TopologicallySortedDependencyGraph implements NodeRegistry {
             }
             Object newNode;
             if (handle != null) {
-                newNode = handle.method.invoke(handle.instance, config, this);
+                newNode = handle.getMethod().invoke(handle.getInstance(), config, this);
                 if (newNode == null) {
                     return null;
                 }
@@ -477,7 +478,7 @@ public class TopologicallySortedDependencyGraph implements NodeRegistry {
                 newNode = inst2Name.inverse().get(name);
             }
             if (handle != null) {
-                NodeFactory<T> factory = (NodeFactory<T>) handle.instance;
+                NodeFactory<T> factory = (NodeFactory<T>) handle.getInstance();
                 if (isPublic) {
                     publicNodeList.add(newNode);
                 }
@@ -1042,16 +1043,16 @@ public class TopologicallySortedDependencyGraph implements NodeRegistry {
 
     public void sortNodeList(List<CbMethodHandle> dispatchMethods) {
         dispatchMethods.sort((CbMethodHandle handle0, CbMethodHandle handle1) -> {
-            if (handle0.instance == handle1.instance) {
-                if (handle0.isEventHandler && !handle1.isEventHandler) {
+            if (handle0.getInstance() == handle1.getInstance()) {
+                if (handle0.isEventHandler() && !handle1.isEventHandler()) {
                     return -1;
-                } else if (!handle0.isEventHandler && handle1.isEventHandler) {
+                } else if (!handle0.isEventHandler() && handle1.isEventHandler()) {
                     return +1;
                 } else {
-                    return handle0.method.getName().compareTo(handle1.method.getName());
+                    return handle0.getMethod().getName().compareTo(handle1.getMethod().getName());
                 }
             }
-            return (topologicalHandlers.indexOf(handle0.instance) - topologicalHandlers.indexOf(handle1.instance));
+            return (topologicalHandlers.indexOf(handle0.getInstance()) - topologicalHandlers.indexOf(handle1.getInstance()));
         });
     }
 
@@ -1059,16 +1060,16 @@ public class TopologicallySortedDependencyGraph implements NodeRegistry {
         dispatchMethods.sort((Tuple<CbMethodHandle, Boolean> tuple0, Tuple<CbMethodHandle, Boolean> tuple1) -> {
             CbMethodHandle handle0 = tuple0.getFirst();
             CbMethodHandle handle1 = tuple1.getFirst();
-            if (handle0.instance == handle1.instance) {
-                if (handle0.isEventHandler && !handle1.isEventHandler) {
+            if (handle0.getInstance() == handle1.getInstance()) {
+                if (handle0.isEventHandler() && !handle1.isEventHandler()) {
                     return -1;
-                } else if (!handle0.isEventHandler && handle1.isEventHandler) {
+                } else if (!handle0.isEventHandler() && handle1.isEventHandler()) {
                     return +1;
                 } else {
-                    return handle0.method.getName().compareTo(handle1.method.getName());
+                    return handle0.getMethod().getName().compareTo(handle1.getMethod().getName());
                 }
             }
-            return (topologicalHandlers.indexOf(handle0.instance) - topologicalHandlers.indexOf(handle1.instance));
+            return (topologicalHandlers.indexOf(handle0.getInstance()) - topologicalHandlers.indexOf(handle1.getInstance()));
         });
     }
 
@@ -1076,8 +1077,6 @@ public class TopologicallySortedDependencyGraph implements NodeRegistry {
      * exports graph as graphml, can be exported with and without event as nodes
      * on the graph.
      *
-     * @param writer    target
-     * @param addEvents flag to control inclusion of events as nodes
      * @throws SAXException                      problem writing jpgraphMl
      * @throws TransformerConfigurationException problem writing jpgraphMl
      */

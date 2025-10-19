@@ -46,12 +46,12 @@ public class DefaultFilterDescriptionProducer implements FilterDescriptionProduc
     @Override
     public FilterDescription getFilterDescription(Class<? extends Event> event, int filterId) {
         final FilterDescription filterDescription = FilterDescriptionProducer.super.getFilterDescription(event, filterId);
-        filterDescription.comment = "Event Class:[" + event.getCanonicalName() + "]"
-                + " filterId:[" + filterId + "]";
+        filterDescription.setComment("Event Class:[" + event.getCanonicalName() + "]"
+                + " filterId:[" + filterId + "]");
         for (FilterDescriptionProducer namingStrategy : namingStrategies) {
-            String commnent = namingStrategy.getFilterDescription(event, filterId).comment;
+            String commnent = namingStrategy.getFilterDescription(event, filterId).getComment();
             if (commnent != null) {
-                filterDescription.comment = commnent;
+                filterDescription.setComment(commnent);
                 break;
             }
         }
@@ -61,12 +61,12 @@ public class DefaultFilterDescriptionProducer implements FilterDescriptionProduc
     @Override
     public FilterDescription getFilterDescription(Class<? extends Event> event, String filterId) {
         final FilterDescription filterDescription = FilterDescriptionProducer.super.getFilterDescription(event, filterId);
-        filterDescription.comment = "Event Class:[" + event.getCanonicalName() + "]"
-                + " filterString:[" + filterId + "]";
+        filterDescription.setComment("Event Class:[" + event.getCanonicalName() + "]"
+                + " filterString:[" + filterId + "]");
         for (FilterDescriptionProducer namingStrategy : namingStrategies) {
-            String commnent = namingStrategy.getFilterDescription(event, filterId).comment;
+            String commnent = namingStrategy.getFilterDescription(event, filterId).getComment();
             if (commnent != null) {
-                filterDescription.comment = commnent;
+                filterDescription.setComment(commnent);
                 break;
             }
         }

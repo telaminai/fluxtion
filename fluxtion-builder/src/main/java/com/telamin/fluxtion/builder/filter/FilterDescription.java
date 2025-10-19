@@ -11,6 +11,8 @@ package com.telamin.fluxtion.builder.filter;
 import com.telamin.fluxtion.runtime.event.Event;
 import lombok.ToString;
 
+import java.io.ObjectStreamException;
+import java.io.Serial;
 import java.lang.reflect.Method;
 import java.util.Objects;
 
@@ -25,56 +27,50 @@ import java.util.Objects;
  * @author Greg Higgins
  */
 @ToString
-public class FilterDescription {
+public class FilterDescription implements java.io.Serializable {
 
-    public static final FilterDescription NO_FILTER = new FilterDescription("NO_FILTER");
-    public static final FilterDescription INVERSE_FILTER = new FilterDescription("INVERSE_FILTER");
-    public static final FilterDescription DEFAULT_FILTER = new FilterDescription("DEFAULT");
+    @Serial
+    private static final long serialVersionUID = 1L;
 
-    /**
-     * Value used by the SEP to determine which decision branch to navigate. If
-     * integer filtering is used.
-     */
-    public final int value;
+    public static final FilterDescription NO_FILTER = FilterDescription.buildNullFilter("NO_FILTER");
+    public static final FilterDescription INVERSE_FILTER = FilterDescription.buildNullFilter("INVERSE_FILTER");
+    public static final FilterDescription DEFAULT_FILTER = FilterDescription.buildNullFilter("DEFAULT");
 
-    /**
-     * Value used by the SEP to determine which decision branch to navigate. If
-     * String filtering is used
-     */
-    public final String stringValue;
+    private final int value;
+
+    private final String stringValue;
 
     private final String nullId;
 
-    /**
-     * boolean value indicating String or integer based filtering.
-     */
-    public final boolean isIntFilter;
+    private final boolean isIntFilter;
 
-    /**
-     * Indicates presence of filtering, false value means match all values.
-     */
-    public boolean isFiltered;
+    private final boolean isFiltered;
 
     /**
      * the event class for this filter.
      */
-    public Class<? extends Event> eventClass;
+    private transient Class<? extends Event> eventClass;
 
-    /**
-     * Human readable comment to be associated with this filter in the generated
-     * code of the SEP. Depending upon the target language this value may be
-     * mutated to suit the target language rules.
-     */
-    public String comment;
+    private String eventClassName;
 
-    /**
-     * User suggested identifier for this filter in the generated SEP code.
-     * Depending upon the target language this value may be mutated to suit the
-     * relevant rules.
-     */
-    public String variableName;
+    private String comment;
 
-    private Method exportFunction;
+    private String variableName;
+
+    private transient Method exportFunction;
+
+    // Serializable copy of export function signature for code generation equivalence after serialization
+    private String exportFunctionSignature;
+
+    public FilterDescription(String eventClass) {
+        this.value = 0;
+        this.eventClass = null;
+        this.stringValue = "";
+        this.isIntFilter = true;
+        this.isFiltered = false;
+        this.nullId = "";
+        this.eventClassName = eventClass;
+    }
 
     public static FilterDescription build(Object input) {
         FilterDescription result = DEFAULT_FILTER;
@@ -91,13 +87,18 @@ public class FilterDescription {
         return result;
     }
 
+    public static FilterDescription buildNullFilter(String nullValue) {
+        return new FilterDescription(null, "", 0, nullValue, false, true);
+    }
+
     public FilterDescription(Class<? extends Event> eventClass) {
         this.value = 0;
         this.eventClass = eventClass;
         this.stringValue = "";
         this.isIntFilter = true;
         this.isFiltered = false;
-        nullId = "";
+        this.nullId = "";
+        this.eventClassName = eventClass == null ? null : eventClass.getName();
     }
 
     public FilterDescription(Class<? extends Event> eventClass, int value) {
@@ -106,7 +107,8 @@ public class FilterDescription {
         this.stringValue = "";
         this.isIntFilter = true;
         this.isFiltered = true;
-        nullId = "";
+        this.nullId = "";
+        this.eventClassName = eventClass == null ? null : eventClass.getName();
     }
 
     public FilterDescription(Class<? extends Event> eventClass, String value) {
@@ -115,15 +117,33 @@ public class FilterDescription {
         this.isIntFilter = false;
         this.isFiltered = true;
         this.value = 0;
-        nullId = "";
+        this.nullId = "";
+        this.eventClassName = eventClass == null ? null : eventClass.getName();
+    }
+
+    public FilterDescription(
+            Class<? extends Event> eventClass,
+            String stringValue,
+            int value,
+            String nullId,
+            boolean isIntFilter,
+            boolean isFiltered
+    ) {
+        this.value = value;
+        this.stringValue = stringValue;
+        this.nullId = nullId;
+        this.isIntFilter = isIntFilter;
+        this.isFiltered = isFiltered;
+        this.eventClass = eventClass;
+        this.eventClassName = eventClass == null ? null : eventClass.getName();
     }
 
     public FilterDescription changeClass(Class<? extends Event> newClass) {
-        FilterDescription fd = new FilterDescription(newClass, stringValue);
-        if (!isFiltered) {
+        FilterDescription fd = new FilterDescription(newClass, getStringValue());
+        if (!isFiltered()) {
             fd = new FilterDescription(newClass);
-        } else if (isIntFilter) {
-            fd = new FilterDescription(newClass, value);
+        } else if (isIntFilter()) {
+            fd = new FilterDescription(newClass, getValue());
         } else if (this == NO_FILTER) {
             return NO_FILTER;
         } else if (this == INVERSE_FILTER) {
@@ -134,19 +154,18 @@ public class FilterDescription {
         return fd;
     }
 
-    private FilterDescription(String value) {
-        this.stringValue = "";
-        this.eventClass = null;
-        this.isIntFilter = false;
-        this.isFiltered = true;
-        this.value = 0;
-        nullId = value;
-    }
-
+    /**
+     * Value used by the SEP to determine which decision branch to navigate. If
+     * integer filtering is used.
+     */
     public int getValue() {
         return value;
     }
 
+    /**
+     * Value used by the SEP to determine which decision branch to navigate. If
+     * String filtering is used
+     */
     public String getStringValue() {
         return stringValue;
     }
@@ -155,10 +174,16 @@ public class FilterDescription {
         return nullId;
     }
 
+    /**
+     * boolean value indicating String or integer based filtering.
+     */
     public boolean isIntFilter() {
         return isIntFilter;
     }
 
+    /**
+     * Indicates presence of filtering, false value means match all values.
+     */
     public boolean isFiltered() {
         return isFiltered;
     }
@@ -167,35 +192,80 @@ public class FilterDescription {
         return eventClass;
     }
 
+    public String getEventClassName() {
+        return eventClassName;
+    }
+
+    /**
+     * Human readable comment to be associated with this filter in the generated
+     * code of the SEP. Depending upon the target language this value may be
+     * mutated to suit the target language rules.
+     */
     public String getComment() {
         return comment;
     }
 
+    /**
+     * User suggested identifier for this filter in the generated SEP code.
+     * Depending upon the target language this value may be mutated to suit the
+     * relevant rules.
+     */
     public String getVariableName() {
         return variableName;
     }
 
     public void setEventClass(Class<? extends Event> eventClass) {
         this.eventClass = eventClass;
+        this.eventClassName = eventClass == null ? null : eventClass.getName();
     }
 
     public void setExportFunction(Method exportFunction) {
         this.exportFunction = exportFunction;
+        this.setExportFunctionSignature(exportFunction == null ? null : exportFunction.toGenericString());
     }
 
     public Method getExportFunction() {
         return exportFunction;
     }
 
+    public String getExportFunctionSignature() {
+        return exportFunctionSignature;
+    }
+
+    public void setComment(String comment) {
+        this.comment = comment;
+    }
+
+    public void setVariableName(String variableName) {
+        this.variableName = variableName;
+    }
+
+    public void setExportFunctionSignature(String exportFunctionSignature) {
+        this.exportFunctionSignature = exportFunctionSignature;
+    }
+
+    private Object readResolve() throws ObjectStreamException {
+        if ("DEFAULT".equals(nullId)) {
+            return DEFAULT_FILTER;
+        }
+        if ("NO_FILTER".equals(nullId)) {
+            return NO_FILTER;
+        }
+        if ("INVERSE_FILTER".equals(nullId)) {
+            return INVERSE_FILTER;
+        }
+        return this;
+    }
+
     @Override
     public int hashCode() {
         int hash = 5;
-        if (isIntFilter) {
-            hash = 89 * hash + this.value;
+        if (isIntFilter()) {
+            hash = 89 * hash + this.getValue();
         } else {
-            hash = 89 * hash + Objects.hashCode(this.stringValue);
+            hash = 89 * hash + Objects.hashCode(this.getStringValue());
         }
-        hash = 89 * hash + (this.isIntFilter ? 1 : 0);
+        hash = 89 * hash + (this.isIntFilter() ? 1 : 0);
         hash = 89 * hash + Objects.hashCode(this.eventClass);
         return hash;
     }
@@ -209,20 +279,18 @@ public class FilterDescription {
             return false;
         }
         final FilterDescription other = (FilterDescription) obj;
-        if (isIntFilter && this.value != other.value) {
+        if (isIntFilter() && this.getValue() != other.getValue()) {
             return false;
         }
-        if (!isIntFilter && !Objects.equals(this.stringValue, other.stringValue)) {
+        if (!isIntFilter() && !Objects.equals(this.getStringValue(), other.getStringValue())) {
             return false;
         }
-        if (this.isIntFilter != other.isIntFilter) {
+        if (this.isIntFilter() != other.isIntFilter()) {
             return false;
         }
         if (!Objects.equals(this.nullId, other.nullId)) {
             return false;
         }
-        return Objects.equals(this.eventClass, other.eventClass);
+        return Objects.equals(this.eventClassName, other.eventClassName);
     }
-
-
 }

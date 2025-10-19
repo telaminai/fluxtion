@@ -9,15 +9,20 @@
 package com.telamin.fluxtion.runtime.audit;
 
 /**
- * EventLogSource is registered with a {@link EventLogManager} at initialisation time. The
- * EventLogManager injects a configured {@link EventLogger} to this instance via
- * the {@link #setLogger(EventLogger)}  }. A
- * user implements this interface for a node in the execution graph to receive
- * a configured {@link EventLogger}.<br>
+ * Marker interface for nodes that want to participate in structured audit logging.
  * <p>
- * The node writes to the EventLogger in any of the lifecycle or event methods
- * to record data and the {@code EventLogManager} handles the formatting and
- * marshalling of log records.
+ * How to get an EventLogger at runtime:
+ * <ul>
+ *   <li>Implement this interface on your node, or</li>
+ *   <li>Extend {@link EventLogNode}, which already implements this interface and exposes a protected
+ *   {@code auditLog} field for convenience.</li>
+ * </ul>
+ * During graph initialisation the {@link EventLogManager} discovers all EventLogSource instances and
+ * injects a configured {@link EventLogger} by calling {@link #setLogger(EventLogger)}. Before injection
+ * the logger defaults to a {@link NullEventLogger} and safely discards writes.
+ * <p>
+ * Once injected, the node can write key/value pairs in its lifecycle or event handler methods, while
+ * the EventLogManager aggregates and emits per-node records in topological execution order.
  *
  * @author Greg Higgins (greg.higgins@v12technology.com)
  */

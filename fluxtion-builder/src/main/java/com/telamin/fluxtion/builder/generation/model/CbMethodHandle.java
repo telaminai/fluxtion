@@ -22,47 +22,59 @@ import java.util.Objects;
 /**
  * @author Greg Higgins
  */
-public class CbMethodHandle {
+public class CbMethodHandle implements SourceCbMethodHandle, java.io.Serializable {
+    private static final long serialVersionUID = 1L;
 
     public enum CallBackType {TRIGGER, EVENT_HANDLER, EXPORT_FUNCTION;}
+
 
     /**
      * The callback method.
      */
     @Getter
-    public final Method method;
+    private final transient Method method;
     /**
      * the instance the method will operate on.
      */
     @Getter
-    public final Object instance;
+    private final transient Object instance;
     /**
      * the variable name of the instance in the SEP.
      */
     @Getter
-    public final String variableName;
+    private final String variableName;
 
     /**
      * the parameter type of the callback - can be null
      */
     @Getter
-    public final Class<?> parameterClass;
+    private final String parameterClass;
 
     /**
      * indicates is an {@link OnEventHandler} method
      */
-    public final boolean isEventHandler;
+    @Getter
+    private final boolean eventHandler;
     /**
      * Is a multi arg event handler
      */
     @Getter
+    private final String methodTarget;
+    @Getter
+    private final String methodName;
+    @Getter
+    private final int parameterCount;
+    @Getter
+    private final String returnType;
+    @Getter
     private final boolean exportedHandler;
+    @Getter
+    private final String methodString;
+    @Getter
+    private final boolean postEventHandler;
 
     @Getter
-    public final boolean postEventHandler;
-
-    @Getter
-    public final boolean invertedDirtyHandler;
+    private final boolean invertedDirtyHandler;
 
     @Getter
     private final boolean guardedParent;
@@ -77,12 +89,12 @@ public class CbMethodHandle {
         this(method, instance, variableName, null, false, false);
     }
 
-    public CbMethodHandle(Method method, Object instance, String variableName, Class<?> parameterClass, boolean isEventHandler, boolean exportedHandler) {
+    public CbMethodHandle(Method method, Object instance, String variableName, Class<?> parameterClass, boolean eventHandler, boolean exportedHandler) {
         this.method = method;
         this.instance = instance;
         this.variableName = variableName;
-        this.parameterClass = parameterClass;
-        this.isEventHandler = isEventHandler;
+        this.parameterClass = parameterClass == null ? null : parameterClass.getCanonicalName();
+        this.eventHandler = eventHandler;
         this.postEventHandler = method.getAnnotation(AfterTrigger.class) != null;
         OnTrigger onTriggerAnnotation = method.getAnnotation(OnTrigger.class);
         OnParentUpdate onParentUpdateAnnotation = method.getAnnotation(OnParentUpdate.class);
@@ -94,24 +106,19 @@ public class CbMethodHandle {
         this.failBuildOnUnguardedTrigger = onTriggerAnnotation != null && onTriggerAnnotation.failBuildIfMissingBooleanReturn();
         this.guardedParent = onParentUpdateAnnotation != null && onParentUpdateAnnotation.guarded();
         this.noPropagateEventHandler = onEventHandlerAnnotation != null && !onEventHandlerAnnotation.propagate();
+        this.methodTarget = Modifier.isStatic(getMethod().getModifiers()) ? instance.getClass().getSimpleName() : variableName;
+        this.methodName = method.getName();
+        this.parameterCount = method.getParameterCount();
+        this.returnType = method.getReturnType().getCanonicalName();
+        this.methodString = method.toString();
     }
 
-    public boolean isEventHandler() {
-        return isEventHandler;
-    }
-
-
-    public String getMethodTarget() {
-        if (Modifier.isStatic(getMethod().getModifiers())) {
-            return instance.getClass().getSimpleName();
-        }
-        return variableName;
-    }
-
+    @Override
     public String invokeLambdaString() {
-        return getMethodTarget() + "::" + getMethod().getName();
+        return getMethodTarget() + "::" + getMethodName();
     }
 
+    @Override
     public String forkVariableName() {
         return "fork_" + getVariableName();
     }
@@ -123,7 +130,7 @@ public class CbMethodHandle {
                 ", instance=" + instance +
                 ", variableName='" + variableName + '\'' +
                 ", parameterClass=" + parameterClass +
-                ", isEventHandler=" + isEventHandler +
+                ", isEventHandler=" + eventHandler +
                 ", isExportHandler=" + exportedHandler +
                 ", isPostEventHandler=" + postEventHandler +
                 ", isInvertedDirtyHandler=" + invertedDirtyHandler +
@@ -151,10 +158,10 @@ public class CbMethodHandle {
             return false;
         }
         final CbMethodHandle other = (CbMethodHandle) obj;
-        if (!Objects.equals(this.method, other.method)) {
+        if (!Objects.equals(this.methodString, other.methodString)) {
             return false;
         }
-        return Objects.equals(this.instance, other.instance);
+        return Objects.equals(this.variableName, other.variableName);
     }
 
     public boolean failBuildOnUnguardedTrigger() {

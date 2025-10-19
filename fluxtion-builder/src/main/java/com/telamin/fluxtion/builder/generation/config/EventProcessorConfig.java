@@ -55,7 +55,6 @@ public class EventProcessorConfig {
     private RootNodeConfig rootNodeConfig;
     private boolean inlineEventHandling = false;
     private boolean supportDirtyFiltering = true;
-    private boolean assignPrivateMembers = false;
     private boolean instanceOfDispatch = true;
     @Getter
     @Setter
@@ -416,18 +415,6 @@ public class EventProcessorConfig {
 
     public void setSupportDirtyFiltering(boolean supportDirtyFiltering) {
         this.supportDirtyFiltering = supportDirtyFiltering;
-    }
-
-    /**
-     * attempt to assign private member variables, some platforms will support
-     * access to non-public scoped members. e.g. reflection utilities in Java.
-     */
-    public boolean isAssignPrivateMembers() {
-        return assignPrivateMembers;
-    }
-
-    public void setAssignPrivateMembers(boolean assignPrivateMembers) {
-        this.assignPrivateMembers = assignPrivateMembers;
     }
 
     /**

@@ -51,8 +51,8 @@ public interface ClassUtils {
      */
     static CbMethodHandle findBestParentCB(Object parent, Collection<CbMethodHandle> cbs) {
         Set<Class<?>> classList = cbs.stream()
-                .filter(cb -> cb.method.getParameterTypes()[0].isAssignableFrom(parent.getClass()))
-                .map(cb -> cb.method.getParameterTypes()[0])
+                .filter(cb -> cb.getMethod().getParameterTypes()[0].isAssignableFrom(parent.getClass()))
+                .map(cb -> cb.getMethod().getParameterTypes()[0])
                 .collect(Collectors.toSet());
         if (classList.isEmpty()) {
             return null;
@@ -69,14 +69,14 @@ public interface ClassUtils {
         }).findFirst();
 
         Optional<CbMethodHandle> findFirst = cbs.stream()
-                .filter(cb -> cb.method.getParameterTypes()[0] == bestMatch.orElse(null))
+                .filter(cb -> cb.getMethod().getParameterTypes()[0] == bestMatch.orElse(null))
                 .findFirst();
         return findFirst.orElse(null);
 
     }
 
     static boolean isPropertyTransient(PropertyDescriptor property, Field field) throws SecurityException {
-        final Class<?> fieldClass = field.instance.getClass();
+        final Class<?> fieldClass = field.getInstance().getClass();
         final String name = property.getName();
         final java.lang.reflect.Field fieldOfProperty;
         final Set<java.lang.reflect.Field> allFields = ReflectionUtils.getAllFields(fieldClass, ReflectionUtils.withName(name));
@@ -350,5 +350,54 @@ public interface ClassUtils {
                 break;
         }
         return retClass;
+    }
+
+    static String mapPrimitiveToWrapper(String clazz) {
+        String retClass = clazz;
+        switch (clazz) {
+            case "int":
+                retClass = Integer.class.getCanonicalName();
+                break;
+            case "double":
+                retClass = Double.class.getCanonicalName();
+                break;
+            case "float":
+                retClass = Float.class.getCanonicalName();
+                break;
+            case "short":
+                retClass = Short.class.getCanonicalName();
+                break;
+            case "byte":
+                retClass = Byte.class.getCanonicalName();
+                break;
+            case "long":
+                retClass = Long.class.getCanonicalName();
+                break;
+            case "char":
+                retClass = Character.class.getCanonicalName();
+                break;
+        }
+        return retClass;
+    }
+
+    static Class<?> resolveClassFromName(String name) {
+        switch (name) {
+            case "int": return Integer.class;
+            case "long": return Long.class;
+            case "double": return Double.class;
+            case "float": return Float.class;
+            case "short": return Short.class;
+            case "byte": return Byte.class;
+            case "char": return Character.class;
+            case "boolean": return Boolean.class;
+            case "void": return Void.class;
+            default:
+                try {
+                    return Class.forName(name);
+                } catch (ClassNotFoundException e) {
+                    System.out.println("unable to resolve class:" + name);
+                    return Object.class;
+                }
+        }
     }
 }

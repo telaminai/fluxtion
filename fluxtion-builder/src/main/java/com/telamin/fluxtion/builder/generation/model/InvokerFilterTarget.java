@@ -15,7 +15,7 @@ import com.telamin.fluxtion.builder.filter.FilterDescription;
  *
  * @author Greg Higgins
  */
-public class InvokerFilterTarget {
+public class InvokerFilterTarget implements java.io.Serializable {
     public FilterDescription filterDescription;
     /**
      * The body of the method thst is the call tree for the filtered dispatch
