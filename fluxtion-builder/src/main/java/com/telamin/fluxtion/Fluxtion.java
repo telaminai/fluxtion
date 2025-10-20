@@ -165,33 +165,6 @@ public interface Fluxtion {
     }
 
     /**
-     * Generates an in memory version of a {@link DataFlow}. The in memory version is transient and requires
-     * the runtime and compiler Fluxtion libraries to operate.
-     * <p>
-     * {@link Lifecycle#init()} has not been called on the returned instance. The caller must invoke init before
-     * sending events to the processor using {@link DataFlow#onEvent(Object)}
-     *
-     * @param sepConfig the configuration used to build this {@link DataFlow}
-     * @return An uninitialized instance of a {@link DataFlow}
-     * @see EventProcessorConfig
-     */
-    static CloneableDataFlow<?> interpret(LambdaReflection.SerializableConsumer<EventProcessorConfig> sepConfig) {
-        return EventProcessorFactory.interpreted(sepConfig);
-    }
-
-    static CloneableDataFlow<?> interpret(LambdaReflection.SerializableConsumer<EventProcessorConfig> sepConfig, boolean generateDescription) {
-        return EventProcessorFactory.interpreted(sepConfig, generateDescription);
-    }
-
-    static CloneableDataFlow<?> interpret(Object... nodes) {
-        return interpret(c -> {
-            for (int i = 0; i < nodes.length; i++) {
-                c.addNode(nodes[i]);
-            }
-        });
-    }
-
-    /**
      * Generates and compiles Java source code for a {@link DataFlow}. The compiled version only requires
      * the Fluxtion runtime dependencies to operate and process events.
      * <p>
@@ -279,34 +252,10 @@ public interface Fluxtion {
             rootInjectedConfig.getCompilerConfig().setResourcesOutputDirectory(overrideResourceDirectory);
         }
         if (rootInjectedConfig.getCompilerConfig().isInterpreted()) {
-            return interpret(rootInjectedConfig.getRootNodeConfig());
+            throw new UnsupportedOperationException("Interpreted mode is not supported");
         } else {
             return EventProcessorFactory.compile(rootInjectedConfig.getEventProcessorConfig(), rootInjectedConfig.getCompilerConfig());
         }
-    }
-
-    /**
-     * Generates an in memory version of a {@link DataFlow}. The in memory version is transient and requires
-     * the runtime and compiler Fluxtion libraries to operate.
-     * <p>
-     * {@link Lifecycle#init()} has not been called on the returned instance. The caller must invoke init before
-     * sending events to the processor using {@link DataFlow#onEvent(Object)}
-     * <p>
-     * The root node is injected into the graph. If the node has any injected dependencies these are added to the
-     * graph. If a custom builder for the root node exists this will called and additional nodes can be added to the
-     * graph in the node method.
-     *
-     * @param rootNode the root node of this graph0
-     * @return An uninitialized instance of a {@link DataFlow}
-     */
-    @SneakyThrows
-    static CloneableDataFlow<?> interpret(RootNodeConfig rootNode) {
-        return EventProcessorFactory.interpreted(rootNode);
-    }
-
-    @SneakyThrows
-    static CloneableDataFlow<?> interpret(RootNodeConfig rootNode, boolean generateDescription) {
-        return EventProcessorFactory.interpreted(rootNode, generateDescription);
     }
 
     /**
