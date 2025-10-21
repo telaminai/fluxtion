@@ -36,7 +36,9 @@ import java.util.Objects;
 import java.util.concurrent.atomic.LongAdder;
 
 /**
- * Entry point for generating a {@link DataFlow}
+ * Entry point for generating a {@link DataFlow}. This interface provides static factory methods
+ * for compiling and generating event processors from various configurations and sources.
+ * It supports both runtime compilation and ahead-of-time (AOT) compilation strategies.
  */
 public interface Fluxtion {
 
@@ -58,6 +60,13 @@ public interface Fluxtion {
         return EventProcessorFactory.compile(sepConfig);
     }
 
+    /**
+     * Generates and compiles a {@link DataFlow} from an array of nodes. Each node is added
+     * to the event processor configuration in the order provided.
+     *
+     * @param nodes array of objects to be added as nodes in the event processor
+     * @return An uninitialized instance of a {@link DataFlow}
+     */
     static CloneableDataFlow<?> compile(Object... nodes) {
         return compile(c -> {
             for (int i = 0; i < nodes.length; i++) {
@@ -83,6 +92,13 @@ public interface Fluxtion {
         });
     }
 
+    /**
+     * Compiles a {@link DataFlow} with custom event processor and compiler configurations.
+     *
+     * @param sepConfig  event processor configuration builder
+     * @param cfgBuilder compiler configuration builder
+     * @return An uninitialized instance of a {@link DataFlow}
+     */
     @SneakyThrows
     static CloneableDataFlow<?> compile(LambdaReflection.SerializableConsumer<EventProcessorConfig> sepConfig,
                                         LambdaReflection.SerializableConsumer<FluxtionCompilerConfig> cfgBuilder) {
@@ -130,12 +146,27 @@ public interface Fluxtion {
         });
     }
 
+    /**
+     * Ahead-of-time compilation of a {@link DataFlow}. The package name is derived from the
+     * configuration builder's containing class and method name.
+     *
+     * @param cfgBuilder event processor configuration builder
+     * @return An uninitialized instance of a {@link DataFlow}
+     */
     @SneakyThrows
     static CloneableDataFlow<?> compileAot(LambdaReflection.SerializableConsumer<EventProcessorConfig> cfgBuilder) {
         String packageName = (cfgBuilder.getContainingClass().getCanonicalName() + "." + cfgBuilder.method().getName()).toLowerCase();
         return compile(cfgBuilder, compilerCfg -> compilerCfg.setPackageName(packageName));
     }
 
+    /**
+     * Ahead-of-time compilation of a {@link DataFlow} with specified package and class names.
+     *
+     * @param packageName target package name for the generated class
+     * @param className   name for the generated class
+     * @param nodes       array of objects to be added as nodes in the event processor
+     * @return An uninitialized instance of a {@link DataFlow}
+     */
     static CloneableDataFlow<?> compileAot(String packageName,
                                            String className,
                                            Object... nodes) {
@@ -146,6 +177,13 @@ public interface Fluxtion {
         }, packageName, className);
     }
 
+    /**
+     * Ahead-of-time compilation of a {@link DataFlow} using default package naming.
+     * The package name is derived from the configuration builder's containing class.
+     *
+     * @param nodes array of objects to be added as nodes in the event processor
+     * @return An uninitialized instance of a {@link DataFlow}
+     */
     static CloneableDataFlow<?> compileAot(Object... nodes) {
         return compileAot(c -> {
             for (int i = 0; i < nodes.length; i++) {
@@ -154,6 +192,17 @@ public interface Fluxtion {
         });
     }
 
+
+    /**
+     * Ahead-of-time compilation of a {@link DataFlow} with specified package and class names.
+     * This method allows full control over the generated class location by providing both the package
+     * and class names explicitly.
+     *
+     * @param cfgBuilder  event processor configuration builder
+     * @param packageName target package name for the generated class
+     * @param className   name for the generated class
+     * @return An uninitialized instance of a {@link DataFlow}
+     */
     @SneakyThrows
     static CloneableDataFlow<?> compileAot(LambdaReflection.SerializableConsumer<EventProcessorConfig> cfgBuilder,
                                            String packageName,
@@ -183,17 +232,39 @@ public interface Fluxtion {
         return EventProcessorFactory.compile(rootNode);
     }
 
+    /**
+     * Compiles a {@link DataFlow} from a root node configuration with custom compiler settings.
+     *
+     * @param rootNode   the root node configuration
+     * @param cfgBuilder compiler configuration builder
+     * @return An uninitialized instance of a {@link DataFlow}
+     */
     @SneakyThrows
     static CloneableDataFlow<?> compile(RootNodeConfig rootNode, LambdaReflection.SerializableConsumer<FluxtionCompilerConfig> cfgBuilder) {
         return EventProcessorFactory.compile(rootNode, cfgBuilder);
     }
 
+    /**
+     * Ahead-of-time compilation of a {@link DataFlow} from a root node configuration.
+     * The package name is derived from the root node's class name and configuration name.
+     *
+     * @param rootNode the root node configuration
+     * @return An uninitialized instance of a {@link DataFlow}
+     */
     @SneakyThrows
     static CloneableDataFlow<?> compileAot(RootNodeConfig rootNode) {
         String pkg = (rootNode.getRootClass().getCanonicalName() + "." + rootNode.getName()).toLowerCase();
         return EventProcessorFactory.compile(rootNode, compilerCfg -> compilerCfg.setPackageName(pkg));
     }
 
+    /**
+     * Ahead-of-time compilation of a {@link DataFlow} from a root node configuration
+     * with a specified package prefix.
+     *
+     * @param rootNode      the root node configuration
+     * @param packagePrefix prefix for the generated class package name
+     * @return An uninitialized instance of a {@link DataFlow}
+     */
     @SneakyThrows
     static CloneableDataFlow<?> compileAot(RootNodeConfig rootNode, String packagePrefix) {
         String pkg = (packagePrefix + "." + rootNode.getName()).toLowerCase();

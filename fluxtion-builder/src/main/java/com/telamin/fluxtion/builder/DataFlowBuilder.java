@@ -39,9 +39,27 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+
 /**
- * Helper methods for subscribing and creating an {@link FlowBuilder} from external events or internal nodes
- * in the graph.
+ * A builder interface for constructing data flow processing pipelines. The DataFlowBuilder provides
+ * static factory methods to create various types of data flow processing nodes and connections.
+ * <p>
+ * Key capabilities:
+ * <ul>
+ *   <li>Event subscription and handling</li>
+ *   <li>Data transformation and mapping</li>
+ *   <li>Stream merging and joining</li>
+ *   <li>Grouping and aggregation</li>
+ *   <li>Push-based data flow processing</li>
+ * </ul>
+ * <p>
+ * The builder pattern allows fluent construction of processing graphs that can be used
+ * to create efficient event processing applications. The generated {@link DataFlow} instances
+ * handle the routing and processing of events through the constructed graph.
+ *
+ * @see DataFlow
+ * @see FlowBuilder
+ * @see FlowFunction
  */
 public interface DataFlowBuilder {
 
@@ -453,6 +471,14 @@ public interface DataFlowBuilder {
         return streamArg1.mapBiFunction(biFunction, streamArg2);
     }
 
+    /**
+     * Creates a GroupBy flow that aggregates incoming events by a key function.
+     *
+     * @param keyFunction The function that extracts the key from input events
+     * @param <T>         The type of input events
+     * @param <K>         The key type used for grouping
+     * @return A GroupByFlowBuilder for further configuration
+     */
     static <T, K> GroupByFlowBuilder<K, T> groupBy(SerializableFunction<T, K> keyFunction) {
         @SuppressWarnings("unchecked")
         Class<T> classSubscription = (Class<T>) keyFunction.method().getDeclaringClass();
@@ -475,6 +501,17 @@ public interface DataFlowBuilder {
         return subscribe(classSubscription).groupByFields(keyFunction);
     }
 
+    /**
+     * Creates a GroupBy flow that aggregates incoming events using a supplied aggregate function.
+     *
+     * @param keyFunction               The function that extracts the key from input events
+     * @param aggregateFunctionSupplier Supplies the aggregate function for each group
+     * @param <T>                       The type of input events
+     * @param <K>                       The key type used for grouping
+     * @param <O>                       The output type after aggregation
+     * @param <F>                       The type of aggregate function
+     * @return A GroupByFlowBuilder for further configuration
+     */
     static <T, K, O, F extends AggregateFlowFunction<T, O, F>> GroupByFlowBuilder<K, O> groupBy(
             SerializableFunction<T, K> keyFunction, SerializableSupplier<F> aggregateFunctionSupplier) {
         @SuppressWarnings("unchecked")
@@ -490,20 +527,49 @@ public interface DataFlowBuilder {
      * @param <T>         The item to aggregate
      * @return The GroupByFlowBuilder that represents the multimap
      */
+    /**
+     * Creates a GroupBy flow that collects incoming events into Lists keyed by the keyFunction.
+     *
+     * @param keyFunction The function that extracts the key from input events
+     * @param <T>         The type of input events
+     * @param <K>         The key type used for grouping
+     * @return A GroupByFlowBuilder wrapping Lists of events
+     */
     static <T, K> GroupByFlowBuilder<K, List<T>> groupByToList(SerializableFunction<T, K> keyFunction) {
         @SuppressWarnings("unchecked")
         Class<T> classSubscription = (Class<T>) keyFunction.method().getDeclaringClass();
         return subscribe(classSubscription).groupByToList(keyFunction);
     }
 
+    /**
+     * Creates a flow that collects incoming events into a Collection.
+     *
+     * @param classSubscription The class to subscribe to for collecting events
+     * @param <T>               The type of events to collect
+     * @return A FlowBuilder wrapping a Collection of events
+     */
     static <T> FlowBuilder<Collection<T>> collectionFromSubscribe(Class<T> classSubscription) {
         return subscribe(classSubscription).mapToCollection();
     }
 
+    /**
+     * Creates a flow that collects incoming events into a List.
+     *
+     * @param classSubscription The class to subscribe to for collecting events
+     * @param <T>               The type of events to collect
+     * @return A FlowBuilder wrapping a List of events
+     */
     static <T> FlowBuilder<List<T>> listFromSubscribe(Class<T> classSubscription) {
         return subscribe(classSubscription).mapToList();
     }
 
+    /**
+     * Creates a flow that collects incoming events into a Set.
+     *
+     * @param classSubscription The class to subscribe to for collecting events
+     * @param <T>               The type of events to collect
+     * @return A FlowBuilder wrapping a Set of events
+     */
     static <T> FlowBuilder<Set<T>> setFromSubscribe(Class<T> classSubscription) {
         return subscribe(classSubscription).mapToSet();
     }
@@ -523,6 +589,14 @@ public interface DataFlowBuilder {
         return subscribe(classSubscription).groupByToList(keyFunctions);
     }
 
+    /**
+     * Creates a GroupBy flow that collects incoming events into Sets keyed by the keyFunction.
+     *
+     * @param keyFunction The function that extracts the key from input events
+     * @param <T>         The type of input events
+     * @param <K>         The key type used for grouping
+     * @return A GroupByFlowBuilder wrapping Sets of events
+     */
     static <T, K> GroupByFlowBuilder<K, Set<T>> groupByToSet(SerializableFunction<T, K> keyFunction) {
         @SuppressWarnings("unchecked")
         Class<T> classSubscription = (Class<T>) keyFunction.method().getDeclaringClass();
@@ -544,6 +618,16 @@ public interface DataFlowBuilder {
         return subscribe(classSubscription).groupByToSet(keyFunctions);
     }
 
+    /**
+     * Creates a GroupBy flow that maps incoming events to key-value pairs.
+     *
+     * @param keyFunction   The function that extracts the key from input events
+     * @param valueFunction The function that extracts the value from input events
+     * @param <T>           The type of input events
+     * @param <K>           The key type used for grouping
+     * @param <V>           The value type after mapping
+     * @return A GroupByFlowBuilder for further configuration
+     */
     static <T, K, V> GroupByFlowBuilder<K, V> groupBy(
             SerializableFunction<T, K> keyFunction,
             SerializableFunction<T, V> valueFunction) {
