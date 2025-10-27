@@ -31,6 +31,7 @@
     <modules>
         <module>fluxtion-runtime</module>
         <module>fluxtion-builder</module>
+        <module>fluxtion-aws-generator-client</module>
     </modules>
 
     <developers>
@@ -273,6 +274,13 @@
                 <version>9.7.1</version>
                 <optional>true</optional>
             </dependency>
+
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>2.17.2</version>
+            </dependency>
+
             <!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-simple -->
             <dependency>
                 <groupId>org.slf4j</groupId>
