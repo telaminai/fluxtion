@@ -42,7 +42,7 @@ class FluxtionSourceGeneratorClientTest {
         server.createContext("/generation", new JsonResponder(201,
                 "{\"contentType\":\"text/plain; charset=utf-8\",\"data\":\"public class Demo {}\"}"));
         System.setProperty("fluxtion.aws.apiBaseUrl", "http://127.0.0.1:" + port);
-        System.setProperty("fluxtion.aws.apiKey", "token");
+        System.setProperty("fluxtion.aws.apiKey", "ALICE");
         System.setProperty("fluxtion.aws.zip", "false");
 
         FluxtionSourceGeneratorClient gen = new FluxtionSourceGeneratorClient();
