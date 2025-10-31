@@ -88,6 +88,7 @@ nav:
           - Creating an EventFeedAgent: example/event-feed-agent.md
           - State and recovery: how-to/state-and-recovery.md
           - Record and replay: how-to/replay-functionality.md
+          - Embedding ML models: how-to/ml-inference-how-to.md
           - Monitoring and metrics: how-to/monitoring-dataflow-runtime.md
           - Audit logging in DataFlow: how-to/audit-logging-dataflow.md
           - Log4j2 setup: how-to/logging-setup.md
