@@ -44,30 +44,6 @@ import java.util.function.Consumer;
 @Slf4j
 public class EventProcessorFactory {
 
-    @SneakyThrows
-    public static InMemoryEventProcessor interpreted(LambdaReflection.SerializableConsumer<EventProcessorConfig> cfgBuilder) {
-        return interpreted(cfgBuilder, false);
-    }
-
-    @SneakyThrows
-    public static InMemoryEventProcessor interpreted(LambdaReflection.SerializableConsumer<EventProcessorConfig> cfgBuilder, boolean generateDescription) {
-        return InMemoryEventProcessorBuilder.interpreted(cfgBuilder, generateDescription);
-    }
-
-    @SneakyThrows
-    public static InMemoryEventProcessor interpreted(RootNodeConfig rootNode) {
-        return interpreted((EventProcessorConfig cfg) -> cfg.setRootNodeConfig(rootNode));
-    }
-
-    public static InMemoryEventProcessor interpreted(RootNodeConfig rootNode, boolean generateDescription) {
-        return interpreted((EventProcessorConfig cfg) -> cfg.setRootNodeConfig(rootNode), generateDescription);
-    }
-
-    @SneakyThrows
-    public static InMemoryEventProcessor interpretedTest(LambdaReflection.SerializableConsumer<EventProcessorConfig> cfgBuilder) {
-        return InMemoryEventProcessorBuilder.interpretedTest(cfgBuilder);
-    }
-
     public static CloneableDataFlow compile(LambdaReflection.SerializableConsumer<EventProcessorConfig> builder) throws Exception {
         String name = "Processor";
         String pkg = (builder.getContainingClass().getCanonicalName() + "." + builder.method().getName()).toLowerCase();
