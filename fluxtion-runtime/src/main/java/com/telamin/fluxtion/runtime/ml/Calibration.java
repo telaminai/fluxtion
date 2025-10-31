@@ -16,13 +16,30 @@ import lombok.Data;
 @Data
 @Builder
 @Experimental
+/**
+ * Calibration message used to tune feature contribution at runtime.
+ *
+ * <p>Targeting:
+ * - If {@code featureIdentifier} is non-null, it is used to select the target feature(s).
+ * - Otherwise, if {@code featureClass} is provided, the target identifier defaults to {@code featureClass.getSimpleName()}.
+ *
+ * <p>Versioning:
+ * - Receivers may implement version gating; the provided runtime does so in {@link AbstractFeature}, only
+ *   applying calibrations whose {@code featureVersion} is greater than or equal to the last applied version.
+ */
 public class Calibration {
+    /** explicit feature identifier to target; if null, {@link #featureClass} simple name is used */
     private String featureIdentifier;
+    /** optional class reference to derive default identifier when {@link #featureIdentifier} is null */
     private Class<? extends Feature> featureClass;
+    /** optional monotonically increasing version for out-of-order delivery handling */
     private int featureVersion;
+    /** trained model coefficient or operational override */
     private double co_efficient;
+    /** runtime calibration multiplier */
     private double weight;
 
+    /** resolve the effective target identifier */
     public String getFeatureIdentifier() {
         return featureIdentifier == null ? featureClass.getSimpleName() : featureIdentifier;
     }

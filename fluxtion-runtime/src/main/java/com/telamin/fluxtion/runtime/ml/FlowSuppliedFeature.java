@@ -14,11 +14,12 @@ import com.telamin.fluxtion.runtime.annotations.builder.AssignToField;
 import com.telamin.fluxtion.runtime.flowfunction.FlowSupplier;
 
 /**
- * Inherit this class and add to {@link PredictiveLinearRegressionModel} to calculate a linear regression.
- * The subclass implements {@link #extractFeatureValue()}, all the event triggering and co_efficient adjustments are
- * implemented in this class.
+ * Base for features that read data from a {@link FlowSupplier} and contribute to a
+ * {@link PredictiveLinearRegressionModel}. The subclass implements {@link #extractFeatureValue()} to return
+ * the raw signal, while this base class handles triggering and applies the current
+ * {@code co_efficient * weight} via {@link #updateFromRaw(double)}.
  *
- * @param <T>
+ * @param <T> input type of the upstream flow
  */
 public abstract class FlowSuppliedFeature<T> extends AbstractFeature implements CalibrationProcessor {
     protected final FlowSupplier<T> dataFlowSupplier;
@@ -37,10 +38,7 @@ public abstract class FlowSuppliedFeature<T> extends AbstractFeature implements 
 
     @OnTrigger
     public boolean calculateFeature() {
-        double newValue = extractFeatureValue() * co_efficient * weight;
-        boolean changed = newValue != value;
-        value = newValue;
-        return changed;
+        return updateFromRaw(extractFeatureValue());
     }
 
     /**
