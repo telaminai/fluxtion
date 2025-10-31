@@ -136,23 +136,6 @@ public class FluxtionSpring {
         return new FluxtionSpring(context, configCustomizer)._compile();
     }
 
-    public static CloneableDataFlow<?> interpret(Path springFile) {
-        FluxtionSpring fluxtionSpring = new FluxtionSpring(springFile.toAbsolutePath().toUri().toString());
-        return fluxtionSpring._interpret();
-    }
-
-    public static CloneableDataFlow<?> interpret(Path springFile, Consumer<EventProcessorConfig> configCustomizer) {
-        return new FluxtionSpring(springFile.toAbsolutePath().toUri().toString(), configCustomizer)._interpret();
-    }
-
-    public static CloneableDataFlow<?> interpret(ApplicationContext context) {
-        return new FluxtionSpring(context)._interpret();
-    }
-
-    public static CloneableDataFlow<?> interpret(ApplicationContext context, Consumer<EventProcessorConfig> configCustomizer) {
-        return new FluxtionSpring(context, configCustomizer)._interpret();
-    }
-
     private CloneableDataFlow<?> _compileAot(LambdaReflection.SerializableConsumer<FluxtionCompilerConfig> compilerConfig) {
         return Fluxtion.compile(this::addNodes, compilerConfig);
     }
@@ -161,11 +144,7 @@ public class FluxtionSpring {
         return Fluxtion.compile(this::addNodes);
     }
 
-    private CloneableDataFlow<?> _interpret() {
-        return Fluxtion.interpret(this::addNodes);
-    }
-
-    private void addNodes(EventProcessorConfig config) {
+    protected void addNodes(EventProcessorConfig config) {
         LOGGER.debug("loading spring context:{}", context);
         List<Auditor> auditorMap = new ArrayList<>();
         for (String beanDefinitionName : context.getBeanDefinitionNames()) {

@@ -60,9 +60,9 @@ extra:
   # Define variables here
   fluxtion_src_runtime: https://github.com/telaminai/fluxtion/tree/main/fluxtion-runtime/src/main/java/com/telamin/fluxtion/runtime
   fluxtion_example_src: https://github.com/telaminai/fluxtion-examples/tree/main
-  fluxtion_version: 0.9.12
+  fluxtion_version: 0.9.13
   fluxtion_javadoc: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-runtime/${fluxtion_version}/index.html
-  release_date: "2025-10-19"
+  release_date: "2025-10-31"
 
 nav:
   - Home:

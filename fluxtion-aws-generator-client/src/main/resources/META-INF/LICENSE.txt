@@ -1,0 +1,54 @@
+Telamin Fluxtion Commercial License Agreement v1.0
+
+IMPORTANT – READ CAREFULLY: This Commercial License Agreement ("Agreement") is a legal agreement between Telamin Limited ("Licensor") and the entity or person agreeing to these terms ("Licensee"). By downloading, installing, accessing, or using the Software, Licensee agrees to be bound by this Agreement.
+
+1. Definitions
+  "Software" means the Telamin Fluxtion components and modules, including without limitation: fluxtion-aws-generator, fluxtion-aws-generator-client, fluxtion-generator-core, fluxtion-interpreter, aws-integration-test (if provided), and related binaries, source code, documentation, and updates provided by Licensor.
+
+2. Grant of License
+  2.1 Production License. Subject to payment of applicable fees and compliance with this Agreement, Licensor grants Licensee a limited, non-exclusive, non-transferable, non-sublicensable license to install and use the Software solely for Licensee’s internal business purposes, up to the licensed quantities (users/cores/instances) specified in the Order.
+  2.2 Evaluation License. If the Software is provided for evaluation, the license is limited to non-production internal evaluation for thirty (30) days, may be terminated at any time by Licensor, and is provided “AS IS” without support or warranty.
+
+3. Restrictions
+  Licensee shall not: (a) copy the Software except for a reasonable number of backup/archival copies; (b) modify, adapt, translate, or create derivative works; (c) reverse engineer, decompile, disassemble, or otherwise attempt to derive source code, except to the extent such restriction is prohibited by law; (d) distribute, sell, resell, rent, lease, lend, sublicense, timeshare, or otherwise make the Software available to any third party; (e) use the Software to provide services to third parties (including as part of a service bureau, SaaS, platform, or managed service); (f) remove or obscure proprietary notices; (g) circumvent technical restrictions or license keys.
+
+4. Ownership
+  The Software is licensed, not sold. Licensor and its licensors own all rights, title, and interest in and to the Software. No rights are granted by implication.
+
+5. Confidentiality
+  The Software (including its structure and organization) and any license keys, documentation, or non-public information provided by Licensor are Licensor’s Confidential Information. Licensee shall protect such information using at least the same degree of care it uses for its own confidential information, and not less than reasonable care.
+
+6. Support and Updates
+  If purchased, support and maintenance are provided under Licensor’s then-current support policy. Licensor may provide Updates; all Updates are deemed part of the Software and subject to this Agreement.
+
+7. Warranty; Disclaimer
+  Licensor warrants that the Software will materially conform to its documentation for ninety (90) days from delivery when used in accordance with the documentation. EXCEPT AS EXPRESSLY PROVIDED IN THIS SECTION, THE SOFTWARE IS PROVIDED “AS IS” AND LICENSOR DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT.
+
+8. Limitation of Liability
+  TO THE MAXIMUM EXTENT PERMITTED BY LAW, LICENSOR SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, OR FOR LOST PROFITS, REVENUE, GOODWILL, OR DATA, EVEN IF ADVISED OF THE POSSIBILITY. LICENSOR’S TOTAL LIABILITY ARISING OUT OF OR RELATED TO THIS AGREEMENT SHALL NOT EXCEED THE AMOUNTS PAID BY LICENSEE FOR THE SOFTWARE IN THE TWELVE (12) MONTHS PRECEDING THE CLAIM.
+
+9. Term and Termination
+  This Agreement is effective upon acceptance and continues for the subscription or perpetual term specified in the Order. Licensor may terminate this Agreement immediately if Licensee breaches it. Upon termination, Licensee must stop all use, delete all copies, and certify destruction. Sections 3–5 and 7–14 survive termination.
+
+10. Verification
+  Upon reasonable notice, Licensor may audit Licensee’s use of the Software no more than once per year, during normal business hours, to verify compliance.
+
+11. Open Source and Third-Party Components
+  The Software may include third-party components subject to separate license terms identified in the accompanying notices file. Such components are licensed to Licensee under their respective licenses; nothing in this Agreement limits Licensee’s rights under those terms.
+
+12. Export; Compliance
+  Licensee shall comply with all applicable export, sanctions, and anti-corruption laws. Licensee represents it is not a prohibited party under such laws.
+
+13. Governing Law; Disputes
+  This Agreement is governed by the laws of England and Wales, and the parties submit to the exclusive jurisdiction of the courts of London, England. The U.N. Convention on Contracts for the International Sale of Goods does not apply.
+
+14. Entire Agreement; Order of Precedence
+  This Agreement, together with any Order, constitutes the entire agreement and supersedes all prior proposals and agreements. In the event of conflict, the Order controls.
+
+15. Assignment
+  Licensee may not assign or transfer this Agreement without Licensor’s prior written consent. Any prohibited assignment is void.
+
+16. Notices
+  Notices must be in writing and are deemed given upon receipt at the addresses specified by the parties.
+
+Copyright (c) 2025 Telamin Limited. All rights reserved.
