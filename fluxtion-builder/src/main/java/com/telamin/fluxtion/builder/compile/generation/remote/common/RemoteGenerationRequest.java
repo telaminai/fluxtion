@@ -11,6 +11,7 @@ package com.telamin.fluxtion.builder.compile.generation.remote.common;
 import com.telamin.fluxtion.builder.compile.config.FluxtionCompilerConfig;
 import com.telamin.fluxtion.builder.generation.config.EventProcessorConfig;
 import com.telamin.fluxtion.builder.generation.model.EventProcessorModel;
+import lombok.ToString;
 
 import java.io.Serializable;
 import java.util.Set;
@@ -19,6 +20,7 @@ import java.util.Set;
  * A simple request DTO for remote generation. Contains a serializable subset of
  * the configuration and context needed by the server to execute the generation.
  */
+@ToString
 public class RemoteGenerationRequest implements Serializable {
 
     private static final long serialVersionUID = 1L;
