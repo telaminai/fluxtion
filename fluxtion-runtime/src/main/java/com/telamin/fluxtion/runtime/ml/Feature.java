@@ -22,17 +22,32 @@ import java.util.List;
 @Experimental
 public interface Feature extends NamedNode, @ExportService CalibrationProcessor {
 
+    /**
+     * Stable identifier for this feature used by {@link Calibration} messages to target updates.
+     * Defaults to the simple class name for subclassed features. For features built via
+     * {@link PropertyToFeature} and friends, the provided name is used.
+     */
     default String identifier() {
         return getClass().getSimpleName();
     }
 
+    /**
+     * Human-friendly node name used in generated sources and logs. Defaults to the decapitalized identifier.
+     */
     @Override
     default String getName() {
         return Introspector.decapitalize(identifier());
     }
 
+    /**
+     * Current contribution of this feature to the model (raw * coefficient * weight).
+     */
     double value();
 
+    /**
+     * Convenience to include one or more properties from a flow as features. The identifier defaults to the
+     * extractor method name (e.g., "getArea").
+     */
     @SafeVarargs
     static <T> List<Feature> include(FlowSupplier<T> inputDataFlow, LambdaReflection.SerializableToDoubleFunction<T>... featureExtractors) {
         List<Feature> featureList = new ArrayList<>(featureExtractors.length);

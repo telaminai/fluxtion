@@ -43,6 +43,22 @@ public class PredictiveLinearRegressionModel implements PredictiveModel, @Export
     @Override
     @NoPropagateFunction
     public boolean setCalibration(List<Calibration> calibrations) {
+        // Note: Each Feature also implements CalibrationProcessor and will receive this message independently.
+        // This method simply recomputes the model prediction after features adjust their internal state.
+        return calculateInference();
+    }
+
+    @Override
+    @NoPropagateFunction
+    public boolean resetToOne() {
+        // The reset message is broadcast to all CalibrationProcessor implementors (features included).
+        // We recalculate to reflect immediate changes without requiring a new data event.
+        return calculateInference();
+    }
+
+    @Override
+    @NoPropagateFunction
+    public boolean resetToZero() {
         return calculateInference();
     }
 
