@@ -52,6 +52,7 @@ flowchart LR
 ```
 
 Notes:
+
 - Features recompute their contribution immediately when they receive a calibration or reset (no new data needed).
 - The model recomputes its sum when calibrations/resets are applied, so predictedValue() updates right away.
 
@@ -158,6 +159,7 @@ svc.resetToOne();    // predictedValue() updates immediately using last observed
 ```
 
 Implementation details:
+
 - AbstractFeature stores the last raw signal, recalculating contribution on calibration/reset.
 - If a feature hasn’t seen data yet, resetToZero sets contribution to 0; later resets will recompute when raw becomes available.
 
@@ -293,6 +295,7 @@ DataFlow sep = Fluxtion.compile(c -> {
 ```
 
 Notes:
+
 - The action node declares a dependency on the model by holding a reference; Fluxtion wires the dependency so that the action node's @OnTrigger method is called after the model updates.
 - Replace the DoubleConsumer with your own sink (Kafka producer, database writer, actuator control, etc.).
 
