@@ -1,0 +1,67 @@
+name: Release to Repsy
+
+on:
+  push:
+    branches:
+      - release-repsy
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # JDK 8 is required at build time by fluxtion-builder-all-java8
+      # (Retrolambda 2.5.7 must run under JDK 8). Installed first so the
+      # release JDK (set up next) wins as JAVA_HOME; JDK 8 path is captured
+      # via the setup-java-exported JAVA_HOME_8_X64.
+      - name: Setup JDK 8 (for Retrolambda in fluxtion-builder-all-java8)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 8
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'adopt'
+
+      - name: Set up Repsy repository
+        uses: actions/setup-java@v4
+        with: # running setup-java again overwrites the settings.xml
+          java-version: '21'
+          distribution: 'adopt'
+
+      - name: Configure Git user
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+
+      # -Djdk8.home flows into release:prepare's verification build; -Darguments
+      # forwards the same property into release:perform's forked inner mvn so
+      # the fluxtion-builder-all-java8 Retrolambda exec finds its JDK 8.
+      - name: Publish to Repsy
+        run: ./mvnw -P repsy-release -B -s .github/settings.xml -DskipTests -Djdk8.home=$JAVA_HOME_8_X64 release:prepare release:perform -Darguments="-DskipTests -Djdk8.home=$JAVA_HOME_8_X64"
+        env:
+          DEPLOYMENT_USERNAME: ${{ secrets.REPSY_USER }}
+          DEPLOYMENT_PASSWORD: ${{ secrets.REPSY_PASSWORD }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - uses: actions/checkout@master
+      - name: Merge release-repsy -> main
+        uses: devmasx/merge-branch@master
+        with:
+          type: now
+          from_branch: release-repsy
+          target_branch: main
+          github_token: ${{ github.token }}
+
+      - name: Merge main -> develop
+        uses: devmasx/merge-branch@master
+        with:
+          type: now
+          from_branch: main
+          target_branch: develop
+          github_token: ${{ github.token }}

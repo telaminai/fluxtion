@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.telamin.fluxtion</groupId>
+        <artifactId>fluxtion-parent</artifactId>
+        <version>1.0.13-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>fluxtion-runtime</artifactId>
+    <name>telamin :: fluxtion-runtime</name>
+
+    <url>https://github.com/telaminai/fluxtion</url>
+    <description>
+        the runtime library for executing Fluxtion data stream
+    </description>
+
+    <properties>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!--
+          agrona is declared as a regular compile-scope transitive — NOT shaded
+          into fluxtion-runtime. Default is 2.x (LTS, JDK 17+ class file 61),
+          consumers that need a different surface (CheerpJ Java 8 mode requires
+          class file 52, so agrona 1.21.2) exclude this dep and add their own
+          version.
+
+          Verified 2026-05-14: fluxtion-runtime's bytecode against agrona 2.x
+          references 19 unique agrona members (5 ctors + 14 methods), all of
+          which exist with identical signatures in agrona 1.21.2 — so the
+          override-down path resolves cleanly at runtime. No source change
+          needed at consumer level when swapping agrona versions; the public
+          API is byte-identical.
+
+          fluxtion-runtime source stays at source 1.8 / target 1.8 so the
+          produced bytecode loads under CheerpJ Java 8 mode (the consumer must
+          still bring agrona 1.21.2 — class file 52 — for the dispatch to
+          succeed; agrona 2.x is class file 61 and CheerpJ rejects it). The
+          animal-sniffer-maven-plugin below mechanically enforces Java 8 stdlib
+          API compatibility — it fails the build on accidental use of Java 9+
+          stdlib calls (String.repeat, List.of, etc.) that would otherwise
+          NoSuchMethodError silently on Java 8 consumers.
+        -->
+        <agrona.version>2.3.0</agrona.version>
+        <log4j2.version>2.24.3</log4j2.version>
+    </properties>
+    <licenses>
+        <license>
+            <distribution>repo</distribution>
+            <name>GNU AFFERO GENERAL PUBLIC LICENSE, version 3</name>
+            <url>https://www.gnu.org/licenses/agpl-3.0.html</url>
+        </license>
+    </licenses>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>license-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>download-license-description</id>
+                        <goals>
+                            <goal>add-third-party</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!--
+              animal-sniffer enforces Java 8 stdlib API compatibility on
+              fluxtion-runtime's compiled classes. The signature artefact
+              "java18" is the Java 1.8 SE API surface (despite the confusing
+              name). Build fails on use of any method/field that wasn't
+              present in JDK 8 — e.g. String.repeat (Java 11), List.of
+              (Java 9), InputStream.readAllBytes (Java 9), Optional.isEmpty
+              (Java 11). Without this gate, source-level Java 9+ API calls
+              compile fine against -source 1.8 -target 1.8 (javac doesn't
+              check stdlib version against -source) but NoSuchMethodError
+              under CheerpJ Java 8 at runtime — silent regression on the
+              browser bundle. animal-sniffer only checks JDK API; agrona 2.x
+              and other 3rd-party calls pass through unchecked.
+            -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>animal-sniffer-maven-plugin</artifactId>
+                <version>1.24</version>
+                <executions>
+                    <execution>
+                        <id>check-java8-api</id>
+                        <phase>process-classes</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <signature>
+                                <groupId>org.codehaus.mojo.signature</groupId>
+                                <artifactId>java18</artifactId>
+                                <version>1.0</version>
+                            </signature>
+                            <!--
+                              Documented animal-sniffer foot-guns that are
+                              not real Java 8 incompatibilities:
+
+                              java.nio.ByteBuffer — Java 9+ covariant return
+                              types (clear/flip/limit/position/mark/reset/rewind
+                              return ByteBuffer instead of Buffer). javac with
+                              -source 1.8 -target 1.8 still binds against the
+                              host JDK's classes, so JDK 17+ javac emits
+                              INVOKEVIRTUAL against the covariant overrides.
+                              At runtime these resolve correctly on any JVM
+                              that includes the covariant overrides (all JDK
+                              9+ and CheerpJ Java 8 mode); pure pre-9 JVMs
+                              would NoSuchMethodError but we don't target
+                              those.
+
+                              java.lang.invoke.MethodHandle — signature-
+                              polymorphic methods (invoke, invokeExact). Their
+                              call-site descriptors are intentionally distinct
+                              from the declared signature; animal-sniffer
+                              cannot model this and flags every call.
+                            -->
+                            <ignores>
+                                <ignore>java.nio.ByteBuffer</ignore>
+                                <ignore>java.lang.invoke.MethodHandle</ignore>
+                            </ignores>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.agrona</groupId>
+            <artifactId>agrona</artifactId>
+            <version>${agrona.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.esotericsoftware</groupId>
+            <artifactId>kryo</artifactId>
+            <version>5.6.2</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.hamcrest</groupId>
+            <artifactId>hamcrest-all</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>

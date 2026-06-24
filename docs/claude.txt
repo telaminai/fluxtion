@@ -1,0 +1,477 @@
+# Fluxtion — orientation for AI authoring
+
+You are writing or modifying Fluxtion code. Read this once at session start; treat it as load-bearing project context. Everything else is a pointer.
+
+This file is the canonical author-orientation document maintained by Telamin AI. It is intentionally written for an LLM cold-start — the structure is symptom-organised so you can scan it.
+
+## The mental model in 60 seconds
+
+Fluxtion is a **compile-time event-graph compiler** for Java. You author plain Java classes that hold state and react to events; Fluxtion statically analyses the dependency graph and generates a flat dispatch tree. There is **no scheduler, no thread pool, no async runtime** — events flow through compile-time-determined dispatch order, deterministically, with zero allocation in the hot path.
+
+The graph is declared by **constructor reference passing**: `new Sigmoid(linear)` means "Sigmoid depends on linear's output." Fluxtion topo-sorts those references at compile time and emits the dispatch table. The graph IS the constructor wiring.
+
+Three properties fall out of this model and are why people use Fluxtion:
+
+1. **Deterministic per-event dispatch.** Same input → byte-identical output, every run.
+2. **Audit + replay as primitives.** Every node activation is captured; replays reproduce exactly.
+3. **Microsecond-bounded latency.** No scheduler, no allocation, single-threaded by design.
+
+If you internalise nothing else, internalise this: **you write nodes, the compiler wires them.** Reason locally per node. Let the framework handle the global topology. This division is why Fluxtion fits AI authoring — your context window only has to hold one node at a time.
+
+## You author at the logical level — the compiler enforces the runtime guarantees
+
+This is the most important framing for AI-authored Fluxtion code, and it's the structural reason the determinism / audit / replay properties survive being written by an LLM.
+
+You — the LLM — operate at the **logical level**. You declare:
+
+- What events the system processes (event types).
+- What state nodes hold and how each node reacts (`@OnEventHandler` / `@OnTrigger` bodies).
+- How nodes depend on each other (constructor reference passing).
+- What policy gates / audit fields / topology shape the system needs.
+
+That is **specification authorship**. It's intent. It's *what the system should do*.
+
+Fluxtion's compiler then takes your specification and produces the **runtime behaviour**:
+
+- A flat dispatch tree in topological order.
+- Compile-time-determined event propagation with no scheduler.
+- Per-event audit records derived from the topology, not hand-written.
+- Byte-equal replay across runs because dispatch order is structural, not stochastic.
+- Compile-time reachability that proves which nodes a given event can reach.
+
+The split is load-bearing: **you cannot introduce non-determinism by being a wrong or careless author.** If you try to spawn a thread inside a node, the rule below ("Single-threaded by design") rejects it. If you try to mutate state from outside the graph, audit/replay structurally breaks. If you try to bypass `@OnTrigger` propagation with a direct method call, you lose dispatch ordering and the compiler-enforced topo-sort no longer applies — but the generated processor still won't dispatch your bypassed call. The compiler is the safety boundary; you operate inside it.
+
+This is why the framework is appropriate for regulated, safety-critical, and AI-authored deployments. The author (human or LLM) writes intent; the compiler guarantees behaviour. The two concerns are separated by the source-gen step — and the source-gen step doesn't trust the author. It enforces.
+
+The practical consequence for you: **stop worrying about whether your code is "deterministic enough" or "safe enough." Worry about whether your specification is correct.** Write nodes that say what they mean. Compose them via constructor reference. Annotate triggers and audit fields. Let the compiler do the rest. If a property holds at the spec level (e.g. *"this tool only fires when policy gate allows"*), the compiled processor satisfies it by construction — not as a runtime convention, but as a structural guarantee.
+
+If a Fluxtion-level error tells you the spec is wrong (an annotation missing, a reference unresolvable, a non-renderable field), fix the spec. The compiler is telling you it cannot make the runtime guarantee for what you wrote — that's exactly the kind of feedback you want.
+
+## The authoring surfaces
+
+Three legitimate ways to declare the graph, all converging on the same generated processor:
+
+- **Imperative** — classes with `@OnEventHandler` (entry points) and `@OnTrigger` (downstream propagation). Best for stateful nodes, ML/numerical, business rules, anything where domain state lives in fields.
+- **DSL** — `DataFlowBuilder.subscribe(...).map(...).filter(...).groupBy(...)`. Best for streaming pipelines. Combinators take **method references**, so any Java method (static, instance, stateful, side-effecting) becomes an operator. **There is no closed operator library** — every Java method ever written is a candidate operator. Don't search for an "operator that does X" in Fluxtion's DSL the way you would in RxJava; just write the Java method and reference it.
+- **Spring XML** — declarative bean wiring via `FluxtionSpring.compileAot("model.xml")`. Best for ops-handoff, configuration-as-deployment, or model-graph authoring (ML topology, agent topology).
+
+Mix freely. A single graph can combine all three.
+
+## Compile shapes — pick by what your code does after compile
+
+Three APIs. **Symptom of picking wrong:** assertions on `myNode.someField` read zero/empty after events fire. That's the bystander shape; switch to a live-binding option.
+
+```java
+// (1) Fire-and-forget. Processor instantiates a fresh internal node;
+// your reference is a bystander. Right for production deploy with no
+// introspection. Smallest generated surface.
+DataFlow flow = Fluxtion.compile(c -> c.addNode(myNode));
+
+// (2) Same baked-instance shape, but retrievable by name. Right for
+// production code that needs id-keyed state queries (inspection,
+// monitoring). Note: getNodeById throws checked NoSuchFieldException.
+DataFlow flow = Fluxtion.compile(c -> c.addNode(myNode, "name"));
+MyNode found = flow.getNodeById("name");
+
+// (3) Live-binding: the user reference IS the dispatch target. Right
+// for tests, debugging, demos where holding the reference is more
+// ergonomic than a name lookup.
+DataFlow flow = Fluxtion.compileDispatcher(c -> c.addNode(myNode));
+```
+
+In tests, default to `compileDispatcher`. In production, default to `compile + addNode(name) + getNodeById` if you need monitoring; `compile + addNode(node)` if you don't.
+
+## Build-time generation — `FluxtionGraphBuilder`
+
+The compile shapes above run the compiler *inside your program* (`Fluxtion.compile(...)`). The production / native / deployable shape moves generation to **build time**: implement `FluxtionGraphBuilder`, and a build step (the Maven plugin, or a host's builder phase) emits a processor class you then load **by name**. `Main` stays a thin, deterministic program — no in-process compile.
+
+```java
+public class MyBuilder implements FluxtionGraphBuilder {
+    @Override public void buildGraph(EventProcessorConfig cfg) {
+        cfg.addEventAudit(LogLevel.INFO);
+        cfg.addNode(new RootNode(), "root");   // register roots; deps discovered via ctor refs
+    }
+    @Override public void configureGeneration(FluxtionCompilerConfig cfg) {
+        cfg.setPackageName("com.example.generated");
+        cfg.setClassName("MyProcessor");
+        cfg.setWriteSourceToFile(true);
+        cfg.setWriteGraphMlToFile(true);       // GraphML for visualisers / step-through
+    }
+}
+```
+
+`Main` and tests load the generated class **by name** — it doesn't exist until the build step runs, so `Class.forName`, never a Java import:
+
+```java
+DataFlow flow = (DataFlow) Class.forName("com.example.generated.MyProcessor")
+        .getDeclaredConstructor().newInstance();
+flow.init();
+```
+
+- No `Fluxtion.compile` in `Main` → no compile-once limit (matters under CheerpJ); Run and tests each `new` a fresh instance.
+- **Tests:** a fresh `new MyProcessor()` per test (imperative-only topologies `newInstance` cleanly) is simpler than the `compileDispatcher` shared-instance pattern — load by name, register sinks/services, drive, assert.
+- This is the shape for AOT/native (`mvn -Pnative package`) and for hosting the same artefact under Mongoose unchanged.
+
+## Required rules
+
+These will save you 80% of cold-start iterations.
+
+1. **Always declare a named package.** `package com.example;` on every Java file. Default-package types are unreachable from the auto-derived named-package generated processor (Java Language Specification rule).
+2. **`flow.init()` does NOT reset user-node fields.** It only resets per-event Fluxtion machinery (dirty flags, queue state). If you reuse one processor across batches, add either:
+   - `@Initialise` on a method that clears state (idiomatic), OR
+   - an explicit `reset()` method called after `init()` (clearest in tests).
+3. **Source-gen IS serialisation.** Fluxtion reflects over every node's fields and emits a generated processor that reconstructs them via constructor calls and field assignments. Once you grok this, every gotcha below is obvious — they're all "this field doesn't render as a Java literal" or "this constructor binding is ambiguous."
+4. **Single-threaded by design.** Do not introduce executors, threads, or async APIs inside nodes. Concurrency breaks the determinism guarantee.
+5. **Mutate state through events, not from outside.** External mutation breaks audit/replay.
+
+## Source-gen annotation triage
+
+Three error patterns, three fixes — pick by symptom.
+
+### Symptom: `cannot find matching constructor for ... fields:[fieldA]`
+
+A field is a `Map`, `List`, `Set`, custom class, or anything that doesn't render as a Java literal. Fluxtion can't reconstruct it in the generated processor's constructor.
+
+**Fix:** annotate `@FluxtionIgnore` (FQN: `com.telamin.fluxtion.runtime.annotations.builder.FluxtionIgnore`) or declare `transient`. Both are valid — Fluxtion's source-gen honours the standard Java keyword. The field initialiser still runs in the generated processor's no-arg constructor, so runtime semantics are preserved.
+
+```java
+@FluxtionIgnore
+private final Map<String, BookState> books = new HashMap<>();
+
+// equivalently:
+private transient final Map<String, BookState> books = new HashMap<>();
+```
+
+Primitives, Strings, enums, and arrays of those don't need this — they serialise fine.
+
+### Symptom: `use @AssignToField to resolve clashing types these fields:[a, b]`
+
+Two or more constructor parameters of the **same type** (two `String`s, two `double`s, two same-typed references). Fluxtion can't pick the constructor binding by type.
+
+**Fix:** annotate each clashing parameter with `@AssignToField("fieldName")` (FQN: `com.telamin.fluxtion.runtime.annotations.builder.AssignToField`). The string names the **field** the parameter binds to. Unique-typed parameters don't need the annotation.
+
+```java
+public LinearLayer(InputLayer upstream,
+                   @AssignToField("weightsPath") String weightsPath,
+                   @AssignToField("biasPath") String biasPath) {
+    this.upstream = upstream;
+    this.weightsPath = weightsPath;
+    this.biasPath = biasPath;
+}
+```
+
+### Symptom: `cannot find symbol: class Foo` in the generated source
+
+Your user types are in the unnamed (default) package. See rule 1 above. Add `package com.example;` to every file.
+
+### Symptom: `cannot find symbol: method lambda$null$...` in DSL-flow generated code
+
+The DSL was passed a state-capturing lambda inside `Fluxtion.compile(cfg -> { DataFlowBuilder...; })`. Source-gen tried to render it as a method ref to a synthetic `lambda$null$<hash>` method — the synthetic only exists as bytecode in the original class, not as a nameable symbol.
+
+**Fix:** replace the lambda with a **named method reference**. Three shapes work — pick by what the function needs to do:
+
+```java
+DataFlowBuilder
+    .subscribeToNode(classifier)
+    .map(QueryClassifier::getCurrentIntent)   // unbound instance — reads upstream type's property
+    .filter(Planner::isActionable)            // static — pure transform
+    .map(Planner::toToolCall)                 // static
+    .push(plannerState::setCurrentCall);      // bound instance — push into a node in the graph
+```
+
+If you genuinely need lambda capture, move the consumer outside the compile boundary via `.sink("name")` + `flow.addSink("name", lambdaWithCapture)` after compile (sink callbacks register at runtime, not source-gen'd — but they fire externally to the graph dispatch, so downstream nodes won't see the effect).
+
+**Note:** this rule **inverts** for the runtime-only `DataFlowBuilder...build()` path — there, lambdas are required because no source-gen runs and bound method refs trip CheerpJ's invokedynamic resolution. The right shape depends on the compile API:
+- `Fluxtion.compile(cfg -> ...)` (AOT source-gen) → method refs yes, captured lambdas no.
+- `.build()` (runtime DSL) → lambdas yes, bound method refs no.
+
+### Symptom: `constructor should be pre-generated`
+
+You hand-constructed a `SinkPublisher` (or another DSL-internal output node) as a field of an imperative node and AOT-compiled it. `SinkPublisher` is produced by the DSL `.sink()` factory — it can't be hand-wired into a generated imperative graph.
+
+**Fix:** emit output via `@ServiceRegistered MessageSink` (see "Emitting output — named sinks"), or end a DSL chain with `.sink("name")`. Don't `new SinkPublisher(...)` in a node.
+
+## Conditional dispatch — `@OnTrigger(dirty)`
+
+`@OnTrigger` (default `dirty = true`) fires when an upstream node signalled a change. `@OnTrigger(dirty = false)` fires on the **inverse** — when the upstream event-handler returned `false`. That is the **dirty/else branch**: wire two nodes to the same parent, and the parent's boolean routes the event to exactly one of them — the `true` path runs its (default `dirty=true`) children, the `false` path runs its `dirty=false` child. It expresses an in-graph branch with no hand-written `if`, and the branch is visible in the generated dispatcher (which is what makes it auditable and replayable).
+
+```java
+@OnEventHandler public boolean onPayment(Payment p) { return approved(p); }  // true=approve, false=decline
+// ApprovePath: @OnTrigger             — runs only when onPayment returned true
+// DeclinePath: @OnTrigger(dirty=false) — runs only when onPayment returned false
+```
+
+## Bridging DSL flows into imperative `@OnTrigger` nodes
+
+A node only propagates change to its dependents if it has at least one trigger annotation (`@OnEventHandler`, `@OnTrigger`, `@AfterEvent`). A plain POJO registered via `cfg.addNode(...)` has no triggering semantics — downstream nodes that depend on it never fire even though the dependency looks structurally correct.
+
+**Wrong shape** (POJO setter target — silently does nothing useful):
+```java
+// ❌ tools' @OnTrigger never fires; PlannerState has no triggering annotation
+DataFlowBuilder.subscribeToNode(classifier)
+    .map(...).filter(...).map(...)
+    .push(plannerState::setCurrentCall);
+```
+
+**Right shape** (FlowSupplier terminal + `@OnTrigger` holder):
+```java
+// ✅ FlowSupplier IS a triggering node; PlannerState's @OnTrigger drives downstream tools
+FlowSupplier<ToolCall> plannedCall = DataFlowBuilder
+    .subscribeToNode(classifier)
+    .map(QueryClassifier::getCurrentIntent)
+    .filter(Planner::isActionable)
+    .map(Planner::toToolCall)
+    .flowSupplier();
+
+PlannerState plannerState = new PlannerState(plannedCall);
+// PlannerState:
+//   private final FlowSupplier<ToolCall> upstream;
+//   @OnTrigger boolean onPlannerUpdate() {
+//       currentCall = upstream.get();
+//       return currentCall != null;
+//   }
+```
+
+Rule of thumb: `.push()` is for side effects observable outside the graph (logging, sinks, metrics). `.flowSupplier()` + `@OnTrigger` holder is for in-graph state propagation that downstream imperative nodes need to react to.
+
+## Services — typed integration boundaries
+
+Two complementary annotations bridge the dataflow with a host application (Spring, Mongoose, REST controller, test harness). Pick by direction.
+
+### Consuming an external service — `@ServiceRegistered`
+
+A node receives an injected service from outside the graph. The annotated method is invoked when the host calls `flow.registerService(impl, ServiceClass.class)`:
+
+```java
+public class TradeEnricher {
+    @FluxtionIgnore
+    private ProductCatalog catalog;     // not source-gen renderable
+
+    @ServiceRegistered
+    public void onCatalogRegistered(ProductCatalog catalog) {
+        this.catalog = catalog;
+    }
+}
+
+// host:
+flow.registerService(new ProductCatalogImpl(), ProductCatalog.class);
+```
+
+The node imports only the **interface**; production wires a real impl, tests wire a mock, the node code never changes.
+
+### Exposing a typed command surface — `@ExportService`
+
+A node implements an interface and marks the `implements` clause with `@ExportService`. The host retrieves the handle and calls it like any Java reference; each call dispatches as an event through the flow.
+
+**Critical constraint: methods on an `@ExportService` interface MUST return `void`.** Fluxtion's source-generator wraps each method with audit-before / audit-after dispatch and discards return values. Non-void methods fail compilation:
+
+```
+error: positionFor(String) cannot implement positionFor(String) in OrderEntry
+       return type void is not compatible with int
+```
+
+So exported methods are **typed command surfaces** (writes IN), not query surfaces (reads OUT).
+
+```java
+public interface OrderEntry {
+    void submitBuy(String symbol, int qty);   // void ✓
+    void submitSell(String symbol, int qty);  // void ✓
+    // int positionFor(String s);             // NON-VOID ✗ — compile error
+}
+
+public class PositionTracker implements @ExportService OrderEntry {
+    @Override public void submitBuy(String symbol, int qty)  { /* mutate state */ }
+    @Override public void submitSell(String symbol, int qty) { /* mutate state */ }
+}
+
+// host:
+OrderEntry handle = flow.getExportedService(OrderEntry.class);
+handle.submitBuy("AAPL", 100);   // dispatched as event into the flow
+```
+
+### Queries out of the dataflow — use `getNodeById`, not `@ExportService`
+
+For synchronous reads of derived state, use the compile-mode pattern (2) above:
+
+```java
+PositionTracker tracker = flow.getNodeById("positionTracker");
+int aapl = tracker.positionFor("AAPL");   // plain getter, no dispatch, no audit
+```
+
+The two surfaces compose cleanly: `@ExportService` for typed write commands, `getNodeById` + plain getters for typed read queries. Same node, same JVM heap, two complementary mechanisms — no eventual consistency, no separate read model.
+
+## Emitting output — named sinks
+
+`@ServiceRegistered` (above) injects an *input* service. The mirror — **emitting output** from an imperative node — uses the same mechanism with `MessageSink` (which `extends Consumer<T>`): the node receives an output sink **by name**, and the host registers a consumer by name. This is the blessed imperative output idiom — prefer it over `getNodeById(...).setSink(...)`, which couples the host to node identity.
+
+```java
+public class Decisions extends SingleNamedNode {
+    @FluxtionIgnore private MessageSink<Decision> sink;        // not source-gen renderable
+
+    @ServiceRegistered @SuppressWarnings("unchecked")
+    public void onSink(MessageSink<?> sink, String name) {
+        if ("out".equals(name)) this.sink = (MessageSink<Decision>) sink;
+    }
+    @OnTrigger public boolean emit() {
+        if (sink != null) sink.accept(/* value */);            // sink is just a Consumer
+        return true;
+    }
+}
+// host — an inline lambda IS a MessageSink (functional interface):
+flow.registerService((MessageSink<Decision>) d -> write(d), MessageSink.class, "out");
+```
+
+The *same* `registerService(consumer, MessageSink.class, name)` call wires a file writer locally, a list in a test, or a real connector sink under Mongoose — **the node code never changes**. That is "deploy the artefact unchanged" applied to I/O, not just the topology.
+
+- `DataFlow extends ServiceRegistry`, so the 3-arg `registerService(T, Class<S>, String)` is available and wraps `Service` for you. (`DataFlow`'s own `registerService(Service<?>)` interface default is an empty no-op; the generated processor overrides it with the real registration — so it reads alarmingly in source but works at runtime.)
+- **DSL flows** use a different output idiom: end the chain with `.sink("name")` and bind via `flow.addSink("name", consumer)`.
+- **Do NOT** hand-wire a `SinkPublisher` into an imperative AOT node — see the `constructor should be pre-generated` symptom above.
+
+## Browser-runtime constraint (CheerpJ playground only)
+
+This section applies only if your code targets the in-browser Fluxtion playground (CheerpJ Java 8 emulation). It does NOT apply to standard JVM execution.
+
+- **Primitive `float` fields trip `UnsatisfiedLinkError: Java_sun_misc_Unsafe_getFloatVolatile`** during Fluxtion's reflective dependency walk. CheerpJ implements the `int` / `long` / `double` / `Object` / array variants of `Unsafe.get*Volatile`, but not `float`.
+  - **Fix:** type tunable scalars as `double`, not `float`. Cast at the use site if needed. Hardcoded constants as `static final` are fine.
+
+```java
+// Bad in CheerpJ:
+private float threshold = 0.5f;
+
+// Good (and more idiomatic — bean-style mutability):
+private double threshold = 0.5;
+public void setThreshold(double t) { this.threshold = t; }
+```
+
+- **Call `Fluxtion.compile()` at most once per JVM lifetime.** Back-to-back compiles in the same JVM throw `NoClassDefFoundError: <class>$$Lambda$<N>` on the synthetic config-lambda class — CheerpJ unloads it between calls.
+
+- **`CloneableDataFlow.newInstance()` on a DSL-containing topology fails** with `ClassCastException` inside `LambdaReflection.serialized()` when `FilterFlowFunction` (or any DSL operator) re-binds its method reference. CheerpJ's serialised-lambda path doesn't round-trip on the second instantiation.
+
+  These two constraints combine: you can't compile twice, and you can't `newInstance()` a DSL topology either. **The only viable replay-equivalence shape under CheerpJ is single compile + single instance + multiple event passes through the same instance.** This works because Fluxtion agents are per-event stateless when there's no cross-event aggregation — running the same event sequence through the same instance multiple times produces byte-identical audit records (modulo clock fields).
+
+```java
+private static volatile DataFlow sharedFlow;
+private static volatile boolean sharedFlowInited;
+
+private static synchronized DataFlow sharedFlow() {
+    if (sharedFlow == null) {
+        sharedFlow = Main.generateFluxtionProcessor();
+    }
+    if (!sharedFlowInited) {
+        sharedFlow.init();
+        sharedFlowInited = true;
+    }
+    return sharedFlow;
+}
+
+private static List<String> captureRun() {
+    DataFlow flow = sharedFlow();
+    List<String> records = new ArrayList<>();
+    // setAuditLogProcessor REPLACES the previous listener — each captureRun()
+    // collects its own records even when multiple tests share one flow.
+    flow.setAuditLogProcessor(record -> records.add(normalise(record.toString())));
+    for (Event e : events) flow.onEvent(e);
+    return records;
+}
+```
+
+Standard JVM has neither limitation — the constraint is CheerpJ-specific. If your topology has cross-event aggregation (counters, sliding windows), this pattern won't give byte-identical runs; you'd need an explicit `reset()` method on stateful nodes, called between runs.
+
+## Run a quick test (jbang — no Maven, but NOT offline)
+
+The fastest feedback loop is a single jbang file — no Maven project. Works for BOTH DSL and imperative/AOT.
+
+**Every** Fluxtion graph build runs topology inference in the GENERATOR — `Fluxtion.compile` / `compileAot`,
+`DataFlowBuilder....build()`, AND `interpret` all use it. By default that's the **cloud service** (API key in
+`~/.fluxtion/fluxtion.apiKeyFile`). If you use the local build engine, pair artifacts through the Fluxtion BOM.
+There is no generate-without-a-generator path — a machine with no key and no local build engine cannot build any
+Fluxtion graph.
+
+Imperative / AOT, one file (the supported shape — match it):
+
+```java
+//REPOS central=https://repo1.maven.org/maven2,fluxtion=https://repo.repsy.io/mvn/fluxtion/fluxtion-public
+//DEPS com.telamin.fluxtion:fluxtion-builder:1.0.56
+//JAVA 21
+package demo;                                          // a NAMED package — required
+import com.telamin.fluxtion.Fluxtion;
+import com.telamin.fluxtion.runtime.DataFlow;
+import com.telamin.fluxtion.runtime.annotations.OnEventHandler;
+import com.telamin.fluxtion.runtime.annotations.OnTrigger;
+
+public class Demo {
+    public static void main(String[] a) {
+        DataFlow flow = (DataFlow) Fluxtion.compileAot("demo.generated", "DemoProcessor",
+                new Child(new Parent()));               // add ONLY the child; Parent is discovered
+        flow.init();
+        flow.onEvent("hi");
+    }
+    public static class Parent { @OnEventHandler public boolean on(String s){ return true; } }
+    public static class Child  { final Parent p; public Child(Parent p){ this.p = p; }
+        @OnTrigger public boolean fire(){ return true; } }
+}
+```
+
+Run: `jbang demo/Demo.java` (file path matches the package).
+
+Single-file rules (these are easy to get wrong):
+- Node classes the generated processor references must be **public** and in a **named package** — the
+  generated processor lands in a SUB-package (`demo.generated`) and cannot see default-package or
+  package-private types. Put helpers as `public static` **nested** classes (javac forbids multiple public
+  top-level classes per file).
+- A node CAN be a `record`. A counter still works: `record Counter(LongAdder n)` — the component is a final
+  reference to a MUTABLE adder (`n.increment()`); a primitive `int count; count++` cannot be a record.
+
+## The reference corpus
+
+When you need a working example of a pattern, **scan https://github.com/telaminai/fluxtion-examples** rather than guessing. The repo contains canonical shapes for every Fluxtion authoring pattern. Match the structure of the closest existing example before improvising.
+
+Pattern-to-directory hints:
+- DSL pipelines (filter/map/groupBy, windowing, aggregation): `compiler/dataflow/...`
+- Imperative `@OnEventHandler` / `@OnTrigger` nodes: `compiler/imperative/...`
+- AOT-compiled processors: `compiler/aot-compiler/...`
+- Spring XML topology authoring: `compiler/spring/...`
+- ML inference (model graph as Fluxtion graph): `compiler/ml-inference/...`
+- Audit log emission and replay: any example using `EventLogManager` or `[FLUXTION_AUDIT]` markers
+- JUnit 5 testing: any `*Test.java` under `compiler/`; use `compileDispatcher` for live binding
+
+If unsure which example matches your pattern, fetch the repo's top-level README and scan the directory layout. Don't invent new shapes when an existing one applies.
+
+## When you're stuck
+
+1. **Read the error message carefully.** Fluxtion's compile errors are written to be directive — "use @AssignToField" tells you exactly what to do. Don't pattern-match against generic Java exception advice.
+2. **Match the shape of the closest fluxtion-examples sample.** Don't invent topology if a precedent exists.
+3. **Troubleshooting index** (symptom-organised, every gotcha with a fix): https://telaminai.github.io/fluxtion/troubleshooting/troubleshooting_index/
+4. **How-to guides** (replay, ML inference, monitoring, integrations): https://telaminai.github.io/fluxtion/how-to/
+5. **Concepts** (event-oriented programming, execution inference, why Fluxtion is structurally different): https://telaminai.github.io/fluxtion/
+
+## Anti-patterns
+
+- **Don't reach for RxJava-style operator chaining habits.** Fluxtion's DSL is sparser by design; combinators take method references and the user-supplied Java IS the operator. Searching for an "operator library" is a category error here.
+- **Don't introduce threads, executors, or async inside nodes.** Single-threaded by design; concurrency violates determinism.
+- **Don't mutate state from outside the graph.** All state changes flow through events. External mutation breaks audit/replay.
+- **Don't bypass `@OnTrigger` propagation with direct method calls between nodes.** The compiler's topological dispatch is what gives determinism; direct calls reintroduce ordering bugs.
+- **Don't add features the task didn't ask for.** Fluxtion idiomatic code is small and focused. Three similar lines is better than a premature abstraction; resist generalising until a second use case appears.
+- **Don't comment what the code does.** Names already do that. Comment only when WHY is non-obvious — a hidden invariant, a workaround, a CheerpJ-specific constraint, behaviour that would surprise a reader.
+
+## House style
+
+- Plain Java classes for nodes; fields for state; `@OnTrigger` for downstream reactions; `@OnEventHandler` for entry points.
+- Constructor takes upstream references — that IS the wiring declaration. No separate wiring file unless you're using Spring XML deliberately.
+- Side effects (println, sinks, alerts, network calls) at terminal nodes only.
+- Tests use `Fluxtion.compileDispatcher` so assertions read live state.
+- Annotations split by package:
+  - `com.telamin.fluxtion.runtime.annotations.*` — lifecycle (`@OnEventHandler`, `@OnTrigger`, `@Initialise`, `@Start`, `@Stop`)
+  - `com.telamin.fluxtion.runtime.annotations.builder.*` — source-gen hints (`@FluxtionIgnore`, `@AssignToField`)
+
+## Why this framework fits AI authoring
+
+You don't need to track this consciously, but it's why the iteration cycle is short:
+
+- **Local reasoning per node.** Each node is ~30 lines: a few fields, a constructor naming its upstreams, one `@OnTrigger` body. You write it without holding the topology in context.
+- **The compiler does global reasoning.** Topo-sort, dispatch order, change propagation — all compile-time. You don't need to.
+- **No scheduler, no async, no thread bugs.** The framework prevents the failure modes that LLM-authored code is most prone to.
+- **Errors are directive.** "Use @AssignToField" tells you the next move. You converge fast.
+- **Open-set operators.** Any Java method is a candidate operator. The "library" you're authoring against is the JDK plus your domain code, not a finite framework API.
+
+Trust the architecture. Reason locally. Let the compiler handle wiring. The framework actively prevents the bugs you'd otherwise write.

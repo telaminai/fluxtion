@@ -1,0 +1,56 @@
+name: MavenCI
+
+on:
+  push:
+    paths-ignore:
+      - docs/**
+      - _sass/**
+      - README.md
+      - mkdocs.yml
+      - images/**
+    branches-ignore:
+      - release
+      - docs
+  pull_request:
+    branches: [ main, develop ]
+
+
+jobs:
+  build_and_test:
+
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # test against the latest update of each major Java version, as well as specific updates of LTS versions:
+        java: [ 21, 25 ]
+    name: Java ${{ matrix.java }} build
+    steps:
+      - uses: actions/checkout@v4
+
+      # JDK 8 is required at build time by fluxtion-builder-all-java8 —
+      # Retrolambda 2.5.7 depends on internal Java 8 LambdaMetafactory
+      # APIs that broke on JDK 9+, so its `java -jar retrolambda.jar`
+      # invocation must run under JDK 8 specifically. Installed first so
+      # the matrix JDK (set up next) wins as JAVA_HOME; JDK 8 path is
+      # captured via the setup-java-exported JAVA_HOME_8_X64.
+      - name: Setup JDK 8 (for Retrolambda in fluxtion-builder-all-java8)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 8
+
+      - name: Setup java ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: ${{ matrix.java }}
+
+      - name: Cache the Maven packages to speed up build
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+      - name: Build project with Maven
+        run: ./mvnw -B package --file pom.xml -Djdk8.home=$JAVA_HOME_8_X64
