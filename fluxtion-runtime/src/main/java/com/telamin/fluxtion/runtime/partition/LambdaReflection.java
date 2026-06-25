@@ -76,12 +76,7 @@ public interface LambdaReflection {
         }
 
         default Method method(ClassLoader loader) {
-            SerializedLambda lambda = serialized();
-            Class<?> containingClass = getContainingClass(loader);
-            return Arrays.stream(containingClass.getDeclaredMethods())
-                    .filter(method -> Objects.equals(method.getName(), lambda.getImplMethodName()))
-                    .findFirst()
-                    .orElseThrow(UnableToGuessMethodException::new);
+            return resolveMethod(serialized(), getContainingClass(loader));
         }
 
         default boolean isDefaultConstructor() {
@@ -90,12 +85,93 @@ public interface LambdaReflection {
 
         @SneakyThrows
         default Method method() {
-            SerializedLambda lambda = serialized();
-            Class<?> containingClass = getContainingClass();
-            return Arrays.stream(containingClass.getDeclaredMethods())
-                    .filter(method -> Objects.equals(method.getName(), lambda.getImplMethodName()))
-                    .findFirst()
-                    .orElseThrow(UnableToGuessMethodException::new);
+            return resolveMethod(serialized(), getContainingClass());
+        }
+
+        /**
+         * True when this instance is an actual serializable lambda / method reference
+         * (it carries a synthetic {@code writeReplace}). A concrete class that merely
+         * implements the interface is not introspectable via {@link #serialized()};
+         * callers should guard with this rather than catching the resulting exception.
+         */
+        default boolean isMethodReference() {
+            try {
+                getClass().getDeclaredMethod("writeReplace");
+                return true;
+            } catch (NoSuchMethodException e) {
+                return false;
+            }
+        }
+
+        /**
+         * Resolves the implementation method, disambiguating overloads by the lambda's
+         * implementation-method signature ({@link SerializedLambda#getImplMethodSignature()}).
+         * Falls back to the first name match when no exact signature match exists (e.g.
+         * bridge or synthetic methods), preserving the historic best-effort behaviour.
+         */
+        static Method resolveMethod(SerializedLambda lambda, Class<?> containingClass) {
+            String name = lambda.getImplMethodName();
+            String signature = lambda.getImplMethodSignature();
+            Method nameMatch = null;
+            for (Method candidate : containingClass.getDeclaredMethods()) {
+                if (!candidate.getName().equals(name)) {
+                    continue;
+                }
+                if (methodDescriptor(candidate).equals(signature)) {
+                    return candidate;
+                }
+                if (nameMatch == null) {
+                    nameMatch = candidate;
+                }
+            }
+            if (nameMatch != null) {
+                return nameMatch;
+            }
+            throw new UnableToGuessMethodException();
+        }
+
+        /** JVM method descriptor, e.g. {@code (I)I} for {@code int f(int)}. */
+        static String methodDescriptor(Method method) {
+            StringBuilder descriptor = new StringBuilder("(");
+            for (Class<?> parameterType : method.getParameterTypes()) {
+                descriptor.append(typeDescriptor(parameterType));
+            }
+            return descriptor.append(')').append(typeDescriptor(method.getReturnType())).toString();
+        }
+
+        /** JVM field/type descriptor for a single type. */
+        static String typeDescriptor(Class<?> type) {
+            if (type.isArray()) {
+                return "[" + typeDescriptor(type.getComponentType());
+            }
+            if (!type.isPrimitive()) {
+                return "L" + type.getName().replace('.', '/') + ";";
+            }
+            if (type == int.class) {
+                return "I";
+            }
+            if (type == long.class) {
+                return "J";
+            }
+            if (type == double.class) {
+                return "D";
+            }
+            if (type == boolean.class) {
+                return "Z";
+            }
+            if (type == float.class) {
+                return "F";
+            }
+            if (type == char.class) {
+                return "C";
+            }
+            if (type == byte.class) {
+                return "B";
+            }
+            if (type == short.class) {
+                return "S";
+            }
+            return "V"; // void
         }
 
         class UnableToGuessMethodException extends RuntimeException {

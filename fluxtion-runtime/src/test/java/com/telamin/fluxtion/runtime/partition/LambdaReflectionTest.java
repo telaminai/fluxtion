@@ -23,6 +23,14 @@ public class LambdaReflectionTest {
         return v * 2;
     }
 
+    static String fmt(int v) {
+        return "int:" + v;
+    }
+
+    static String fmt(long v) {
+        return "long:" + v;
+    }
+
     @Test
     public void unboundInstanceMethodReferenceResolvesContainingClass() {
         SerializableFunction<String, Integer> length = String::length;
@@ -79,5 +87,40 @@ public class LambdaReflectionTest {
         Class<?> resolved = ((MethodReferenceReflection) length)
                 .getContainingClass(String.class.getClassLoader());
         assertSame(String.class, resolved);
+    }
+
+    @Test
+    public void overloadedImplementationMethodIsDisambiguatedBySignature() {
+        // Both references target a method named "fmt"; method() must pick the overload
+        // matching the implementation-method signature, not the first by name.
+        SerializableFunction<Integer, String> intFmt = LambdaReflectionTest::fmt;
+        SerializableFunction<Long, String> longFmt = LambdaReflectionTest::fmt;
+
+        assertEquals(int.class, intFmt.method().getParameterTypes()[0]);
+        assertEquals(long.class, longFmt.method().getParameterTypes()[0]);
+        assertEquals("int:1", intFmt.apply(1));
+        assertEquals("long:1", longFmt.apply(1L));
+    }
+
+    @Test
+    public void methodReferenceIsRecognised() {
+        SerializableFunction<String, Integer> ref = String::length;
+        assertTrue(ref.isMethodReference());
+    }
+
+    @Test
+    public void concreteImplementingClassIsNotAMethodReference() {
+        class NamedFn implements SerializableFunction<String, Integer> {
+            @Override
+            public Integer apply(String s) {
+                return s.length();
+            }
+        }
+        SerializableFunction<String, Integer> named = new NamedFn();
+
+        // A concrete class has no synthetic writeReplace, so it is not introspectable as
+        // a method reference — callers should guard with isMethodReference().
+        assertFalse(named.isMethodReference());
+        assertEquals(3, (int) named.apply("abc"));
     }
 }
