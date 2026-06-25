@@ -41,11 +41,28 @@ public interface LambdaReflection {
         }
 
         default Class<?> getContainingClass() {
+            String className = serialized().getImplClass().replaceAll("/", ".");
+            // Resolve via the lambda's own class loader first, so a method reference whose
+            // implementation class lives in a non-default loader (for example compiled
+            // inline .fsql records, or any plugin/child class loader) resolves correctly.
+            // Fall back to the thread context loader, then the historic default (this
+            // interface's defining loader) for full backward compatibility.
             try {
-                String className = serialized().getImplClass().replaceAll("/", ".");
-                return Class.forName(className);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
+                return Class.forName(className, true, getClass().getClassLoader());
+            } catch (ClassNotFoundException | LinkageError ownLoaderMiss) {
+                ClassLoader contextLoader = Thread.currentThread().getContextClassLoader();
+                if (contextLoader != null) {
+                    try {
+                        return Class.forName(className, true, contextLoader);
+                    } catch (ClassNotFoundException | LinkageError ignored) {
+                        // fall through to the historic default
+                    }
+                }
+                try {
+                    return Class.forName(className);
+                } catch (ClassNotFoundException e) {
+                    throw new RuntimeException(e);
+                }
             }
         }
 
