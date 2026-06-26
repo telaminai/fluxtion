@@ -7,6 +7,14 @@ package com.telamin.fluxtion.runtime.flowfunction.aggregate.function.primitive;
 
 public class DoubleMinFlowFunction extends AbstractDoubleFlowFunction<DoubleMinFlowFunction> {
 
+    // Seed via the NaN sentinel: a fresh instance must start NaN so the first input is
+    // taken verbatim. The inherited `value` field defaults to 0.0, which through groupBy
+    // (the wrapper supplies a fresh, un-reset function per key) would make min() seed from
+    // 0.0 and leak it for all-positive groups. resetDouble() already restores NaN.
+    public DoubleMinFlowFunction() {
+        value = Double.NaN;
+    }
+
     @Override
     public double aggregateDouble(double input) {
         value = Double.isNaN(value) ? input : Math.min(value, input);
