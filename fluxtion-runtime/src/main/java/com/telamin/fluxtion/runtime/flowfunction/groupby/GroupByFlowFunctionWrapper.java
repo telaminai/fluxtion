@@ -12,6 +12,7 @@ import com.telamin.fluxtion.runtime.partition.LambdaReflection.SerializableFunct
 import com.telamin.fluxtion.runtime.partition.LambdaReflection.SerializableSupplier;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
@@ -35,6 +36,7 @@ public class GroupByFlowFunctionWrapper<T, K, V, A, F extends AggregateFlowFunct
     private transient final Map<K, AtomicLong> keyCount;
     private F latestAggregateValue;
     private KeyValue<K, A> keyValue;
+    private transient GroupByDelta<K, A> delta = GroupByDelta.recomputeRequired();
 
     public GroupByFlowFunctionWrapper(
             @AssignToField("keyFunction")
@@ -76,6 +78,8 @@ public class GroupByFlowFunctionWrapper<T, K, V, A, F extends AggregateFlowFunct
             targetFunction.combine(f);
             mapOfValues.put(k, targetFunction.get());
         });
+        // P1: combine touches many keys; multi-key window deltas are P3. Until then, signal recompute.
+        delta = GroupByDelta.recomputeRequired();
     }
 
     @Override
@@ -96,22 +100,34 @@ public class GroupByFlowFunctionWrapper<T, K, V, A, F extends AggregateFlowFunct
                 mapOfValues.put(k, targetFunction.get());
             }
         });
+        // P1: deduct touches many keys; multi-key window deltas are P3. Until then, signal recompute.
+        delta = GroupByDelta.recomputeRequired();
     }
 
     public GroupBy<K, A> aggregate(T input) {
         K key = keyFunction.apply(input);
         V value = valueFunction.apply(input);
         F currentFunction = mapOfFunctions.get(key);
-        if (currentFunction == null) {
+        boolean newKey = currentFunction == null;
+        if (newKey) {
             currentFunction = aggregateFunctionSupplier.get();
             mapOfFunctions.put(key, currentFunction);
             keyCount.computeIfAbsent(key, k -> new AtomicLong()).incrementAndGet();
         }
         currentFunction.aggregate(value);
         latestAggregateValue = currentFunction;
-        mapOfValues.put(key, latestAggregateValue.get());
-        keyValue = new KeyValue<>(key, latestAggregateValue.get());
+        A aggregated = latestAggregateValue.get();
+        mapOfValues.put(key, aggregated);
+        keyValue = new KeyValue<>(key, aggregated);
+        // P1 single-key producer delta: one event changes exactly one key.
+        delta = GroupByDelta.incremental(Collections.<Change<K, A>>singletonList(
+                new Change<>(key, aggregated, newKey ? ChangeOp.ADD : ChangeOp.UPDATE)));
         return this;
+    }
+
+    @Override
+    public GroupByDelta<K, A> delta() {
+        return delta;
     }
 
     @Override
@@ -141,6 +157,7 @@ public class GroupByFlowFunctionWrapper<T, K, V, A, F extends AggregateFlowFunct
         keyCount.clear();   // the recompute branch resets + re-combines every roll; combine increments
                             // keyCount, so without this clear the map grows unbounded (a slow leak).
         keyValue = null;
+        delta = GroupByDelta.cleared();
         return this;
     }
 
