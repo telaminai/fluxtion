@@ -10,7 +10,9 @@ import com.telamin.fluxtion.runtime.flowfunction.groupby.GroupBy.KeyValue;
 import com.telamin.fluxtion.runtime.partition.LambdaReflection.SerializableBiFunction;
 import com.telamin.fluxtion.runtime.partition.LambdaReflection.SerializableFunction;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -78,15 +80,56 @@ public class GroupByMapFlowFunction {
 //        return mapValues(inputMap);
     }
 
+    /**
+     * Delta-aware (P2b of the GroupBy delta IVM scope, {@code docs/design/groupby-delta-ivm.md}).
+     * {@code mapValues} is a 1:1 key-preserving transform, so each input {@link Change} maps to one
+     * output change with the same key and op and the transformed value — the output
+     * {@link GroupByDelta} mirrors the input's shape. {@link DeltaMode#RECOMPUTE_REQUIRED} upstream
+     * (e.g. a join or windowed combine) falls back to a full rescan and propagates
+     * {@code RECOMPUTE_REQUIRED}; {@code toMap()} is always the full mapped state.
+     */
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public <K, V> GroupBy<K, V> mapValues(GroupBy inputMap) {
-        outputCollection.reset();
-        inputMap.toMap().entrySet().forEach(e -> {
-            Entry entry = (Entry) e;
-            outputCollection.toMap().put(entry.getKey(), mapFunction.apply(entry.getValue()));
-        });
+        GroupByDelta delta = inputMap.delta();
+        Map outMap = outputCollection.toMap();
+
+        if (delta.mode() == DeltaMode.RECOMPUTE_REQUIRED) {
+            outputCollection.reset();
+            inputMap.toMap().forEach((k, v) -> outMap.put(k, mapFunction.apply(v)));
+            outputCollection.setDelta(GroupByDelta.recomputeRequired());
+            return outputCollection;
+        }
+
+        boolean clear = delta.mode() == DeltaMode.CLEAR_THEN_APPLY;
+        if (clear) {
+            outputCollection.reset();
+        }
+        List outChanges = new ArrayList();
+        List<Change> entries = delta.entries();
+        for (int i = 0; i < entries.size(); i++) {
+            Change c = entries.get(i);
+            if (c.op() == ChangeOp.DELETE) {
+                Object previous = outMap.remove(c.key());
+                outChanges.add(Change.delete(c.key(), previous));
+            } else {
+                Object mapped = mapFunction.apply(c.value());
+                outMap.put(c.key(), mapped);
+                outChanges.add(new Change(c.key(), mapped, c.op()));
+            }
+        }
+        outputCollection.setDelta(clear
+                ? GroupByDelta.clearThenApply(outChanges)
+                : GroupByDelta.incremental(outChanges));
         return outputCollection;
     }
 
+    /**
+     * Not delta-aware: a key remap may be non-injective (two input keys → one output key), and an
+     * incremental DELETE cannot know whether another input key still occupies the output slot —
+     * correct incremental maintenance is a groupBy-shaped (ref-counted) problem, deferred. So
+     * {@code mapKeys} stays a full recompute and propagates {@link DeltaMode#RECOMPUTE_REQUIRED}
+     * downstream (via {@code reset()}), which is always correct, just not O(Δ).
+     */
     public <K, V> GroupBy<K, V> mapKeys(GroupBy inputMap) {
         outputCollection.reset();
         inputMap.toMap().entrySet().forEach(e -> {
