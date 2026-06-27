@@ -43,8 +43,20 @@ public final class Change<K, V> {
         return new Change<>(key, value, ChangeOp.UPDATE);
     }
 
+    /**
+     * A DELETE whose {@code value} is left null. For a DELETE the {@code key} is authoritative;
+     * consumers must not require {@code value} unless using a delete-aware API contract.
+     */
     public static <K, V> Change<K, V> delete(K key) {
         return new Change<>(key, null, ChangeOp.DELETE);
+    }
+
+    /**
+     * A DELETE that carries the previous visible value, for delete-aware consumers (materialised views,
+     * actions). Map-derived consumers ignore the value and simply remove the key.
+     */
+    public static <K, V> Change<K, V> delete(K key, V previousValue) {
+        return new Change<>(key, previousValue, ChangeOp.DELETE);
     }
 
     public K key() {
