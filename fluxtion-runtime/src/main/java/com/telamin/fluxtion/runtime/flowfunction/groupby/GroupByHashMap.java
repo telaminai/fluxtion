@@ -15,10 +15,27 @@ import java.util.Map;
 public class GroupByHashMap<K, V> implements GroupBy<K, V>, Stateful<GroupBy<K, V>> {
     @FluxtionIgnore
     private final Map<K, V> map = new HashMap<>();
+    @FluxtionIgnore
+    private transient GroupByDelta<K, V> delta = GroupByDelta.recomputeRequired();
 
     public GroupByHashMap<K, V> add(KeyValue<K, V> keyValue) {
         map.put(keyValue.getKey(), keyValue.getValue());
         return this;
+    }
+
+    /**
+     * Record the change set this collection represents for the current cycle. Delta-aware operators
+     * (P1+) set this; until then it stays {@link GroupByDelta#recomputeRequired()} so consumers
+     * recompute (unchanged behaviour).
+     */
+    public GroupByHashMap<K, V> setDelta(GroupByDelta<K, V> delta) {
+        this.delta = delta;
+        return this;
+    }
+
+    @Override
+    public GroupByDelta<K, V> delta() {
+        return delta;
     }
 
     public GroupByHashMap<K, V> fromMap(Map<K, V> fromMap) {
@@ -30,6 +47,7 @@ public class GroupByHashMap<K, V> implements GroupBy<K, V>, Stateful<GroupBy<K, 
     @Override
     public GroupBy<K, V> reset() {
         map.clear();
+        delta = GroupByDelta.recomputeRequired();
         return this;
     }
 
