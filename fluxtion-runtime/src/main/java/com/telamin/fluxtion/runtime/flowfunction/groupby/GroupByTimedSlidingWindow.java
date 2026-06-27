@@ -45,6 +45,11 @@ public class GroupByTimedSlidingWindow<T, K, V, R, S extends FlowFunction<T>, F 
     private transient BucketedSlidingWindow<T, GroupBy<K, R>, GroupByFlowFunctionWrapper<T, K, V, R, F>> slidingCalculator;
     private transient final Map<K, R> mapOfValues = new HashMap<>();
     private transient final MyGroupBy results = new MyGroupBy();
+    // P3 layer 2 (sliding-invertible only). Bootstrap-safe defaults: false/null so AOT transient zeroing
+    // can never accidentally treat a later publish as the first one.
+    private transient boolean windowBootstrapped = false;
+    private transient boolean publishIsBootstrap = false;
+    private transient Boolean deductSupportedCache;
 
 
     public GroupByTimedSlidingWindow(
@@ -90,6 +95,10 @@ public class GroupByTimedSlidingWindow<T, K, V, R, S extends FlowFunction<T>, F 
         slidingCalculator.roll(rollTrigger.getTriggerCount());
         if (slidingCalculator.isAllBucketsFilled()) {
             cacheWindowValue();
+            // The first published window covers the whole warm-up the downstream never saw -> publish
+            // RECOMPUTE_REQUIRED for it; every slide after is an O(Δ) incremental delta.
+            publishIsBootstrap = !windowBootstrapped;
+            windowBootstrapped = true;
             publishOverrideTriggered = !overridePublishTrigger & !overrideUpdateTrigger;
             inputStreamTriggered_1 = true;
             inputStreamTriggered = true;
@@ -115,6 +124,15 @@ public class GroupByTimedSlidingWindow<T, K, V, R, S extends FlowFunction<T>, F 
         slidingCalculator = new BucketedSlidingWindow<>(groupBySupplier, bucketCount);
         rollTrigger.init();
         mapOfValues.clear();
+        windowBootstrapped = false; // a reset re-bootstraps: next first publish is RECOMPUTE_REQUIRED again
+    }
+
+    /** Whether the per-value aggregate is invertible — only then is a sliding delta exact. */
+    private boolean deductSupported() {
+        if (deductSupportedCache == null) {
+            deductSupportedCache = windowFunctionSupplier.get().deductSupported();
+        }
+        return deductSupportedCache;
     }
 
     @Override
@@ -132,6 +150,17 @@ public class GroupByTimedSlidingWindow<T, K, V, R, S extends FlowFunction<T>, F 
         @Override
         public Map<K, R> toMap() {
             return mapOfValues;
+        }
+
+        @Override
+        public GroupByDelta<K, R> delta() {
+            // Always consume the producer's accumulated roll delta to close its cycle (so the next roll
+            // starts fresh), even when we then publish RECOMPUTE_REQUIRED.
+            GroupByDelta<K, R> slide = slidingCalculator.get().delta();
+            if (!deductSupported() || publishIsBootstrap) {
+                return GroupByDelta.recomputeRequired();
+            }
+            return slide;
         }
 
         @Override
