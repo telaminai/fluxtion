@@ -11,7 +11,9 @@ import com.telamin.fluxtion.runtime.partition.LambdaReflection.SerializableFunct
 import com.telamin.fluxtion.runtime.partition.LambdaReflection.SerializableSupplier;
 import org.junit.Test;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
@@ -82,14 +84,26 @@ public class GroupByFlowFunctionWrapperDeltaTest {
     }
 
     @Test
-    public void combineSignalsRecomputeRequired() {
+    public void combineEmitsMultiKeyIncrementalDelta() {
+        // P3: combine now accumulates the per-key changes from the merged bucket into one incremental
+        // delta (windowed multi-key producer delta), rather than signalling RECOMPUTE_REQUIRED.
         GroupByFlowFunctionWrapper<Ev, String, Integer, Integer, IntSumFlowFunction> a = newSumGroup();
         GroupByFlowFunctionWrapper<Ev, String, Integer, Integer, IntSumFlowFunction> b = newSumGroup();
         a.aggregate(new Ev("A", 5));
         b.aggregate(new Ev("A", 9));
+        b.aggregate(new Ev("B", 2));
 
-        a.combine(b);
-        assertEquals(DeltaMode.RECOMPUTE_REQUIRED, a.delta().mode());
+        a.combine(b); // A: 5 (existing) + 9 -> 14 UPDATE; B: new -> 2 ADD
+        GroupByDelta<String, Integer> d = a.delta();
+        assertEquals(DeltaMode.INCREMENTAL, d.mode());
+        assertEquals(2, d.entries().size());
+
+        Map<String, Change<String, Integer>> byKey = new HashMap<>();
+        for (Change<String, Integer> c : d.entries()) {
+            byKey.put(c.key(), c);
+        }
+        assertEquals(new Change<>("A", 14, ChangeOp.UPDATE), byKey.get("A"));
+        assertEquals(new Change<>("B", 2, ChangeOp.ADD), byKey.get("B"));
     }
 
     @Test
