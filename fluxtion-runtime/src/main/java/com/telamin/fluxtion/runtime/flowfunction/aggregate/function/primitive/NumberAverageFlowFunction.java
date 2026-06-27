@@ -62,6 +62,12 @@ public class NumberAverageFlowFunction
         updateAverage();
     }
 
+    /** Invertible: carries (sum, count) so {@code deduct} is a true inverse of {@code combine}. */
+    @Override
+    public boolean deductSupported() {
+        return true;
+    }
+
     private void updateAverage() {
         if (count <= 0) {
             count = 0;

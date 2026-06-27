@@ -8,11 +8,11 @@ package com.telamin.fluxtion.runtime.flowfunction.aggregate.function;
 import com.telamin.fluxtion.runtime.flowfunction.aggregate.function.primitive.DoubleMaxFlowFunction;
 import com.telamin.fluxtion.runtime.flowfunction.aggregate.function.primitive.DoubleMinFlowFunction;
 import com.telamin.fluxtion.runtime.flowfunction.aggregate.function.primitive.IntMaxFlowFunction;
+import com.telamin.fluxtion.runtime.flowfunction.aggregate.function.primitive.IntSumFlowFunction;
 import com.telamin.fluxtion.runtime.flowfunction.groupby.GroupBy;
 import com.telamin.fluxtion.runtime.flowfunction.groupby.GroupByFlowFunctionWrapper;
 import com.telamin.fluxtion.runtime.partition.LambdaReflection.SerializableFunction;
 import com.telamin.fluxtion.runtime.partition.LambdaReflection.SerializableSupplier;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.Set;
@@ -36,12 +36,11 @@ import static org.junit.Assert.assertFalse;
  * the full-recompute branch in {@link BucketedSlidingWindow#roll(int)}. The bugs below are all
  * cases where a non-invertible aggregate is wrongly routed onto the deduct path.
  *
- * <p><b>@Ignore</b>: these reproduce OPEN bugs and fail/error today (3 failures, 1 error). They are
- * committed disabled so the module build stays green; remove the {@code @Ignore} to verify a fix —
- * all four must then pass with no edit to the assertions.
+ * <p>These previously reproduced three open bugs (3 failures + 1 error). The minimal runtime fixes
+ * are now applied — grouped wrapper {@code deductSupported()} delegation + {@code keyCount} clear,
+ * {@code AggregateToSet}/{@code List} marked non-invertible, and a {@code DoubleMin} NaN guard — so
+ * all four now pass. They remain as regression guards.
  */
-@Ignore("Reproduces open sliding-window deduct/invertibility bugs (see internal regression notes). "
-        + "Remove @Ignore to verify the fix.")
 public class WindowingDeductInvertibilityTest {
 
     /** Minimal input: a symbol-keyed price. Plain class (not a record) to keep the source level low. */
@@ -181,5 +180,58 @@ public class WindowingDeductInvertibilityTest {
         min.aggregateDouble(5.0);
         min.aggregateDouble(Double.NaN);
         assertEquals("Min must ignore NaN symmetrically with Max", 5.0, min.getAsDouble(), 0.0);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Branch correctness — the deduct path (invertible) and the recompute path (non-invertible) must
+    // both give the right window value after a bucket expires.
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * Deduct path regression guard: a grouped sliding <b>sum</b> (invertible) keeps the O(Δ) deduct
+     * path after the routing change in Fix 1, and stays correct when a key spans both buckets and the
+     * oldest expires. Window = live buckets {A:9} + {A:3} = 12.
+     */
+    @Test
+    public void groupedSlidingSumStaysCorrectOnDeductPathAcrossExpiry() {
+        SerializableFunction<Quote, String> keyFn = Quote::sym;
+        SerializableFunction<Quote, Integer> valFn = Quote::px;
+        SerializableSupplier<IntSumFlowFunction> aggFn = IntSumFlowFunction::new;
+        Supplier<GroupByFlowFunctionWrapper<Quote, String, Integer, Integer, IntSumFlowFunction>> supplier =
+                () -> new GroupByFlowFunctionWrapper<>(keyFn, valFn, aggFn);
+
+        BucketedSlidingWindow<Quote, GroupBy<String, Integer>,
+                GroupByFlowFunctionWrapper<Quote, String, Integer, Integer, IntSumFlowFunction>> window =
+                new BucketedSlidingWindow<>(supplier, 2);
+
+        window.aggregate(new Quote("AAA", 5));
+        window.roll();
+        window.aggregate(new Quote("AAA", 9));
+        window.roll();
+        window.aggregate(new Quote("AAA", 3));
+        window.roll();      // bucket0 (AAA:5) expires via deduct
+
+        assertEquals("sliding sum over the two live buckets {9, 3}",
+                Integer.valueOf(12), window.get().toMap().get("AAA"));
+    }
+
+    /**
+     * Recompute path correctness: a non-grouped sliding <b>max</b> (non-invertible) recomputes from
+     * the live buckets on each roll. After the oldest bucket (5) expires, the window = max(9, 3) = 9.
+     */
+    @Test
+    public void nonGroupedSlidingMaxRecomputeCorrectAcrossExpiry() {
+        BucketedSlidingWindow<Integer, Integer, IntMaxFlowFunction> window =
+                new BucketedSlidingWindow<>(IntMaxFlowFunction::new, 2);
+
+        window.aggregate(5);
+        window.roll();
+        window.aggregate(9);
+        window.roll();
+        window.aggregate(3);
+        window.roll();      // bucket0 (5) expires; recompute over live buckets {9, 3}
+
+        assertEquals("sliding max over the two live buckets {9, 3}",
+                Integer.valueOf(9), window.get());
     }
 }

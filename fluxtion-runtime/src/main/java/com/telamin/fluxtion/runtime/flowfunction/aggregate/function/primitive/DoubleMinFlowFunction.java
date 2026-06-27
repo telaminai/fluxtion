@@ -17,7 +17,11 @@ public class DoubleMinFlowFunction extends AbstractDoubleFlowFunction<DoubleMinF
 
     @Override
     public double aggregateDouble(double input) {
-        value = Double.isNaN(value) ? input : Math.min(value, input);
+        // Guard NaN symmetrically with DoubleMax: Math.min(x, NaN) == NaN would otherwise poison the
+        // running min permanently until reset.
+        if (!Double.isNaN(input)) {
+            value = Double.isNaN(value) ? input : Math.min(value, input);
+        }
         return getAsDouble();
     }
 

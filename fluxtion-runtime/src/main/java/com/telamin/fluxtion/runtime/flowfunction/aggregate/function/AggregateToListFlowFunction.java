@@ -43,6 +43,19 @@ public class AggregateToListFlowFunction<T> implements AggregateFlowFunction<T, 
         list.removeAll(add.list);
     }
 
+    /**
+     * Non-invertible: {@code removeAll} is not the inverse of {@code addAll} (it strips every equal
+     * element, ignoring multiplicity and the bounded {@code maxElementCount} FIFO), so {@code false}
+     * routes sliding windows onto the full-recompute branch. NOTE: recompute re-combines buckets in
+     * array-index order, not chronological order after ring-buffer wraparound — so ordered / bounded
+     * {@code toList} under a sliding window remains a tracked design follow-up (see the regression
+     * notes), this change only stops the silent {@code removeAll} corruption.
+     */
+    @Override
+    public boolean deductSupported() {
+        return false;
+    }
+
     @Override
     public List<T> get() {
         return list;

@@ -56,6 +56,17 @@ public class GroupByFlowFunctionWrapper<T, K, V, A, F extends AggregateFlowFunct
         return this;
     }
 
+    /**
+     * Delegate to the inner per-key aggregate. The wrapper's {@code combine}/{@code deduct} are only
+     * invertible when the inner aggregate is — e.g. sum/count/average. For a non-invertible inner
+     * aggregate (min/max), this returns {@code false} so {@code BucketedSlidingWindow} takes the
+     * full-recompute branch instead of calling the inner {@code deduct} (which throws).
+     */
+    @Override
+    public boolean deductSupported() {
+        return aggregateFunctionSupplier.get().deductSupported();
+    }
+
     @Override
     public void combine(GroupByFlowFunctionWrapper<T, K, V, A, F> add) {
         //merge each if existing
@@ -127,6 +138,8 @@ public class GroupByFlowFunctionWrapper<T, K, V, A, F extends AggregateFlowFunct
     public GroupBy<K, A> reset() {
         mapOfFunctions.clear();
         mapOfValues.clear();
+        keyCount.clear();   // the recompute branch resets + re-combines every roll; combine increments
+                            // keyCount, so without this clear the map grows unbounded (a slow leak).
         keyValue = null;
         return this;
     }
