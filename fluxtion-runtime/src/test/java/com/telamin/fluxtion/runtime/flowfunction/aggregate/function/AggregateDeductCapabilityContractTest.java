@@ -25,8 +25,8 @@ import static org.junit.Assert.fail;
  *
  * <p>{@code deductSupported()} is a correctness boundary: it tells {@code BucketedSlidingWindow}
  * whether it may subtract an expiring bucket (O(Δ) deduct path) or must recompute from the live
- * buckets. The interface default is {@code false} (safe-by-default), so an aggregate is invertible
- * ONLY if it explicitly opts in AND backs that with a real {@code deduct}.
+ * buckets. It has <b>no default</b> — every aggregate must declare its capability explicitly — so an
+ * aggregate is invertible ONLY if it returns {@code true} AND backs that with a real {@code deduct}.
  *
  * <p>This test enumerates <b>every</b> built-in {@link Aggregates} factory by reflection and asserts:
  * <ol>
