@@ -100,7 +100,7 @@ public class GroupByFlowBuilder<K, V> extends AbstractGroupByBuilder<K, V, com.t
     public <R, F extends AggregateFlowFunction<V, R, F>> FlowBuilder<R> reduceValues(
             SerializableSupplier<F> aggregateFactory) {
         return new FlowBuilder<>(new MapRef2RefFlowFunction<>(eventStream,
-                new com.telamin.fluxtion.runtime.flowfunction.groupby.GroupByReduceFlowFunction(aggregateFactory.get())::reduceValues));
+                new com.telamin.fluxtion.runtime.flowfunction.groupby.GroupByReduceFlowFunction(aggregateFactory)::reduceValues));
     }
 
     /**
