@@ -6,6 +6,7 @@
 package com.telamin.fluxtion.runtime.flowfunction.helpers;
 
 import com.telamin.fluxtion.runtime.annotations.OnTrigger;
+import com.telamin.fluxtion.runtime.event.NamedFeedEvent;
 import com.telamin.fluxtion.runtime.flowfunction.Stateful;
 import com.telamin.fluxtion.runtime.flowfunction.groupby.GroupBy;
 import com.telamin.fluxtion.runtime.flowfunction.groupby.TopNByValue;
@@ -41,6 +42,11 @@ public interface Mappers {
     @SuppressWarnings("all")
     public static <T, R> R cast(T in) {
         return (R) in;
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> T namedFeedData(Object in) {
+        return ((NamedFeedEvent<T>) in).data();
     }
 
     static double nanToZero(double in) {
