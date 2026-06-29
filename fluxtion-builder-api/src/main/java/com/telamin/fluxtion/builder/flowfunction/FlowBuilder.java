@@ -388,6 +388,28 @@ public class FlowBuilder<T> extends AbstractFlowBuilder<T, FlowBuilder<T>> imple
         return groupByTumbling(keyFunction, valueFunction, Aggregates.identityFactory(), bucketSizeMillis);
     }
 
+    /**
+     * Event-time tumbling group-by: identical to {@link #groupByTumbling(SerializableFunction,
+     * SerializableFunction, SerializableSupplier, int)} but the window rolls on event-time (the graph
+     * {@code Clock}'s {@code getEventTime()}, sourced from each input {@code Event}) rather than wallclock.
+     * The first window edge aligns to the first event seen, and the window only advances on events that
+     * carry an event-time. Use when the bucket boundaries must follow when events <em>happened</em>, not
+     * when they arrived.
+     */
+    public <V, K, A, F extends AggregateFlowFunction<V, A, F>> GroupByFlowBuilder<K, A>
+    groupByTumblingEventTime(SerializableFunction<T, K> keyFunction,
+                             SerializableFunction<T, V> valueFunction,
+                             SerializableSupplier<F> aggregateFunctionSupplier,
+                             int bucketSizeMillis) {
+        return new GroupByFlowBuilder<>(new com.telamin.fluxtion.runtime.flowfunction.groupby.GroupByTumblingEventTimeWindow<>(
+                eventStream,
+                aggregateFunctionSupplier,
+                keyFunction,
+                valueFunction,
+                bucketSizeMillis
+        ));
+    }
+
     public <V, K, A, F extends AggregateFlowFunction<V, A, F>> GroupByFlowBuilder<K, A>
     groupBySliding(SerializableFunction<T, K> keyFunction,
                    SerializableFunction<T, V> valueFunction,
