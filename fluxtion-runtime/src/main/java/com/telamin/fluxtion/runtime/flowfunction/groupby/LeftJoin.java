@@ -5,25 +5,11 @@
 
 package com.telamin.fluxtion.runtime.flowfunction.groupby;
 
-import com.telamin.fluxtion.runtime.flowfunction.Tuple;
-
 public class LeftJoin extends AbstractJoin {
 
+    /** Left: every left key is in the join (the right value may be null). */
     @Override
-    @SuppressWarnings("unckecked")
-    public <K1, V1, K2 extends K1, V2> GroupBy<K1, Tuple<V1, V2>> join(
-            GroupBy<K1, V1> leftGroupBy, GroupBy<K2, V2> rightGroupBY) {
-        reset();
-        if (leftGroupBy != null) {
-            leftGroupBy.toMap().entrySet().forEach(left -> {
-                V2 right = rightGroupBY == null ? null : rightGroupBY.toMap().get(left.getKey());
-//                joinedGroup.toMap().put(left.getKey(), Tuple.build(left.getValue(), right));
-                joinedGroup.toMap().put(
-                        left.getKey(),
-                        tupleObjectPool.checkOut().setFirst(left.getValue()).setSecond(right));
-            });
-        }
-        return (GroupBy<K1, Tuple<V1, V2>>) (Object) joinedGroup;
+    protected boolean included(boolean leftPresent, boolean rightPresent) {
+        return leftPresent;
     }
-
 }
