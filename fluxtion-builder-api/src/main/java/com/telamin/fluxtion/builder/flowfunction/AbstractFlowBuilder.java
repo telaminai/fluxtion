@@ -213,6 +213,19 @@ public abstract class AbstractFlowBuilder<T, B extends AbstractFlowBuilder<T, B>
         return console("{}");
     }
 
+    /**
+     * Pass-through tap that emits structured key/value entries to the graph audit log on each trigger.
+     * The {@code auditEmitter} receives this tap's injected {@link com.telamin.fluxtion.runtime.audit.EventLogger}
+     * plus the streamed value and writes the desired keys at the desired severity, e.g.
+     * {@code (log, t) -> log.info("symbol", t.symbol())}. Observation only — the value flows downstream
+     * unchanged. The entry severity is the emitter's choice ({@code log.info/debug/…}); the host-configured
+     * audit level is the filter. Use a named method reference so the construct regenerates under AOT.
+     */
+    public B auditLog(LambdaReflection.SerializableBiConsumer<com.telamin.fluxtion.runtime.audit.EventLogger, T> auditEmitter) {
+        return connect(new com.telamin.fluxtion.runtime.flowfunction.function.AuditLogFlowFunction<>(
+                eventStream, auditEmitter));
+    }
+
     public IntFlowBuilder mapToInt(LambdaReflection.SerializableToIntFunction<T> mapFunction) {
         return new IntFlowBuilder(new MapRef2ToIntFlowFunction<>(eventStream, mapFunction));
     }
