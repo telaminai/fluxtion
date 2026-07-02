@@ -5,12 +5,15 @@ import com.telamin.fluxtion.runtime.partition.LambdaReflection.SerializableFunct
 import com.telamin.fluxtion.runtime.partition.LambdaReflection.SerializableSupplier;
 import org.junit.Test;
 
+import java.lang.invoke.SerializedLambda;
 import java.util.ArrayList;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * Behavioural contract for {@link LambdaReflection.MethodReferenceReflection} — the
@@ -81,6 +84,81 @@ public class LambdaReflectionTest {
     }
 
     @Test
+    public void lambdaAotSupportClassifiesFunctionalForms() {
+        SerializableFunction<String, Integer> methodReference = String::length;
+        SerializableFunction<Integer, Integer> inline = v -> v + 1;
+        int threshold = 10;
+        SerializableFunction<Integer, Boolean> capturingInline = v -> v >= threshold;
+        String receiver = "hello";
+        SerializableSupplier<Integer> boundReference = receiver::length;
+        SerializableSupplier<ArrayList> constructorReference = ArrayList::new;
+
+        assertEquals(
+                LambdaAotSupport.LambdaKind.METHOD_REFERENCE,
+                LambdaAotSupport.analyse(methodReference).getKind());
+        assertEquals(
+                LambdaAotSupport.LambdaKind.NON_CAPTURING_INLINE_LAMBDA,
+                LambdaAotSupport.analyse(inline).getKind());
+        assertEquals(
+                LambdaAotSupport.LambdaKind.CAPTURING_INLINE_LAMBDA,
+                LambdaAotSupport.analyse(capturingInline).getKind());
+        assertEquals(
+                LambdaAotSupport.LambdaKind.BOUND_INSTANCE_REFERENCE,
+                LambdaAotSupport.analyse(boundReference).getKind());
+        assertEquals(
+                LambdaAotSupport.LambdaKind.CONSTRUCTOR_REFERENCE,
+                LambdaAotSupport.analyse(constructorReference).getKind());
+    }
+
+    @Test
+    public void lambdaAotSupportRecreatesNonCapturingInlineLambdaFromSerializedMetadata() {
+        SerializableFunction<Integer, Integer> inc = v -> v + 1;
+
+        LambdaAotSupport.LambdaAnalysis analysis = LambdaAotSupport.analyse(inc);
+        assertEquals(LambdaAotSupport.LambdaKind.NON_CAPTURING_INLINE_LAMBDA, analysis.getKind());
+        assertNotNull(analysis.getSerializedLambda());
+        assertEquals(0, analysis.getCapturedArgCount());
+
+        SerializableFunction<Integer, Integer> recreated = recreateFunction(analysis.getSerializedLambda());
+
+        assertEquals(42, (int) recreated.apply(41));
+        assertEquals(0, recreated.captured().length);
+        assertEquals(
+                LambdaAotSupport.LambdaKind.NON_CAPTURING_INLINE_LAMBDA,
+                LambdaAotSupport.analyse(recreated).getKind());
+    }
+
+    @Test
+    public void lambdaAotSupportRecreatesNonCapturingInlineLambdaFromGeneratedMetadataShape() {
+        SerializableFunction<Integer, Integer> inc = v -> v + 1;
+        SerializedLambda lambda = inc.serialized();
+
+        SerializableFunction<Integer, Integer> recreated = recreateFunctionFromFields(
+                LambdaReflectionTest.class,
+                lambda.getImplMethodKind(),
+                lambda.getImplMethodName(),
+                lambda.getImplMethodSignature(),
+                lambda.getFunctionalInterfaceMethodName(),
+                lambda.getFunctionalInterfaceMethodSignature(),
+                lambda.getInstantiatedMethodType());
+
+        assertEquals(12, (int) recreated.apply(11));
+    }
+
+    @Test
+    public void lambdaAotSupportRejectsCapturingLambdaRecreation() {
+        int offset = 1;
+        SerializableFunction<Integer, Integer> capturing = v -> v + offset;
+
+        try {
+            recreateFunction(capturing.serialized());
+            fail("capturing lambda recreation should fail");
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("capturedArgCount=1"));
+        }
+    }
+
+    @Test
     public void getContainingClassWithExplicitLoaderHonoursThatLoader() {
         SerializableFunction<String, Integer> length = String::length;
 
@@ -122,5 +200,35 @@ public class LambdaReflectionTest {
         // a method reference — callers should guard with isMethodReference().
         assertFalse(named.isMethodReference());
         assertEquals(3, (int) named.apply("abc"));
+        assertEquals(
+                LambdaAotSupport.LambdaKind.CONCRETE_FUNCTION_OBJECT,
+                LambdaAotSupport.analyse(named).getKind());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static SerializableFunction<Integer, Integer> recreateFunction(SerializedLambda lambda) {
+        return (SerializableFunction<Integer, Integer>) LambdaAotSupport.recreateNonCapturingLambda(
+                (Class) SerializableFunction.class,
+                lambda);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static SerializableFunction<Integer, Integer> recreateFunctionFromFields(
+            Class<?> implementationClass,
+            int implementationMethodKind,
+            String implementationMethodName,
+            String implementationMethodDescriptor,
+            String functionalInterfaceMethodName,
+            String functionalInterfaceMethodDescriptor,
+            String instantiatedMethodDescriptor) {
+        return (SerializableFunction<Integer, Integer>) LambdaAotSupport.recreateNonCapturingLambda(
+                (Class) SerializableFunction.class,
+                implementationClass,
+                implementationMethodKind,
+                implementationMethodName,
+                implementationMethodDescriptor,
+                functionalInterfaceMethodName,
+                functionalInterfaceMethodDescriptor,
+                instantiatedMethodDescriptor);
     }
 }
