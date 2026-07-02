@@ -60,6 +60,13 @@ public class GroupByReduceFlowFunction {
         List<Change> entries = delta.entries();
         for (int i = 0; i < entries.size(); i++) {
             Change c = entries.get(i);
+            if ((c.op() == ChangeOp.UPDATE || c.op() == ChangeOp.DELETE)
+                    && (!seen.containsKey(c.key()) || isNonFinite(seen.get(c.key())))) {
+                return (R) recompute(inputMap);
+            }
+        }
+        for (int i = 0; i < entries.size(); i++) {
+            Change c = entries.get(i);
             switch (c.op()) {
                 case ADD:
                     aggregateFunction.aggregate(c.value());
@@ -96,6 +103,22 @@ public class GroupByReduceFlowFunction {
         deductScratch.reset();
         deductScratch.aggregate(value);
         aggregateFunction.deduct(deductScratch);
+    }
+
+    /**
+     * Floating point NaN/infinity are not algebraically invertible under {@code deduct}. Once a
+     * running sum/average has been poisoned by a non-finite contribution, replacing or deleting that
+     * contribution cannot be repaired by {@code total -= old}; the only correct path is to rebuild from
+     * the current {@link GroupBy#toMap()}.
+     */
+    private static boolean isNonFinite(Object value) {
+        if (value instanceof Double) {
+            return !Double.isFinite((Double) value);
+        }
+        if (value instanceof Float) {
+            return !Float.isFinite((Float) value);
+        }
+        return false;
     }
 
     //required for serialised version
