@@ -107,11 +107,12 @@ public class MergeMapToNodeFlowFunction<T> implements TriggeredFlowFunction<T> {
 
     @Initialise
     public void init() {
-        allTriggersUpdated = false;
-        triggerList.clear();
+        requiredSet.clear();
         mergeProperties.stream()
+                .filter(MergeProperty::isMandatory)
                 .map(MergeProperty::getTrigger)
                 .forEach(requiredSet::add);
+        allTriggersUpdated = requiredSet.isEmpty();
     }
 
     @Override
