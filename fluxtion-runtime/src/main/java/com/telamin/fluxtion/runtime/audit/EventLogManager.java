@@ -72,8 +72,9 @@ public class EventLogManager implements Auditor {
     }
 
     public EventLogManager tracingOn(LogLevel level) {
-        trace = level != LogLevel.NONE;
-        this.traceLevel = level;
+        LogLevel resolvedLevel = level == null ? LogLevel.INFO : level;
+        trace = resolvedLevel != LogLevel.NONE;
+        this.traceLevel = resolvedLevel;
         return this;
     }
 
