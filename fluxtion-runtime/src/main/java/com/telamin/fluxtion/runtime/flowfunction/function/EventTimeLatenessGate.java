@@ -46,4 +46,17 @@ public class EventTimeLatenessGate {
         long windowStart = (eventTime / windowSizeMillis) * windowSizeMillis;
         return windowStart + windowSizeMillis + allowedLatenessMillis > watermark;
     }
+
+    /**
+     * The complement of {@link #inHorizon} for the {@code on late route to <sink>} side branch: true when the
+     * event's bucket is beyond the allowed-lateness horizon (so it should be routed to the late-data sink rather
+     * than aggregated). Read-only w.r.t. the watermark — {@link #inHorizon} on the main branch advances it. The
+     * current event's own bucket is never beyond-horizon relative to itself, so branch ordering is safe.
+     */
+    public boolean beyondHorizon(Event event) {
+        long eventTime = event.getEventTime();
+        long windowStart = (eventTime / windowSizeMillis) * windowSizeMillis;
+        long w = Math.max(watermark, eventTime);
+        return windowStart + windowSizeMillis + allowedLatenessMillis <= w;
+    }
 }
