@@ -22,13 +22,16 @@ import com.telamin.fluxtion.runtime.event.Event;
  */
 public class EventTimeLatenessGate {
 
+    private final long stepMillis;        // window advance: slide for HOP, size for TUMBLE
     private final long windowSizeMillis;
     private final long allowedLatenessMillis;
     private transient long watermark = Long.MIN_VALUE;
 
     public EventTimeLatenessGate(
+            @AssignToField("stepMillis") long stepMillis,
             @AssignToField("windowSizeMillis") long windowSizeMillis,
             @AssignToField("allowedLatenessMillis") long allowedLatenessMillis) {
+        this.stepMillis = stepMillis;
         this.windowSizeMillis = windowSizeMillis;
         this.allowedLatenessMillis = allowedLatenessMillis;
     }
@@ -43,8 +46,8 @@ public class EventTimeLatenessGate {
         if (eventTime > watermark) {
             watermark = eventTime;
         }
-        long windowStart = (eventTime / windowSizeMillis) * windowSizeMillis;
-        return windowStart + windowSizeMillis + allowedLatenessMillis > watermark;
+        long latestWindowStart = (eventTime / stepMillis) * stepMillis;
+        return latestWindowStart + windowSizeMillis + allowedLatenessMillis > watermark;
     }
 
     /**
@@ -55,8 +58,8 @@ public class EventTimeLatenessGate {
      */
     public boolean beyondHorizon(Event event) {
         long eventTime = event.getEventTime();
-        long windowStart = (eventTime / windowSizeMillis) * windowSizeMillis;
+        long latestWindowStart = (eventTime / stepMillis) * stepMillis;
         long w = Math.max(watermark, eventTime);
-        return windowStart + windowSizeMillis + allowedLatenessMillis <= w;
+        return latestWindowStart + windowSizeMillis + allowedLatenessMillis <= w;
     }
 }
