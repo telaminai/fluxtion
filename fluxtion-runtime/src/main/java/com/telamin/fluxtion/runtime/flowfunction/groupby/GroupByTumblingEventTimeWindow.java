@@ -37,9 +37,10 @@ import java.util.Map;
  * {@code windowSizeMillis} past the current edge, the completed window is published (one bucket per crossing)
  * and a fresh window begins, into which the triggering event is then aggregated.
  *
- * <p><b>Scope (first slice):</b> assumes broadly ordered event-time. An event whose event-time falls before
- * the current window edge (late / out-of-order) is aggregated into the current window rather than its own —
- * correct only for in-order streams. Watermarks + allowed-lateness + late-data routing are a later step.
+ * <p><b>Scope (allowed-lateness = 0):</b> a <b>late</b> event — one whose event-time falls before the current
+ * window edge, i.e. its bucket has already closed — is <b>dropped</b> (not aggregated into the current window,
+ * which would silently corrupt an unrelated bucket). Watermarks + a configurable allowed-lateness horizon +
+ * retract/re-emit of a closed bucket + late-data routing are a later slice (fsql-late-data.md).
  *
  * @param <T> input type
  * @param <K> key type from input T
@@ -107,6 +108,14 @@ public class GroupByTumblingEventTimeWindow<T, K, V, R, S extends FlowFunction<T
             // which event arrives first, matching standard event-time tumbling.
             windowStart = (eventTime / windowSizeMillis) * windowSizeMillis;
             primed = true;
+        } else if (eventTime < windowStart) {
+            // Late event (allowed-lateness = 0): its bucket already closed. DROP it — do NOT aggregate into the
+            // current bucket (that silently corrupts an unrelated window) and do NOT propagate. Allowed-lateness
+            // + retract/re-emit is a later slice (fsql-late-data.md).
+            publishOverrideTriggered = false;
+            inputStreamTriggered_1 = false;
+            inputStreamTriggered = false;
+            return;
         } else if (eventTime - windowStart >= windowSizeMillis) {
             // A whole bucket (or more) has elapsed in event-time: cache + publish the completed window,
             // reset the collection, and advance the edge by however many buckets were crossed.
