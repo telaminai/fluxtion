@@ -19,7 +19,7 @@ import com.telamin.fluxtion.runtime.partition.LambdaReflection.SerializableSuppl
 import com.telamin.fluxtion.runtime.time.Clock;
 
 import java.util.Collection;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -64,7 +64,9 @@ public class GroupByTumblingEventTimeWindow<T, K, V, R, S extends FlowFunction<T
 
     private final int windowSizeMillis;
 
-    private transient final Map<K, R> mapOfValues = new HashMap<>();
+    // LinkedHashMap: first-key-seen order → deterministic multi-key emit, identical interpreted/AOT (see
+    // GroupByHashMap / GroupByTumblingWindow).
+    private transient final Map<K, R> mapOfValues = new LinkedHashMap<>();
     private transient final MyGroupBy results = new MyGroupBy();
     private transient long windowStart;
     private transient boolean primed;

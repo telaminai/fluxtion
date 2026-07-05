@@ -18,7 +18,7 @@ import com.telamin.fluxtion.runtime.partition.LambdaReflection.SerializableSuppl
 import com.telamin.fluxtion.runtime.time.FixedRateTrigger;
 
 import java.util.Collection;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -43,7 +43,9 @@ public class GroupByTimedSlidingWindow<T, K, V, R, S extends FlowFunction<T>, F 
     public FixedRateTrigger rollTrigger;
     private transient Supplier<GroupByFlowFunctionWrapper<T, K, V, R, F>> groupBySupplier;
     private transient BucketedSlidingWindow<T, GroupBy<K, R>, GroupByFlowFunctionWrapper<T, K, V, R, F>> slidingCalculator;
-    private transient final Map<K, R> mapOfValues = new HashMap<>();
+    // LinkedHashMap: first-key-seen order → deterministic multi-key emit, identical interpreted/AOT (see
+    // GroupByHashMap / GroupByTumblingWindow).
+    private transient final Map<K, R> mapOfValues = new LinkedHashMap<>();
     private transient final MyGroupBy results = new MyGroupBy();
     // P3 layer 2 (sliding-invertible only). Bootstrap-safe defaults: false/null so AOT transient zeroing
     // can never accidentally treat a later publish as the first one.

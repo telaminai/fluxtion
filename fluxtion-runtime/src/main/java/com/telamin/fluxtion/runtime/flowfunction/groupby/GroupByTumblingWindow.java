@@ -18,7 +18,7 @@ import com.telamin.fluxtion.runtime.partition.LambdaReflection.SerializableSuppl
 import com.telamin.fluxtion.runtime.time.FixedRateTrigger;
 
 import java.util.Collection;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 
@@ -39,7 +39,9 @@ public class GroupByTumblingWindow<T, K, V, R, S extends FlowFunction<T>, F exte
     public GroupByFlowFunctionWrapper<T, K, V, R, F> groupByWindowedCollection;
     public FixedRateTrigger rollTrigger;
 
-    private transient final Map<K, R> mapOfValues = new HashMap<>();
+    // LinkedHashMap: preserve first-key-seen order so a multi-key window roll emits deterministically (see
+    // GroupByHashMap). Fed by putAll(groupByWindowedCollection.toMap()), which is itself insertion-ordered.
+    private transient final Map<K, R> mapOfValues = new LinkedHashMap<>();
     private transient final MyGroupBy results = new MyGroupBy();
 
     public GroupByTumblingWindow(

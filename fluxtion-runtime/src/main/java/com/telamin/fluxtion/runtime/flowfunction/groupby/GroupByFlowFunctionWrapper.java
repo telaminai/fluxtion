@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
@@ -58,7 +59,10 @@ public class GroupByFlowFunctionWrapper<T, K, V, A, F extends AggregateFlowFunct
         this.valueFunction = valueFunction;
         this.aggregateFunctionSupplier = aggregateFunctionSupplier;
         this.mapOfFunctions = new HashMap<>();
-        this.mapOfValues = new HashMap<>();
+        // LinkedHashMap: mapOfValues is the root aggregation store whose toMap() feeds every window's output and
+        // the join recompute path — first-key-seen order here makes multi-key emit deterministic and identical
+        // interpreted/AOT (see GroupByHashMap). mapOfFunctions/keyCount are bookkeeping, never iterated for emit.
+        this.mapOfValues = new LinkedHashMap<>();
         this.keyCount = new HashMap<>();
     }
 
