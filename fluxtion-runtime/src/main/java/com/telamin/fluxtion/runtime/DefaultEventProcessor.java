@@ -271,6 +271,12 @@ public class DefaultEventProcessor
   //EVENT BUFFERING - END
 
   private void auditEvent(Object typedEvent) {
+    // NON-EVENT-TIME FALLBACK — do NOT copy this as the event-time generation template.
+    // The static Object type binds to Clock.eventReceived(Object), which sets eventTime = processTime
+    // (see Clock.java): an Event's getEventTime() is IGNORED here. This is deliberate for the generic/legacy
+    // dispatch path, but the live interpreted/AOT paths must emit a concrete `instanceof <ConcreteEvent>`
+    // branch so the call binds to Clock.eventReceived(Event) and honours event-time. Generating a generic
+    // Object dispatch from this template would silently reintroduce interpreted/AOT event-time divergence.
     clock.eventReceived(typedEvent);
     nodeNameLookup.eventReceived(typedEvent);
     serviceRegistry.eventReceived(typedEvent);
