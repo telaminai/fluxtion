@@ -7,6 +7,7 @@ package com.telamin.fluxtion.runtime.flowfunction.function;
 
 import com.telamin.fluxtion.runtime.annotations.builder.AssignToField;
 import com.telamin.fluxtion.runtime.event.Event;
+import com.telamin.fluxtion.runtime.partition.LambdaReflection.SerializableFunction;
 
 /**
  * A stateful event-time watermark gate for late-data (allowed-lateness) windowing. Used as a
@@ -19,21 +20,27 @@ import com.telamin.fluxtion.runtime.event.Event;
  *
  * <p>Reads event-time from {@link Event#getEventTime()}, so one instance serves any event-time record (which
  * implements {@code Event}). The watermark is transient node state; the sizes are the persisted configuration.
+ *
+ * @param <B> the bucketed record type ({@code <q>__Bucketed}) for the HOP per-bucket horizon check; the event
+ *            branch ({@link #inHorizon}/{@link #beyondHorizon}) is independent of {@code B}.
  */
-public class EventTimeLatenessGate {
+public class EventTimeLatenessGate<B> {
 
     private final long stepMillis;        // window advance: slide for HOP, size for TUMBLE
     private final long windowSizeMillis;
     private final long allowedLatenessMillis;
+    private final SerializableFunction<B, Long> bucketWindowStartFn; // HOP per-bucket horizon; unused for TUMBLE
     private transient long watermark = Long.MIN_VALUE;
 
     public EventTimeLatenessGate(
             @AssignToField("stepMillis") long stepMillis,
             @AssignToField("windowSizeMillis") long windowSizeMillis,
-            @AssignToField("allowedLatenessMillis") long allowedLatenessMillis) {
+            @AssignToField("allowedLatenessMillis") long allowedLatenessMillis,
+            @AssignToField("bucketWindowStartFn") SerializableFunction<B, Long> bucketWindowStartFn) {
         this.stepMillis = stepMillis;
         this.windowSizeMillis = windowSizeMillis;
         this.allowedLatenessMillis = allowedLatenessMillis;
+        this.bucketWindowStartFn = bucketWindowStartFn;
     }
 
     /**
@@ -61,5 +68,19 @@ public class EventTimeLatenessGate {
         long latestWindowStart = (eventTime / stepMillis) * stepMillis;
         long w = Math.max(watermark, eventTime);
         return latestWindowStart + windowSizeMillis + allowedLatenessMillis <= w;
+    }
+
+    /**
+     * Per-bucket horizon check for a HOP (sliding) fan-out: a late event fans out to <em>every</em> overlapping
+     * window, but {@link #inHorizon} only decides on the event's <em>latest</em> window (enough to admit the
+     * event). Each fanned-out {@code <q>__Bucketed} row is then filtered here against its OWN window's horizon, so
+     * an earlier overlapping window that is already beyond {@code L} is dropped rather than resurrected. Read-only
+     * w.r.t. the watermark — {@link #inHorizon} on the upstream event branch advances it first (the bucket flow is
+     * downstream of that gate), so {@code watermark} is current. Exact for TUMBLE too (one bucket, same horizon as
+     * the event), where it is simply not wired.
+     */
+    public boolean bucketInHorizon(B bucket) {
+        long windowStart = bucketWindowStartFn.apply(bucket);
+        return windowStart + windowSizeMillis + allowedLatenessMillis > watermark;
     }
 }
