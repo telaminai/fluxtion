@@ -13,8 +13,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The memory-bounding companion to {@link EventTimeLatenessGate} for FSQL late-data windows (fsql-late-data.md
@@ -37,7 +39,9 @@ public class EventTimeBucketEvictor<B> {
     private final SerializableFunction<B, Long> windowStartFn;
     private final SerializableFunction<B, GroupByKey<B>> keyFn;
     private transient long watermark = Long.MIN_VALUE;
-    private transient final Map<Long, List<GroupByKey<B>>> keysByWindow = new LinkedHashMap<>();
+    // Live keys per window-start. A Set (insertion-ordered for deterministic eviction emit-order) dedups the
+    // repeated appends — a window receives one bucketed row per event, but many events share a (windowStart, key).
+    private transient final Map<Long, Set<GroupByKey<B>>> keysByWindow = new LinkedHashMap<>();
 
     public EventTimeBucketEvictor(
             @AssignToField("windowSizeMillis") long windowSizeMillis,
@@ -56,11 +60,11 @@ public class EventTimeBucketEvictor<B> {
         if (windowStart > watermark) {
             watermark = windowStart;
         }
-        keysByWindow.computeIfAbsent(windowStart, k -> new ArrayList<>()).add(keyFn.apply(bucketed));
+        keysByWindow.computeIfAbsent(windowStart, k -> new LinkedHashSet<>()).add(keyFn.apply(bucketed));
         List<GroupByKey<B>> evicted = new ArrayList<>();
-        Iterator<Map.Entry<Long, List<GroupByKey<B>>>> it = keysByWindow.entrySet().iterator();
+        Iterator<Map.Entry<Long, Set<GroupByKey<B>>>> it = keysByWindow.entrySet().iterator();
         while (it.hasNext()) {
-            Map.Entry<Long, List<GroupByKey<B>>> e = it.next();
+            Map.Entry<Long, Set<GroupByKey<B>>> e = it.next();
             if (e.getKey() + windowSizeMillis + allowedLatenessMillis <= watermark) {
                 evicted.addAll(e.getValue());
                 it.remove();

@@ -53,7 +53,7 @@ public class EventTimeLatenessGate<B> {
         if (eventTime > watermark) {
             watermark = eventTime;
         }
-        long latestWindowStart = (eventTime / stepMillis) * stepMillis;
+        long latestWindowStart = Math.floorDiv(eventTime, stepMillis) * stepMillis;
         return latestWindowStart + windowSizeMillis + allowedLatenessMillis > watermark;
     }
 
@@ -65,7 +65,7 @@ public class EventTimeLatenessGate<B> {
      */
     public boolean beyondHorizon(Event event) {
         long eventTime = event.getEventTime();
-        long latestWindowStart = (eventTime / stepMillis) * stepMillis;
+        long latestWindowStart = Math.floorDiv(eventTime, stepMillis) * stepMillis;
         long w = Math.max(watermark, eventTime);
         return latestWindowStart + windowSizeMillis + allowedLatenessMillis <= w;
     }
