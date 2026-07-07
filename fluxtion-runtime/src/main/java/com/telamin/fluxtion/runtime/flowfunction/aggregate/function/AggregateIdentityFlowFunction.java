@@ -26,4 +26,10 @@ public class AggregateIdentityFlowFunction<T> implements AggregateFlowFunction<T
         value = input;
         return value;
     }
+
+    /** Identity has no meaningful inverse — non-invertible, so sliding windows recompute. */
+    @Override
+    public boolean deductSupported() {
+        return false;
+    }
 }

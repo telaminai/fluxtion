@@ -29,4 +29,10 @@ public class DoubleSumFlowFunction extends AbstractDoubleFlowFunction<DoubleSumF
         value -= deduct.value;
     }
 
+    /** Invertible (group aggregate): {@code deduct} is a true inverse of {@code combine}. */
+    @Override
+    public boolean deductSupported() {
+        return true;
+    }
+
 }

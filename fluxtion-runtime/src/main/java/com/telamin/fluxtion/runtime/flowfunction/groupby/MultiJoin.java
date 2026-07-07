@@ -56,6 +56,11 @@ public class MultiJoin<K, T> implements TriggeredFlowFunction<GroupBy<K, T>>, Gr
     public void groupByUpdated(LegMapper<T> legMapperUpdated) {
         FlowSupplier<GroupBy<Object, Object>> aflow = legMapperUpdated.flow;
         KeyValue keyValue = aflow.get().lastKeyValue();
+        if (keyValue == null || keyValue.getKey() == null) {
+            joinedGroup.reset();
+            updated = false;
+            return;
+        }
         Object key = keyValue.getKey();
         T target = this.target.get();
         updated = true;

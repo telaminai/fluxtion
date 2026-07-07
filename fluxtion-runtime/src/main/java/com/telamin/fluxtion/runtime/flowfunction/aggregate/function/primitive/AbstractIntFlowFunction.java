@@ -57,8 +57,13 @@ public abstract class AbstractIntFlowFunction<T extends AbstractIntFlowFunction<
 
     @Override
     public Integer aggregate(Integer input) {
+        // Clear `reset` AFTER delegating: seeded aggregates (min/max) read `reset` in
+        // aggregateInt to take the first value verbatim. Clearing it first defeated that
+        // seed and leaked the 0 initial value through groupBy (min returned 0). Sum/count
+        // ignore `reset` (0 is their identity), so post-clear preserves their behaviour.
+        int result = aggregateInt(input);
         reset = false;
-        return aggregateInt(input);
+        return result;
     }
 
     public Integer get() {

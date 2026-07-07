@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.telamin.fluxtion</groupId>
         <artifactId>fluxtion-parent</artifactId>
-        <version>1.0.13-SNAPSHOT</version>
+        <version>1.0.14-SNAPSHOT</version>
     </parent>
 
     <artifactId>fluxtion-builder-api-all-java8</artifactId>
@@ -58,12 +58,8 @@
             <version>${retrolambda.version}</version>
             <scope>provided</scope>
         </dependency>
-        <dependency>
-            <groupId>com.esotericsoftware</groupId>
-            <artifactId>kryo</artifactId>
-            <version>5.6.2</version>
-            <scope>provided</scope>
-        </dependency>
+        <!-- Kryo removed (remove-meta Phase 4): no class in the repackaged runtime/builder-api set references it
+             any more — serialization moved to fluxtion-builder with its own Kryo dependency. -->
     </dependencies>
 
     <build>

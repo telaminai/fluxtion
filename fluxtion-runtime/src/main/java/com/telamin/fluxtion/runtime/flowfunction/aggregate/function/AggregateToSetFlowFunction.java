@@ -30,6 +30,16 @@ public class AggregateToSetFlowFunction<T> implements AggregateFlowFunction<T, S
         list.removeAll(add.list);
     }
 
+    /**
+     * Non-invertible: a {@link HashSet} carries no multiplicity, so {@code removeAll} is not the
+     * inverse of {@code addAll} — a value present in both an expiring and a live bucket would be
+     * dropped. Forcing {@code false} routes sliding windows onto the full-recompute branch.
+     */
+    @Override
+    public boolean deductSupported() {
+        return false;
+    }
+
     @Override
     public Set<T> get() {
         return list;

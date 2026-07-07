@@ -82,4 +82,13 @@ public class Aggregates {
     public static SerializableSupplier<LongAverageFlowFunction> longAverageFactory() {
         return LongAverageFlowFunction::new;
     }
+
+    /**
+     * Average over any {@link Number} input returning an exact {@code Double} — the right
+     * choice for SQL {@code AVG} over int/long/double (no lossy integer division). The
+     * natural component accessor binds without a widening step.
+     */
+    public static SerializableSupplier<NumberAverageFlowFunction> numberAverageFactory() {
+        return NumberAverageFlowFunction::new;
+    }
 }
