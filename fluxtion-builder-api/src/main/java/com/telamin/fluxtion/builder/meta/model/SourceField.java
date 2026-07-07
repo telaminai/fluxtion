@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR SSPL-1.0
  */
 
-package com.telamin.fluxtion.runtime.meta.model;
+package com.telamin.fluxtion.builder.meta.model;
 
 /**
  * Represents a field in a source model. It provides metadata about fields, such as

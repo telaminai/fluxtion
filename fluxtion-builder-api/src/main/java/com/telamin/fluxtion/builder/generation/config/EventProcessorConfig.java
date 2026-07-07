@@ -8,7 +8,7 @@ import com.telamin.fluxtion.builder.callback.*;
 import com.telamin.fluxtion.builder.context.EventProcessorContextFactory;
 import com.telamin.fluxtion.builder.context.InstanceSupplierFactory;
 import com.telamin.fluxtion.builder.filter.EventHandlerFilterOverride;
-import com.telamin.fluxtion.runtime.meta.model.ClassName;
+import com.telamin.fluxtion.builder.meta.model.ClassName;
 import com.telamin.fluxtion.builder.generation.serialiser.FieldContext;
 import com.telamin.fluxtion.builder.input.SubscriptionManagerFactory;
 import com.telamin.fluxtion.builder.node.*;

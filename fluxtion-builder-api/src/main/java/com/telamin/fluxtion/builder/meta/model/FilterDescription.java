@@ -2,7 +2,7 @@
  * Copyright: © 2026. Gregory Higgins <greg.higgins@v12technology.com>
  * SPDX-License-Identifier: AGPL-3.0-only OR SSPL-1.0
  */
-package com.telamin.fluxtion.runtime.meta.model;
+package com.telamin.fluxtion.builder.meta.model;
 
 import com.telamin.fluxtion.runtime.event.Event;
 import lombok.ToString;
@@ -222,7 +222,7 @@ public class FilterDescription implements java.io.Serializable {
     public Class<? extends Event> getEventClass() {
         if (eventClass == null && eventClassName != null) {
             try {
-                Class<?> resolved = com.telamin.fluxtion.runtime.meta.dto.TypeNameResolver.resolveType(eventClassName);
+                Class<?> resolved = com.telamin.fluxtion.builder.meta.model.TypeNameResolver.resolveType(eventClassName);
                 if (Event.class.isAssignableFrom(resolved)) {
                     eventClass = (Class<? extends Event>) resolved;
                 }
