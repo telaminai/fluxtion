@@ -21,6 +21,7 @@ import com.telamin.fluxtion.runtime.flowfunction.function.QuinPushFunction;
 import com.telamin.fluxtion.runtime.flowfunction.groupby.GroupBy;
 import com.telamin.fluxtion.runtime.flowfunction.groupby.GroupByHashMap;
 import com.telamin.fluxtion.runtime.flowfunction.groupby.GroupByKey;
+import com.telamin.fluxtion.runtime.flowfunction.helpers.Mappers;
 import com.telamin.fluxtion.runtime.input.EventFeed;
 import com.telamin.fluxtion.runtime.node.DefaultEventHandlerNode;
 import com.telamin.fluxtion.runtime.node.NamedFeedEventHandlerNode;
@@ -115,7 +116,7 @@ public interface DataFlowBuilder {
     static <T> FlowBuilder<T> subscribeToFeed(String feedName, Class<T> dataType) {
         NamedFeedEventHandlerNode<T> feedEventHandlerNode = new NamedFeedEventHandlerNode<>(feedName);
         return new FlowBuilder<>(GeneratorNodeCollection.service().addOrReuse(feedEventHandlerNode))
-                .map(NamedFeedEvent::data);
+                .map((SerializableFunction<NamedFeedEvent<T>, T>) Mappers::namedFeedData);
     }
 
     /**
@@ -129,7 +130,7 @@ public interface DataFlowBuilder {
      */
     static <T, R> FlowBuilder<R> subscribeToFeed(String feedName, SerializableFunction<T, R> mapFunction) {
         return new FlowBuilder<>(GeneratorNodeCollection.service().addOrReuse(new NamedFeedEventHandlerNode<T>(feedName)))
-                .map(NamedFeedEvent::data)
+                .map((SerializableFunction<NamedFeedEvent<T>, T>) Mappers::namedFeedData)
                 .map(mapFunction);
     }
 
@@ -158,7 +159,7 @@ public interface DataFlowBuilder {
     static <T> FlowBuilder<T> subscribeToFeed(String feedName, String topic, Class<T> dataType) {
         NamedFeedTopicFilteredEventHandlerNode<T> feedEventHandlerNode = new NamedFeedTopicFilteredEventHandlerNode<>(feedName, topic);
         return new FlowBuilder<>(GeneratorNodeCollection.service().addOrReuse(feedEventHandlerNode))
-                .map(NamedFeedEvent::data);
+                .map((SerializableFunction<NamedFeedEvent<T>, T>) Mappers::namedFeedData);
     }
 
     /**
@@ -173,7 +174,7 @@ public interface DataFlowBuilder {
      */
     static <T, R> FlowBuilder<R> subscribeToFeed(String feedName, String topic, SerializableFunction<T, R> mapFunction) {
         return new FlowBuilder<>(GeneratorNodeCollection.service().addOrReuse(new NamedFeedTopicFilteredEventHandlerNode<T>(feedName, topic)))
-                .map(NamedFeedEvent::data)
+                .map((SerializableFunction<NamedFeedEvent<T>, T>) Mappers::namedFeedData)
                 .map(mapFunction);
     }
 

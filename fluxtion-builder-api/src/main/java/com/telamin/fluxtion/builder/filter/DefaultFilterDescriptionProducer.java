@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR SSPL-1.0
  */
 package com.telamin.fluxtion.builder.filter;
-import com.telamin.fluxtion.runtime.meta.model.FilterDescriptionProducer;
+import com.telamin.fluxtion.builder.meta.spi.FilterDescriptionProducer;
 import com.telamin.fluxtion.builder.generation.context.GenerationContext;
 import com.telamin.fluxtion.builder.generation.context.GenerationContextHolder;
 import com.telamin.fluxtion.runtime.event.Event;
@@ -16,10 +16,10 @@ import java.util.ServiceLoader;
 /**
  * @author Greg Higgins
  */
-public class DefaultFilterDescriptionProducer implements com.telamin.fluxtion.runtime.meta.model.FilterDescriptionProducer {
+public class DefaultFilterDescriptionProducer implements com.telamin.fluxtion.builder.meta.spi.FilterDescriptionProducer {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DefaultFilterDescriptionProducer.class);
-    private ArrayList<com.telamin.fluxtion.runtime.meta.model.FilterDescriptionProducer> namingStrategies;
+    private ArrayList<com.telamin.fluxtion.builder.meta.spi.FilterDescriptionProducer> namingStrategies;
 
     public DefaultFilterDescriptionProducer() {
         loadServices();
@@ -31,9 +31,9 @@ public class DefaultFilterDescriptionProducer implements com.telamin.fluxtion.ru
         namingStrategies = new ArrayList<>();
         if (GenerationContextHolder.currentOrNull() != null && GenerationContextHolder.currentOrNull().getClassLoader() != null) {
             LOGGER.debug("using custom class loader to search for NodeNameProducer");
-            loadServices = ServiceLoader.load(com.telamin.fluxtion.runtime.meta.model.FilterDescriptionProducer.class, GenerationContextHolder.currentOrNull().getClassLoader());
+            loadServices = ServiceLoader.load(com.telamin.fluxtion.builder.meta.spi.FilterDescriptionProducer.class, GenerationContextHolder.currentOrNull().getClassLoader());
         } else {
-            loadServices = ServiceLoader.load(com.telamin.fluxtion.runtime.meta.model.FilterDescriptionProducer.class);
+            loadServices = ServiceLoader.load(com.telamin.fluxtion.builder.meta.spi.FilterDescriptionProducer.class);
         }
         loadServices.forEach(namingStrategies::add);
 //        Collections.sort(namingStrategies);
@@ -41,11 +41,11 @@ public class DefaultFilterDescriptionProducer implements com.telamin.fluxtion.ru
     }
 
     @Override
-    public com.telamin.fluxtion.runtime.meta.model.FilterDescription getFilterDescription(Class<? extends Event> event, int filterId) {
-        final com.telamin.fluxtion.runtime.meta.model.FilterDescription filterDescription = com.telamin.fluxtion.runtime.meta.model.FilterDescriptionProducer.super.getFilterDescription(event, filterId);
+    public com.telamin.fluxtion.builder.meta.model.FilterDescription getFilterDescription(Class<? extends Event> event, int filterId) {
+        final com.telamin.fluxtion.builder.meta.model.FilterDescription filterDescription = com.telamin.fluxtion.builder.meta.spi.FilterDescriptionProducer.super.getFilterDescription(event, filterId);
         filterDescription.setComment("Event Class:[" + event.getCanonicalName() + "]"
                 + " filterId:[" + filterId + "]");
-        for (com.telamin.fluxtion.runtime.meta.model.FilterDescriptionProducer namingStrategy : namingStrategies) {
+        for (com.telamin.fluxtion.builder.meta.spi.FilterDescriptionProducer namingStrategy : namingStrategies) {
             String commnent = namingStrategy.getFilterDescription(event, filterId).getComment();
             if (commnent != null) {
                 filterDescription.setComment(commnent);
@@ -56,11 +56,11 @@ public class DefaultFilterDescriptionProducer implements com.telamin.fluxtion.ru
     }
 
     @Override
-    public com.telamin.fluxtion.runtime.meta.model.FilterDescription getFilterDescription(Class<? extends Event> event, String filterId) {
-        final com.telamin.fluxtion.runtime.meta.model.FilterDescription filterDescription = com.telamin.fluxtion.runtime.meta.model.FilterDescriptionProducer.super.getFilterDescription(event, filterId);
+    public com.telamin.fluxtion.builder.meta.model.FilterDescription getFilterDescription(Class<? extends Event> event, String filterId) {
+        final com.telamin.fluxtion.builder.meta.model.FilterDescription filterDescription = com.telamin.fluxtion.builder.meta.spi.FilterDescriptionProducer.super.getFilterDescription(event, filterId);
         filterDescription.setComment("Event Class:[" + event.getCanonicalName() + "]"
                 + " filterString:[" + filterId + "]");
-        for (com.telamin.fluxtion.runtime.meta.model.FilterDescriptionProducer namingStrategy : namingStrategies) {
+        for (com.telamin.fluxtion.builder.meta.spi.FilterDescriptionProducer namingStrategy : namingStrategies) {
             String commnent = namingStrategy.getFilterDescription(event, filterId).getComment();
             if (commnent != null) {
                 filterDescription.setComment(commnent);

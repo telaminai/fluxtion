@@ -58,8 +58,13 @@ public abstract class AbstractLongFlowFunction<T extends AbstractLongFlowFunctio
 
     @Override
     public Long aggregate(Long input) {
+        // Clear `reset` AFTER delegating: seeded aggregates (min/max) read `reset` in
+        // aggregateLong to take the first value verbatim. Clearing it first defeated that
+        // seed and leaked the 0 initial value through groupBy (min returned 0). Sum/count
+        // ignore `reset` (0 is their identity), so post-clear preserves their behaviour.
+        long result = aggregateLong(input);
         reset = false;
-        return aggregateLong(input);
+        return result;
     }
 
     public Long get() {

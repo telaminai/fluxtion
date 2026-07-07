@@ -9,6 +9,7 @@ import com.telamin.fluxtion.runtime.flowfunction.aggregate.AggregateDoubleFlowFu
 import com.telamin.fluxtion.runtime.flowfunction.aggregate.AggregateFlowFunction;
 import com.telamin.fluxtion.runtime.flowfunction.aggregate.AggregateIntFlowFunction;
 import com.telamin.fluxtion.runtime.flowfunction.aggregate.AggregateLongFlowFunction;
+import com.telamin.fluxtion.runtime.flowfunction.groupby.GroupBy;
 import com.telamin.fluxtion.runtime.partition.LambdaReflection.SerializableSupplier;
 
 import java.util.ArrayList;
@@ -68,6 +69,17 @@ public class BucketedSlidingWindow<T, R, F extends AggregateFlowFunction<T, R, F
                 allBucketsFilled = allBucketsFilled | writePointer == buckets.size();
                 writePointer = writePointer % buckets.size();
             }
+            // A non-finite (NaN/±Infinity) contribution poisons the running sum irrecoverably under
+            // deduct (NaN - NaN = NaN, Inf - Inf = NaN), so once its bucket expires the incremental
+            // aggregate stays poisoned. Recompute from the live buckets — the same route the
+            // non-invertible (min/max) path always takes — so the window recovers. Cheap: the check is
+            // O(1) and the recompute only runs while a non-finite value is live or just expired.
+            if (isNonFinite(aggregatedFunction.get())) {
+                aggregatedFunction.reset();
+                for (int i = 0; i < buckets.size(); i++) {
+                    aggregatedFunction.combine(buckets.get(i));
+                }
+            }
         } else {
             aggregatedFunction.reset();
             //clear and then combine
@@ -92,6 +104,30 @@ public class BucketedSlidingWindow<T, R, F extends AggregateFlowFunction<T, R, F
 
     public R get() {
         return aggregatedFunction.get();
+    }
+
+    /**
+     * Floating-point NaN/infinity are not algebraically invertible under {@code deduct}: once a running
+     * sum/average has been poisoned by a non-finite contribution, {@code total -= old} cannot repair it.
+     * A non-{@code Double}/{@code Float} aggregate (int/long sums, min/max) is never non-finite here. For a
+     * <b>grouped</b> sliding window the aggregate is a {@link GroupBy}, so any per-key value being non-finite
+     * poisons that key — scan the values (this runs once per roll, not per event, so it is cheap).
+     */
+    private static boolean isNonFinite(Object value) {
+        if (value instanceof Double) {
+            return !Double.isFinite((Double) value);
+        }
+        if (value instanceof Float) {
+            return !Float.isFinite((Float) value);
+        }
+        if (value instanceof GroupBy) {
+            for (Object v : ((GroupBy<?, ?>) value).values()) {
+                if (isNonFinite(v)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public static class BucketedSlidingWindowedIntFunction<F extends AggregateIntFlowFunction<F>>

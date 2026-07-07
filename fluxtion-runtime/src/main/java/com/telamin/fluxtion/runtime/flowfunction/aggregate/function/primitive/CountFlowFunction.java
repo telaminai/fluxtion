@@ -78,6 +78,12 @@ public class CountFlowFunction<T> implements AggregateFlowFunction<T, Integer, C
         count -= add.count;
     }
 
+    /** Invertible (group aggregate): {@code deduct} is a true inverse of {@code combine}. */
+    @Override
+    public boolean deductSupported() {
+        return true;
+    }
+
     public int increment(double input) {
         return increment(1);
     }

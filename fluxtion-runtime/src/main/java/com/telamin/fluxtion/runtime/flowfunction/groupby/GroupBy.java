@@ -27,6 +27,18 @@ public interface GroupBy<K, V> {
         return emptyKey();
     }
 
+    /**
+     * The keys changed in the current event cycle (a changelog) — lets downstream operators and FSQL
+     * typed output update in O(Δ) rather than re-scanning the whole group. See {@link GroupByDelta}.
+     *
+     * <p><b>Defaults to {@link GroupByDelta#recomputeRequired()}</b> — a producer that does not emit
+     * deltas forces consumers to recompute/diff from {@link #toMap()}. A delta is an optimisation, not
+     * a correctness boundary, so this is defaulted (not abstract) by design.
+     */
+    default GroupByDelta<K, V> delta() {
+        return GroupByDelta.recomputeRequired();
+    }
+
     @SuppressWarnings("unchecked")
     static <K, V> KeyValue<K, V> emptyKey() {
         return (KeyValue<K, V>) KV_KEY_VALUE;

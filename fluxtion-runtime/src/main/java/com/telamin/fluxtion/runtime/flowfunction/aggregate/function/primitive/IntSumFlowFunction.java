@@ -24,6 +24,12 @@ public class IntSumFlowFunction extends AbstractIntFlowFunction<IntSumFlowFuncti
         value -= deduct.value;
     }
 
+    /** Invertible (group aggregate): {@code deduct} is a true inverse of {@code combine}. */
+    @Override
+    public boolean deductSupported() {
+        return true;
+    }
+
     @Override
     public String toString() {
         return "AggregateIntSum{" +
