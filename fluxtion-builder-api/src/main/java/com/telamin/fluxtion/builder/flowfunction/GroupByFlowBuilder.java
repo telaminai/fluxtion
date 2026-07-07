@@ -100,7 +100,33 @@ public class GroupByFlowBuilder<K, V> extends AbstractGroupByBuilder<K, V, com.t
     public <R, F extends AggregateFlowFunction<V, R, F>> FlowBuilder<R> reduceValues(
             SerializableSupplier<F> aggregateFactory) {
         return new FlowBuilder<>(new MapRef2RefFlowFunction<>(eventStream,
-                new com.telamin.fluxtion.runtime.flowfunction.groupby.GroupByReduceFlowFunction(aggregateFactory.get())::reduceValues));
+                new com.telamin.fluxtion.runtime.flowfunction.groupby.GroupByReduceFlowFunction(aggregateFactory)::reduceValues));
+    }
+
+    /**
+     * Flat-map (1→N) the keys changed in the current cycle to a stream of
+     * {@link com.telamin.fluxtion.runtime.flowfunction.groupby.GroupBy.KeyValue}s — ADD/UPDATE only,
+     * DELETEs excluded. The append/upsert path: safe to feed straight into a typed-row mapper. Replaces
+     * the lossy 1→1 {@code map(GroupBy::lastKeyValue)} (which surfaces at most one changed key per
+     * cycle). See {@code docs/design/groupby-delta-ivm.md}.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public FlowBuilder<com.telamin.fluxtion.runtime.flowfunction.groupby.GroupBy.KeyValue<K, V>> changedKeyValues() {
+        FlowBuilder raw = new FlowBuilder<>(eventStream)
+                .flatMap(com.telamin.fluxtion.runtime.flowfunction.groupby.GroupByDeltaFlowFunctions::changedKeyValues);
+        return (FlowBuilder<com.telamin.fluxtion.runtime.flowfunction.groupby.GroupBy.KeyValue<K, V>>) raw;
+    }
+
+    /**
+     * Flat-map (1→N) the full {@link com.telamin.fluxtion.runtime.flowfunction.groupby.Change} stream
+     * for the current cycle, including DELETE — the delete-aware path for materialised views and
+     * actions.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public FlowBuilder<com.telamin.fluxtion.runtime.flowfunction.groupby.Change<K, V>> changes() {
+        FlowBuilder raw = new FlowBuilder<>(eventStream)
+                .flatMap(com.telamin.fluxtion.runtime.flowfunction.groupby.GroupByDeltaFlowFunctions::changes);
+        return (FlowBuilder<com.telamin.fluxtion.runtime.flowfunction.groupby.Change<K, V>>) raw;
     }
 
 

@@ -32,6 +32,12 @@ public class DoubleAverageFlowFunction extends AbstractDoubleFlowFunction<Double
         updateAverage();
     }
 
+    /** Invertible: carries (sum, count) so {@code deduct} is a true inverse of {@code combine}. */
+    @Override
+    public boolean deductSupported() {
+        return true;
+    }
+
     @Override
     public double resetDouble() {
         value = 0;

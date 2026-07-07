@@ -32,6 +32,12 @@ public class IntAverageFlowFunction extends AbstractIntFlowFunction<IntAverageFl
         updateAverage();
     }
 
+    /** Invertible: carries (sum, count) so {@code deduct} is a true inverse of {@code combine}. */
+    @Override
+    public boolean deductSupported() {
+        return true;
+    }
+
     @Override
     public int resetInt() {
         super.resetInt();

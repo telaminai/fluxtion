@@ -14,6 +14,7 @@ import com.telamin.fluxtion.runtime.audit.*;
 import com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel;
 import com.telamin.fluxtion.runtime.context.DataFlowContext;
 import com.telamin.fluxtion.runtime.context.NodeDiscovery;
+import com.telamin.fluxtion.runtime.describe.ProcessorDescriptor;
 import com.telamin.fluxtion.runtime.flowfunction.FlowFunction;
 import com.telamin.fluxtion.runtime.event.Event;
 import com.telamin.fluxtion.runtime.event.Signal;
@@ -63,6 +64,16 @@ public interface DataFlow extends ServiceRegistry, NodeDiscovery, Lifecycle {
     };
 
     BooleanSupplier ALWAYS_FALSE = () -> false;
+
+    /**
+     * The processor's self-description (named inputs / sinks / services + a factory) — see
+     * {@link ProcessorDescriptor}. Generated (AOT) processors override this with a compiler-emitted descriptor;
+     * interpreted processors carry one derived from the generation model. Hand-written DataFlows inherit
+     * {@code null}. Never requires {@code init()}.
+     */
+    default ProcessorDescriptor getDescriptor() {
+        return null;
+    }
 
     /**
      * The user can pass in a map of values to this instance. The map will be available in the graph by injecting

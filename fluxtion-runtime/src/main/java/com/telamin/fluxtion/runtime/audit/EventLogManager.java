@@ -49,6 +49,7 @@ public class EventLogManager implements Auditor {
     @Inject
     public Clock clock;
     private boolean canTrace = false;
+    private LogLevel logLevel = LogLevel.INFO;
 
 
     public EventLogManager() {
@@ -71,8 +72,24 @@ public class EventLogManager implements Auditor {
     }
 
     public EventLogManager tracingOn(LogLevel level) {
-        trace = level != LogLevel.NONE;
-        this.traceLevel = level;
+        LogLevel resolvedLevel = level == null ? LogLevel.INFO : level;
+        trace = resolvedLevel != LogLevel.NONE;
+        this.traceLevel = resolvedLevel;
+        return this;
+    }
+
+    /**
+     * Sets the initial per-node audit entry threshold without enabling method invocation tracing.
+     *
+     * <p>This is useful for structured business audit entries where the processor should emit
+     * {@code EventLogger.info/debug/trace(...)} values but should not record every invoked node and
+     * method. Method invocation tracing remains controlled by {@link #tracingOn(LogLevel)}.</p>
+     *
+     * @param level threshold for {@link EventLogger} entries
+     * @return this manager
+     */
+    public EventLogManager logLevel(LogLevel level) {
+        logLevel = level == null ? LogLevel.INFO : level;
         return this;
     }
 
@@ -89,6 +106,7 @@ public class EventLogManager implements Auditor {
     @Override
     public void nodeRegistered(Object node, String nodeName) {
         EventLogger logger = new EventLogger(logRecord, nodeName);
+        logger.setLevel(logLevel);
         if (node instanceof EventLogSource) {
             EventLogSource calcSource = (EventLogSource) node;
             calcSource.setLogger(logger);
@@ -103,6 +121,7 @@ public class EventLogManager implements Auditor {
             String nodeName = stringEventLogSourceEntry.getKey();
             EventLogSource calcSource = stringEventLogSourceEntry.getValue();
             EventLogger logger = new EventLogger(logRecord, nodeName);
+            logger.setLevel(logLevel);
             calcSource.setLogger(logger);
             name2LogSourceMap.put(nodeName, calcSource);
             node2Logger.put(nodeName, logger);
@@ -155,6 +174,7 @@ public class EventLogManager implements Auditor {
             });
             if (newConfig.getSourceId() == null) {
                 node2Logger.values().forEach((t) -> t.setLevel(newConfig.getLevel()));
+                logLevel = newConfig.getLevel();
             }
         }
 

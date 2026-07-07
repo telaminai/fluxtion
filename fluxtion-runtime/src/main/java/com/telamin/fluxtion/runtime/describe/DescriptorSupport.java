@@ -1,0 +1,159 @@
+/*
+ * Copyright: © 2026. Gregory Higgins <greg.higgins@v12technology.com>
+ * SPDX-License-Identifier: AGPL-3.0-only OR SSPL-1.0
+ */
+package com.telamin.fluxtion.runtime.describe;
+
+import com.telamin.fluxtion.runtime.DataFlow;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.function.Supplier;
+
+/**
+ * Factory for immutable {@link ProcessorDescriptor} instances. The generator emits DATA through this helper —
+ * never logic — so a generated descriptor is a pure literal in the generated source, and the interpreted path
+ * builds the identical shape from the generation model at build time.
+ */
+public final class DescriptorSupport {
+
+    private DescriptorSupport() {
+    }
+
+    /** Array form used by generated source (Java 8 friendly — no {@code List.of}). */
+    public static ProcessorDescriptor of(
+            Class<? extends DataFlow> dataFlowClass,
+            Supplier<? extends DataFlow> factory,
+            ProcessorDescriptor.Input[] inputs,
+            ProcessorDescriptor.Sink[] sinks,
+            ProcessorDescriptor.Service[] services) {
+        return of(dataFlowClass, factory, inputs, sinks, services, null);
+    }
+
+    /** Array form with provenance metadata — the shape the generator emits. */
+    public static ProcessorDescriptor of(
+            Class<? extends DataFlow> dataFlowClass,
+            Supplier<? extends DataFlow> factory,
+            ProcessorDescriptor.Input[] inputs,
+            ProcessorDescriptor.Sink[] sinks,
+            ProcessorDescriptor.Service[] services,
+            Meta meta) {
+        return of(dataFlowClass, factory,
+                inputs == null ? Collections.<ProcessorDescriptor.Input>emptyList() : Arrays.asList(inputs),
+                sinks == null ? Collections.<ProcessorDescriptor.Sink>emptyList() : Arrays.asList(sinks),
+                services == null ? Collections.<ProcessorDescriptor.Service>emptyList() : Arrays.asList(services),
+                meta);
+    }
+
+    public static ProcessorDescriptor of(
+            Class<? extends DataFlow> dataFlowClass,
+            Supplier<? extends DataFlow> factory,
+            List<ProcessorDescriptor.Input> inputs,
+            List<ProcessorDescriptor.Sink> sinks,
+            List<ProcessorDescriptor.Service> services) {
+        return of(dataFlowClass, factory, inputs, sinks, services, null);
+    }
+
+    /**
+     * Full form carrying the optional provenance metadata (scalars and sidecar POINTERS only — never payloads).
+     */
+    public static ProcessorDescriptor of(
+            Class<? extends DataFlow> dataFlowClass,
+            Supplier<? extends DataFlow> factory,
+            List<ProcessorDescriptor.Input> inputs,
+            List<ProcessorDescriptor.Sink> sinks,
+            List<ProcessorDescriptor.Service> services,
+            Meta meta) {
+        return new ImmutableDescriptor(dataFlowClass, factory, copy(inputs), copy(sinks), copy(services),
+                meta == null ? Meta.EMPTY : meta);
+    }
+
+    /** Optional provenance metadata: scalars + sidecar resource pointers. All fields nullable. */
+    public static final class Meta {
+        static final Meta EMPTY = new Meta(null, null, null, null);
+
+        private final String name;
+        private final String toolchainVersion;
+        private final String sourceFingerprint;
+        private final String graphmlResource;
+
+        public Meta(String name, String toolchainVersion, String sourceFingerprint, String graphmlResource) {
+            this.name = name;
+            this.toolchainVersion = toolchainVersion;
+            this.sourceFingerprint = sourceFingerprint;
+            this.graphmlResource = graphmlResource;
+        }
+
+        public String name() { return name; }
+        public String toolchainVersion() { return toolchainVersion; }
+        public String sourceFingerprint() { return sourceFingerprint; }
+        public String graphmlResource() { return graphmlResource; }
+    }
+
+    private static <T> List<T> copy(List<T> src) {
+        return src == null || src.isEmpty()
+                ? Collections.<T>emptyList()
+                : Collections.unmodifiableList(new ArrayList<>(src));
+    }
+
+    private static final class ImmutableDescriptor implements ProcessorDescriptor {
+        private final Class<? extends DataFlow> dataFlowClass;
+        private final Supplier<? extends DataFlow> factory;
+        private final List<Input> inputs;
+        private final List<Sink> sinks;
+        private final List<Service> services;
+        private final Meta meta;
+
+        private ImmutableDescriptor(Class<? extends DataFlow> dataFlowClass,
+                                    Supplier<? extends DataFlow> factory,
+                                    List<Input> inputs,
+                                    List<Sink> sinks,
+                                    List<Service> services,
+                                    Meta meta) {
+            this.dataFlowClass = dataFlowClass;
+            this.factory = factory;
+            this.inputs = inputs;
+            this.sinks = sinks;
+            this.services = services;
+            this.meta = meta;
+        }
+
+        @Override
+        public List<Input> inputs() { return inputs; }
+
+        @Override
+        public List<Sink> sinks() { return sinks; }
+
+        @Override
+        public List<Service> services() { return services; }
+
+        @Override
+        public Class<? extends DataFlow> dataFlowClass() { return dataFlowClass; }
+
+        @Override
+        public Supplier<? extends DataFlow> factory() { return factory; }
+
+        @Override
+        public String name() {
+            return meta.name() != null ? meta.name()
+                    : dataFlowClass == null ? null : dataFlowClass.getName();
+        }
+
+        @Override
+        public String toolchainVersion() { return meta.toolchainVersion(); }
+
+        @Override
+        public String sourceFingerprint() { return meta.sourceFingerprint(); }
+
+        @Override
+        public String graphmlResource() { return meta.graphmlResource(); }
+
+        @Override
+        public String toString() {
+            return "ProcessorDescriptor{name=" + name()
+                    + ", inputs=" + inputs + ", sinks=" + sinks + ", services=" + services + '}';
+        }
+    }
+}

@@ -22,13 +22,31 @@ public interface AggregateFlowFunction<I, R, T extends AggregateFlowFunction<I, 
         throw new RuntimeException("Sliding not supported implement combine for " + this.getClass().getName());
     }
 
+    /**
+     * Subtract the contribution of an expiring window bucket — the inverse of {@link #combine}. The
+     * sliding-window engine calls this ONLY when {@link #deductSupported()} returns {@code true}, so
+     * any aggregate that opts in MUST implement it.
+     */
     default void deduct(T add) {
-        throw new RuntimeException("Sliding not supported implement deduct for " + this.getClass().getName());
+        throw new UnsupportedOperationException(
+                "deduct() not implemented for " + this.getClass().getName()
+                        + " — an aggregate whose deductSupported() returns true must implement deduct()");
     }
 
-    default boolean deductSupported() {
-        return true;
-    }
+    /**
+     * Whether this aggregate supports {@link #deduct} as a true inverse of {@link #combine} — i.e.
+     * whether it is invertible (forms a group), so a sliding window can subtract an expiring bucket
+     * in O(Δ) instead of recomputing from the live buckets.
+     *
+     * <p><b>No default — every aggregate must declare this explicitly.</b> Invertibility is a
+     * correctness boundary, so each implementation is required to consciously state its algebra:
+     * only invertible (group) aggregates — sum, count, average — return {@code true}; semilattice
+     * aggregates (min/max), set/list, distinct, identity and most custom aggregates return
+     * {@code false} and route through full recompute. Returning {@code true} obliges a correct
+     * {@link #deduct}. (The {@link com.telamin.fluxtion.runtime.flowfunction.aggregate.function.AbstractAggregateFlowFunction}
+     * convenience base answers {@code false} for you; override it if your aggregate is invertible.)
+     */
+    boolean deductSupported();
 
     R get();
 

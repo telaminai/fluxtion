@@ -35,6 +35,16 @@ public abstract class AbstractAggregateFlowFunction<I, R>
         return result = resetAction(get());
     }
 
+    /**
+     * Non-invertible by default: this convenience base does not implement {@link #combine}/
+     * {@link #deduct}, so a sliding window recomputes from the live buckets. A custom aggregate that
+     * is invertible should override this to {@code true} and implement {@link #deduct}.
+     */
+    @Override
+    public boolean deductSupported() {
+        return false;
+    }
+
     abstract protected R calculateAggregate(I input, R previous);
 
     abstract protected R resetAction(R previous);

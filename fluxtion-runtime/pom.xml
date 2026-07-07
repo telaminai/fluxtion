@@ -137,12 +137,8 @@
             <artifactId>agrona</artifactId>
             <version>${agrona.version}</version>
         </dependency>
-        <dependency>
-            <groupId>com.esotericsoftware</groupId>
-            <artifactId>kryo</artifactId>
-            <version>5.6.2</version>
-            <optional>true</optional>
-        </dependency>
+        <!-- Kryo removed (remove-meta Phase 4): it served SerializationUtils/SerializationFormat, which now live
+             in fluxtion-builder (builder.compile.generation.serialization) along with the Kryo dependency. -->
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>

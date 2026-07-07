@@ -5,7 +5,7 @@
 
 package com.telamin.fluxtion.builder.generation.serialiser;
 
-import com.telamin.fluxtion.runtime.meta.model.Field;
+import com.telamin.fluxtion.builder.meta.model.Field;
 import lombok.AccessLevel;
 import lombok.Getter;
 
