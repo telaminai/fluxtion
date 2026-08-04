@@ -430,7 +430,8 @@ Pattern-to-directory hints:
 - DSL pipelines (filter/map/groupBy, windowing, aggregation): `compiler/dataflow/...`
 - Imperative `@OnEventHandler` / `@OnTrigger` nodes: `compiler/imperative/...`
 - AOT-compiled processors: `compiler/aot-compiler/...`
-- Spring XML topology authoring: `compiler/spring/...`
+- Spring XML topology authoring: `compiler/spring/...` — and to *design a Spring app by conversation → XML → starter
+  skeleton*, see `docs/spring-authoring.md` (pointer to the `fluxtion-web` project-starter authoring docs)
 - ML inference (model graph as Fluxtion graph): `compiler/ml-inference/...`
 - Audit log emission and replay: any example using `EventLogManager` or `[FLUXTION_AUDIT]` markers
 - JUnit 5 testing: any `*Test.java` under `compiler/`; use `compileDispatcher` for live binding
