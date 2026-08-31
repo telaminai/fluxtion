@@ -158,6 +158,11 @@ public class EventProcessorConfig {
             setAuditorMap(new HashMap<>());
         }
         getAuditorMap().put(name, listener);
+        // The auditor map is single-slot per NAME, so this registration replaces whatever held the
+        // name — and provenance must follow the replacement. An author who registers under a name the
+        // framework already used owns the binding from here on; leaving the name marked would publish
+        // their node as framework plumbing and drop it from the authored-node count.
+        frameworkAuditorNames.remove(name);
         return listener;
     }
 
@@ -175,15 +180,23 @@ public class EventProcessorConfig {
      * them.
      */
     public <T extends Auditor> T addFrameworkAuditor(T listener, String name) {
+        // Delegate FIRST, then mark. addAuditor clears the mark, because an author registration must
+        // clear it; recording before the call would have the delegate immediately undo it. The order
+        // is load-bearing in both directions — framework-over-author marks, author-over-framework
+        // clears — and each direction is pinned by a test.
+        T registered = addAuditor(listener, name);
         frameworkAuditorNames.add(name);
-        return addAuditor(listener, name);
+        return registered;
     }
 
     /**
      * The names of auditors the framework registered itself. Never null.
      *
-     * <p>An author-registered auditor is absent from this set even if it shares a name, because the
-     * set is written only by {@link #addFrameworkAuditor}.
+     * <p>Membership follows the LAST registration under a name, because the auditor map itself is
+     * single-slot per name. An author who registers over a framework name owns the binding and the
+     * name leaves this set; the framework registering over an author's name puts it back. An earlier
+     * version only ever added, so replacing the clock left the author's own node published as
+     * framework plumbing — the opposite of what this method promises.
      */
     public Set<String> getFrameworkAuditorNames() {
         return Collections.unmodifiableSet(frameworkAuditorNames);
