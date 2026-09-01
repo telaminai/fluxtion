@@ -20,6 +20,81 @@ The binding tells Fluxtion to dispatch this event to this node. Fluxtion resolve
 
 Either add an @OnEventHandler method on deafBean taking com.example.PriceUpdate, or remove the binding if the event was meant for a different bean. If the handler exists but takes a supertype, name that type in the binding instead.
 
+## Example
+
+Both files below are executed against the real Spring adapter on every build, so the first is guaranteed to produce this diagnostic and the second to build cleanly.
+
+### The configuration that causes it
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="
+    http://www.springframework.org/schema/beans
+    http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <!-- This node declares NO @OnEventHandler at all. -->
+    <bean id="deafNode"
+          class="com.telamin.fluxtion.builder.extern.spring.errors.SpringErrorFixtures$DeafNode"/>
+
+    <bean class="com.telamin.fluxtion.builder.extern.spring.FluxtionSpringConfig">
+        <property name="nodeBeans">
+            <list><value>deafNode</value></list>
+        </property>
+        <property name="eventTypes">
+            <list><value>java.lang.String</value></list>
+        </property>
+        <property name="eventHandlers">
+            <list>
+                <bean class="com.telamin.fluxtion.builder.extern.spring.FluxtionSpringConfig$EventHandlerBinding">
+                    <property name="event" value="java.lang.String"/>
+                    <property name="nodeBeans">
+                        <!-- deafNode cannot accept a String: the route would never fire -->
+                        <list><value>deafNode</value></list>
+                    </property>
+                </bean>
+            </list>
+        </property>
+    </bean>
+</beans>
+```
+
+### The configuration that fixes it
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="
+    http://www.springframework.org/schema/beans
+    http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <bean id="stringHandler"
+          class="com.telamin.fluxtion.builder.extern.spring.errors.SpringErrorFixtures$StringHandler"/>
+
+    <bean class="com.telamin.fluxtion.builder.extern.spring.FluxtionSpringConfig">
+        <property name="nodeBeans">
+            <list><value>stringHandler</value></list>
+        </property>
+        <property name="eventTypes">
+            <list><value>java.lang.String</value></list>
+        </property>
+        <property name="eventHandlers">
+            <list>
+                <bean class="com.telamin.fluxtion.builder.extern.spring.FluxtionSpringConfig$EventHandlerBinding">
+                    <!-- the event the node actually declares an @OnEventHandler for -->
+                    <property name="event" value="java.lang.String"/>
+                    <property name="nodeBeans">
+                        <list><value>stringHandler</value></list>
+                    </property>
+                </bean>
+            </list>
+        </property>
+    </bean>
+</beans>
+```
+
 ## Which builds raise it
 
 **Spring configuration analysis**, on every build path that loads a Spring context. Non-Spring builds never raise it.

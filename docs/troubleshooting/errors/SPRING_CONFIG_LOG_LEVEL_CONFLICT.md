@@ -20,6 +20,54 @@ The log level is a property of the PROCESSOR, not of a config bean, so two beans
 
 Set logLevel on one config bean, or set the same value on both. Leaving it null on the others is how a bean says it has no opinion.
 
+## Example
+
+Both files below are executed against the real Spring adapter on every build, so the first is guaranteed to produce this diagnostic and the second to build cleanly.
+
+### The configuration that causes it
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="
+    http://www.springframework.org/schema/beans
+    http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <bean id="stringHandler" class="com.telamin.fluxtion.builder.extern.spring.errors.SpringErrorFixtures$StringHandler"/>
+
+    <!-- Two config beans, each declaring a DIFFERENT non-null log level. -->
+    <bean id="configA" class="com.telamin.fluxtion.builder.extern.spring.FluxtionSpringConfig">
+        <property name="nodeBeans"><list><value>stringHandler</value></list></property>
+        <property name="logLevel" value="INFO"/>
+    </bean>
+
+    <bean id="configB" class="com.telamin.fluxtion.builder.extern.spring.FluxtionSpringConfig">
+        <property name="logLevel" value="DEBUG"/>
+    </bean>
+</beans>
+```
+
+### The configuration that fixes it
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="
+    http://www.springframework.org/schema/beans
+    http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <bean id="stringHandler" class="com.telamin.fluxtion.builder.extern.spring.errors.SpringErrorFixtures$StringHandler"/>
+
+    <!-- One audit regime for the graph: declare the level once. -->
+    <bean id="configA" class="com.telamin.fluxtion.builder.extern.spring.FluxtionSpringConfig">
+        <property name="nodeBeans"><list><value>stringHandler</value></list></property>
+        <property name="logLevel" value="INFO"/>
+    </bean>
+</beans>
+```
+
 ## Which builds raise it
 
 **Spring configuration analysis**, on every build path that loads a Spring context. Non-Spring builds never raise it.
