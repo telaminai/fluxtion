@@ -1,0 +1,473 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fluxtion.com/schema/fluxtion-diagnostics-1.0.schema.json",
+  "title": "Fluxtion compiler diagnostics",
+  "description": "The published wire form of Fluxtion compiler diagnostics. Normative for diagnosticsVersion 1.x; see wire-contract.md. Optional fields are OMITTED rather than null. Consumers must ignore unknown fields, and must tolerate unknown `code`, `category`, `role` and element `kind` values. `severity` is the ONE closed enum: it decides whether a build fails, an unknown value has no safe default, and adding a member is therefore a MAJOR bump.",
+  "type": "object",
+  "required": [
+    "diagnosticsVersion",
+    "truncated",
+    "diagnostics"
+  ],
+  "properties": {
+    "diagnosticsVersion": {
+      "type": "string",
+      "pattern": "^1\\.[0-9]+$",
+      "description": "MAJOR.MINOR. This file is NORMATIVE FOR 1.x, so it accepts only 1.y — a document declaring 2.0 is not described here and must be validated against the 2.x schema. The earlier ^[0-9]+ pattern made this file silently claim to describe every future major version."
+    },
+    "sourceRoot": {
+      "type": "string",
+      "description": "POSIX-form root that every sourceRef.file is relative to. Omitted when unknown."
+    },
+    "truncated": {
+      "type": "boolean",
+      "description": "True when the compiler died before diagnostics were complete. The document is still valid JSON."
+    },
+    "diagnostics": {
+      "type": "array",
+      "description": "Emission order is preserved and is meaningful.",
+      "items": {
+        "$ref": "#/$defs/diagnostic"
+      }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "diagnostic": {
+      "type": "object",
+      "required": [
+        "code",
+        "severity",
+        "category",
+        "message",
+        "rule",
+        "why",
+        "element"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]*(-[0-9]{4})?$",
+          "description": "Stable. Covers FLX-1001 and SPRING_UNKNOWN_BINDING_NODE."
+        },
+        "severity": {
+          "enum": [
+            "ERROR",
+            "WARN",
+            "INFO"
+          ]
+        },
+        "category": {
+          "type": "string",
+          "description": "Known members below; consumers must tolerate unknown ones.",
+          "examples": [
+            "GRAPH_MODEL",
+            "ANNOTATION",
+            "SPRING_CONFIG",
+            "REPLAY",
+            "AUDIT",
+            "GRAPHML",
+            "MAVEN_PLUGIN"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable. MAY change without a version bump \u2014 never key off it."
+        },
+        "rule": {
+          "type": "string",
+          "minLength": 1
+        },
+        "why": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Fluxtion's interpretation of the structure. The field the authoring failures were caused by lacking."
+        },
+        "suggestedFix": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Omitted when there is no honest suggestion. An absent fix is legitimate; a guessed one is worse than none."
+        },
+        "documentationUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "element": {
+          "$ref": "#/$defs/element"
+        },
+        "sourceRef": {
+          "$ref": "#/$defs/sourceRef"
+        },
+        "related": {
+          "type": "array",
+          "description": "Declaration order. Omitted when empty, never null.",
+          "items": {
+            "$ref": "#/$defs/related"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "element": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "nodeName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "nodeClass": {
+          "type": "string",
+          "minLength": 1
+        },
+        "field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fieldType": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "annotation": {
+          "type": "string"
+        },
+        "eventType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "filterValue": {
+          "type": "string"
+        },
+        "filterType": {
+          "type": "string"
+        },
+        "serviceInterface": {
+          "type": "string",
+          "minLength": 1
+        },
+        "serviceName": {
+          "type": "string"
+        },
+        "beanName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "beanClass": {
+          "type": "string"
+        },
+        "referencedBean": {
+          "type": "string",
+          "minLength": 1
+        },
+        "typeName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "generatedSource": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expectedSignature": {
+          "type": "string"
+        },
+        "foundSignature": {
+          "type": "string"
+        },
+        "cyclePath": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "mappedFields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "stateFields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "referenceFields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "collidingNodes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "xpathHint": {
+          "type": "string",
+          "description": "Best-effort XML location for a Spring-authored source. Deliberately NOT sourceRef: an XPath is not a file/line/column, and overloading sourceRef would make it mean two things (N8)."
+        }
+      },
+      "additionalProperties": true,
+      "description": "Tagged union on `kind`. An unknown kind must be treated as an opaque element, not a parse failure.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "NODE"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "kind",
+              "nodeName",
+              "nodeClass"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "FIELD"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "kind",
+              "nodeClass",
+              "field"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "METHOD"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "kind",
+              "nodeClass",
+              "method"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "EVENT"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "kind",
+              "eventType"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "SERVICE"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "kind",
+              "serviceInterface"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "SPRING_BEAN"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "kind",
+              "beanName"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "CYCLE"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "kind",
+              "cyclePath"
+            ],
+            "properties": {
+              "cyclePath": {
+                "type": "array",
+                "minItems": 2,
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "GENERATED_SOURCE"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "kind",
+              "generatedSource"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "SPRING_SERVICE_BINDING"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "kind"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "SPRING_TYPE"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "kind",
+              "typeName"
+            ]
+          }
+        }
+      ]
+    },
+    "sourceRef": {
+      "type": "object",
+      "required": [
+        "file"
+      ],
+      "properties": {
+        "file": {
+          "type": "string",
+          "pattern": "^(?![/\\\\])(?![A-Za-z]:).*$",
+          "description": "RELATIVE to sourceRoot, POSIX separators. Never absolute: these strings reach CI logs and LLM prompts, and an absolute path leaks the build machine's layout."
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "related": {
+      "type": "object",
+      "required": [
+        "role",
+        "name"
+      ],
+      "properties": {
+        "role": {
+          "type": "string",
+          "examples": [
+            "MAPPED_FIELD",
+            "CONSTRUCTOR_PARAM",
+            "PARENT_NODE",
+            "SIBLING",
+            "COLLIDING_NODE",
+            "IGNORED_FIELD"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}
