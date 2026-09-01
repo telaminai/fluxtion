@@ -50,6 +50,8 @@ public class EventProcessorConfig {
     private List<Object> nodeList;
     private HashMap<Object, String> publicNodes;
     private HashMap<String, Auditor> auditorMap;
+    /** Names registered by {@link #addFrameworkAuditor}: framework plumbing, not authored nodes. */
+    private final Set<String> frameworkAuditorNames = new HashSet<>();
     private NodeFactoryRegistration nodeFactoryRegistration;
     private RootNodeConfig rootNodeConfig;
     private boolean inlineEventHandling = false;
@@ -64,7 +66,7 @@ public class EventProcessorConfig {
     public EventProcessorConfig() {
         clock();
         ServiceRegistryNode serviceRegistryNode = new ServiceRegistryNode();
-        addAuditor(serviceRegistryNode, ServiceRegistryNode.NODE_NAME);
+        addFrameworkAuditor(serviceRegistryNode, ServiceRegistryNode.NODE_NAME);
         addNode(serviceRegistryNode, ServiceRegistryNode.NODE_NAME);
         this.nodeFactoryRegistration = new NodeFactoryRegistration(NodeFactoryConfig.required.getFactoryClasses());
         classSerializerMap.putAll(ClassSerializerRegistry.service("java").classSerializerMap());
@@ -156,7 +158,48 @@ public class EventProcessorConfig {
             setAuditorMap(new HashMap<>());
         }
         getAuditorMap().put(name, listener);
+        // The auditor map is single-slot per NAME, so this registration replaces whatever held the
+        // name — and provenance must follow the replacement. An author who registers under a name the
+        // framework already used owns the binding from here on; leaving the name marked would publish
+        // their node as framework plumbing and drop it from the authored-node count.
+        frameworkAuditorNames.remove(name);
         return listener;
+    }
+
+    /**
+     * Registers an auditor the FRAMEWORK supplies, rather than one the author wrote.
+     *
+     * <p>The distinction is not cosmetic and cannot be recovered downstream. {@link #getAuditorMap()}
+     * mixes both, so a consumer asking "did the compiler create this node, or did the author?" has
+     * only the bean name to go on — and answering from a package prefix misclassifies a user class in
+     * a framework-shaped package, and a framework class outside one. Recording it here, where the
+     * framework registers its own, makes it a fact.
+     *
+     * <p>Consumed by artefact metadata (GraphML {@code fluxtion.framework}) so a coverage figure can
+     * have an honest denominator: framework plumbing an author never wrote should not count against
+     * them.
+     */
+    public <T extends Auditor> T addFrameworkAuditor(T listener, String name) {
+        // Delegate FIRST, then mark. addAuditor clears the mark, because an author registration must
+        // clear it; recording before the call would have the delegate immediately undo it. The order
+        // is load-bearing in both directions — framework-over-author marks, author-over-framework
+        // clears — and each direction is pinned by a test.
+        T registered = addAuditor(listener, name);
+        frameworkAuditorNames.add(name);
+        return registered;
+    }
+
+    /**
+     * The names of auditors the framework registered itself. Never null.
+     *
+     * <p>Membership follows the LAST registration under a name, because the auditor map itself is
+     * single-slot per name. An author who registers over a framework name owns the binding and the
+     * name leaves this set; the framework registering over an author's name puts it back. An earlier
+     * version only ever added, so replacing the clock left the author's own node published as
+     * framework plumbing — the opposite of what this method promises.
+     */
+    public Set<String> getFrameworkAuditorNames() {
+        return Collections.unmodifiableSet(frameworkAuditorNames);
     }
 
     /**
@@ -176,7 +219,7 @@ public class EventProcessorConfig {
      * @return the clock in generated SEP
      */
     public Clock clock() {
-        addAuditor(clock, "clock");
+        addFrameworkAuditor(clock, "clock");
         return clock;
     }
 
@@ -186,7 +229,7 @@ public class EventProcessorConfig {
      */
     public EventProcessorConfig addEventAudit(LogLevel tracingLogLevel) {
         if (tracingLogLevel != null) {
-            addAuditor(new EventLogManager().tracingOn(tracingLogLevel), EventLogManager.NODE_NAME);
+            addFrameworkAuditor(new EventLogManager().tracingOn(tracingLogLevel), EventLogManager.NODE_NAME);
         }
         return this;
     }
@@ -195,7 +238,7 @@ public class EventProcessorConfig {
      * Add an {@link EventLogManager} auditor to the generated SEP without method tracing
      */
     public EventProcessorConfig addEventAudit() {
-        addAuditor(new EventLogManager().tracingOff(), EventLogManager.NODE_NAME);
+        addFrameworkAuditor(new EventLogManager().tracingOff(), EventLogManager.NODE_NAME);
         return this;
     }
 
@@ -205,7 +248,7 @@ public class EventProcessorConfig {
     }
 
     public EventProcessorConfig addEventAudit(LogLevel tracingLogLevel, boolean printEventToString, boolean printThreadName) {
-        addAuditor(
+        addFrameworkAuditor(
                 new EventLogManager()
                         .tracingOn(tracingLogLevel)
                         .printEventToString(printEventToString)
