@@ -111,6 +111,48 @@ public class CallbackDispatcherEmptyPathTest {
         assertThat(processor.dispatched, is(listOf("one", "two")));
     }
 
+    // ---- W2: what the empty-path early return depends on ------------------------------------
+
+    /**
+     * The early return skips {@code dispatching = false}, which the old code executed
+     * unconditionally. That is only safe if a nested call cannot reach the early return WHILE an
+     * outer dispatch is running — because {@code dispatching} decides whether
+     * {@link CallbackDispatcherImpl#fireIteratorCallback} queues to the front or the back.
+     *
+     * <p>It cannot: the in-flight item is removed only AFTER its {@code dispatch()} returns false,
+     * so the queue is never empty from inside a callback. This test pins that premise; if a future
+     * change removes the item first, the early return silently becomes a reordering bug and this
+     * fails rather than the ordering drifting unnoticed.
+     */
+    @Test
+    public void theInFlightItemStaysOnTheQueueDuringItsOwnDispatch() {
+        boolean[] seenEmpty = {true};
+        dispatcher.queueReentrantEvent("only");
+        processor.onDispatch = e -> seenEmpty[0] = dispatcher.myStack.isEmpty();
+        dispatcher.dispatchQueuedCallbacks();
+        assertThat("a nested dispatchQueuedCallbacks() must never observe an empty queue — "
+                        + "this is what makes the W2 early return behaviour-preserving",
+                seenEmpty[0], is(false));
+    }
+
+    /** The contract {@code dispatching} exists for, and which the early return must not disturb. */
+    @Test
+    public void fireIteratorCallbackDuringDispatchGoesToTheFrontOfTheQueue() {
+        dispatcher.queueReentrantEvent("outer");
+        dispatcher.queueReentrantEvent("tail");
+        processor.onDispatch = e -> {
+            if ("outer".equals(e)) {
+                List<String> items = new ArrayList<>();
+                items.add("i1");
+                items.add("i2");
+                dispatcher.fireIteratorCallback(7, items.iterator());
+            }
+        };
+        dispatcher.dispatchQueuedCallbacks();
+        assertThat("dispatching==true must put the iterator ahead of already-queued work",
+                processor.dispatched, is(listOf("outer", "i1", "i2", "tail")));
+    }
+
     // ---- W3: the queue is primitive-valued, so a callback must not box ---------------------
 
     @Test
@@ -136,15 +178,24 @@ public class CallbackDispatcherEmptyPathTest {
     /** Minimal processor that records what was dispatched to it. */
     private static final class RecordingProcessor implements InternalEventProcessor {
         final List<Object> dispatched = new ArrayList<>();
+        /** run on every dispatch, so a test can act from INSIDE an in-flight callback */
+        java.util.function.Consumer<Object> onDispatch = e -> {/*NoOp*/};
 
         @Override
         public void onEvent(Object event) {
-            dispatched.add(event);
+            record(event);
         }
 
         @Override
         public void onEventInternal(Object event) {
-            dispatched.add(event);
+            record(event);
+        }
+
+        /** iterator callbacks arrive wrapped; record the payload so tests read as the caller wrote it */
+        private void record(Object event) {
+            Object payload = event instanceof CallbackEvent ? ((CallbackEvent<?>) event).getData() : event;
+            dispatched.add(payload);
+            onDispatch.accept(payload);
         }
 
         @Override
