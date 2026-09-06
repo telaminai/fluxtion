@@ -17,7 +17,7 @@ public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, N
 
     public InternalEventProcessor eventProcessor;
     // W2: declared as the concrete type — an interface-typed field on this path is not
-    // devirtualised by closed-world AOT without profiles (M46 §3.3).
+    // devirtualised by closed-world AOT without profiles (M50 §3.3).
     // W3: BooleanSupplier, not Supplier<Boolean> — every wrapper's dispatch() already
     // returns primitive boolean, so the generic queue boxed on every callback.
     ArrayDeque<BooleanSupplier> myStack = new ArrayDeque<>();

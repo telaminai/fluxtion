@@ -10,7 +10,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 /**
- * M46/W2+W3 — {@code dispatchQueuedCallbacks()} runs on every event, and its EMPTY path used to
+ * M50/W2+W3 — {@code dispatchQueuedCallbacks()} runs on every event, and its EMPTY path used to
  * perform an interface {@code Deque.isEmpty()} plus an unconditional {@code dispatching = false}
  * store. The queue also held {@code Supplier<Boolean>}, boxing on every callback even though every
  * wrapper's {@code dispatch()} returns primitive {@code boolean}.
