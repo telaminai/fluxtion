@@ -60,6 +60,37 @@ public class EventProcessorConfig {
     @Getter
     @Setter
     private boolean supportBufferAndTrigger = true;
+
+    /**
+     * M50/W4 — whether the generated processor keeps the re-entrancy wrapper on the event path.
+     *
+     * <p>{@code processEvent} runs on EVERY event and, with support on, tests a {@code processing}
+     * flag, queues re-entrant events and drains the callback queue. When no node in the graph can
+     * raise a re-entrant event the queue is provably always empty and all of that is dead code.
+     * Round 58 measured the wrapper at <b>-26% on native-image</b> and -7% on a JIT.
+     *
+     * <p><b>Default true.</b> Turning it off trades a capability for throughput, so the safe default
+     * is current behaviour. With it off the generated processor retains a guard that <b>throws</b>
+     * rather than silently dropping a re-entrant event: build-time detection cannot be complete,
+     * because a node can reach the dispatcher through a service or reflectively.
+     */
+    @Getter
+    @Setter
+    private boolean supportReentrancy = true;
+
+    /**
+     * M50/W4 — whether the generated processor registers itself with the subscription manager.
+     *
+     * <p>{@code subscriptionManager.setSubscribingEventProcessor(this)} runs in the CONSTRUCTOR, so
+     * the processor escapes before it has handled an event and can never be scalar-replaced. Round 58
+     * found the escape chain worth more under AOT than PGO: 1.55 ns vs 3+ ns for the same source.
+     *
+     * <p><b>Default true.</b> Set false only when the processor is driven directly through
+     * {@code onEvent} and never subscribes to an event feed.
+     */
+    @Getter
+    @Setter
+    private boolean supportSubscriptions = true;
     private DISPATCH_STRATEGY dispatchStrategy = DISPATCH_STRATEGY.INSTANCE_OF;
     private List<String> compilerOptions = new ArrayList<>();
 
