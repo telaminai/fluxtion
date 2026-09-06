@@ -91,6 +91,26 @@ public class EventProcessorConfig {
     @Getter
     @Setter
     private boolean supportSubscriptions = true;
+
+    /**
+     * M50/W4 — whether every node is registered with each auditor at construction.
+     *
+     * <p>{@code initialiseAuditor} calls {@code auditor.nodeRegistered(node, name)} for EVERY node,
+     * and {@code NodeNameAuditor} stores them in two {@code HashMap}s. That publishes every node into
+     * a live heap structure, so no node can be scalar-replaced and the whole graph materialises.
+     *
+     * <p>It is the single largest cost in a generated processor and it is invisible without a profile,
+     * because an unprofiled image is already slow for other reasons. Measured on a real generated
+     * processor under accurate PGO: <b>5.07 ns with registration, 1.57 ns without</b> — the latter
+     * matching hand-written flat code at 1.54.
+     *
+     * <p><b>Default true.</b> Set false only when nothing needs to resolve a node by name:
+     * {@code getNodeById}, {@code DataFlow.getServiceById} and any auditor that uses
+     * {@code nodeRegistered} (an audit log naming its nodes, for instance) all depend on it.
+     */
+    @Getter
+    @Setter
+    private boolean supportNodeNameLookup = true;
     private DISPATCH_STRATEGY dispatchStrategy = DISPATCH_STRATEGY.INSTANCE_OF;
     private List<String> compilerOptions = new ArrayList<>();
 
