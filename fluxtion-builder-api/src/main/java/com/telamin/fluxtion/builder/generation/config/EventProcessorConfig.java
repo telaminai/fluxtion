@@ -249,6 +249,76 @@ public class EventProcessorConfig {
      * version only ever added, so replacing the clock left the author's own node published as
      * framework plumbing — the opposite of what this method promises.
      */
+    /**
+     * M50/W4 — a named bundle of the settings that decide dispatch cost.
+     *
+     * <p>These settings are individually documented, individually measured, and individually silent
+     * when omitted: a processor missing one is still correct and simply runs 3-5x slower with no
+     * diagnostic. Round 59 spent most of its time discovering that a figure which looked like
+     * compiler instability was a missing setting. A named profile removes the possibility.
+     *
+     * <p>Each profile states what it GIVES UP, because none of them is free.
+     */
+    public enum PerformanceProfile {
+        /**
+         * Framework defaults. Every capability on. Nothing is given up and nothing is tuned.
+         */
+        DEFAULT,
+        /**
+         * The audit log is the product: keep auditors, but stop the two defaults that allocate.
+         *
+         * <p>Gives up: the event's {@code toString()} and the thread name in each record.
+         * Keeps: everything else, including a fully populated node-name map.
+         * Measured: 885 -> 550 ns/event with node tracing on, and 208 bytes/event -> zero, which is
+         * what lets an audited processor run under a non-collecting GC.
+         */
+        AUDITED,
+        /**
+         * Lowest dispatch cost. <b>Gives up the audit log and conditional propagation.</b>
+         *
+         * <p>Drops the framework auditors — so no {@code Clock} reading the system clock on every
+         * event, and no {@code NodeNameLookup} map — turns off dirty filtering, and stops node
+         * registration. Node lookup still works: the generator emits it as code.
+         *
+         * <p>Requires void triggers on the nodes themselves
+         * ({@code failBuildIfMissingBooleanReturn = false}), which this profile cannot set for you.
+         * Measured on a 10-node graph: 5.5 ns on any JIT, ~1.6 ns native with PGO and the generated
+         * inlining directive.
+         */
+        LOWEST_LATENCY
+    }
+
+    /**
+     * Applies a {@link PerformanceProfile}. Call it FIRST, then override individual settings if you
+     * need to — a profile is a starting point, not a lock.
+     *
+     * @return this config, for chaining
+     */
+    public EventProcessorConfig performanceProfile(PerformanceProfile profile) {
+        if (profile == null || profile == PerformanceProfile.DEFAULT) {
+            return this;
+        }
+        if (profile == PerformanceProfile.LOWEST_LATENCY) {
+            setSupportDirtyFiltering(false);
+            setSupportNodeNameLookup(false);
+            if (getAuditorMap() != null) {
+                getAuditorMap().keySet().removeAll(new HashSet<>(getFrameworkAuditorNames()));
+            }
+        }
+        // AUDITED intentionally changes nothing here: its two settings live on the EventLogManager
+        // and are applied by addEventAudit(level, printEventToString, printThreadName). Naming the
+        // profile still documents the choice, and auditedEventLogConfig() below applies it.
+        return this;
+    }
+
+    /**
+     * The audit configuration {@link PerformanceProfile#AUDITED} means: records, node tracing, and
+     * neither of the two defaults that allocate.
+     */
+    public EventProcessorConfig addAuditedEventLog(LogLevel tracingLogLevel) {
+        return addEventAudit(tracingLogLevel, false, false);
+    }
+
     public Set<String> getFrameworkAuditorNames() {
         return Collections.unmodifiableSet(frameworkAuditorNames);
     }
