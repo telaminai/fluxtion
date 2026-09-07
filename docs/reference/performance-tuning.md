@@ -58,11 +58,11 @@ The last row is the point: **with the full configuration, generated dispatch is 
 hand-rolled flat Java.** Every JIT lands at 5.5–5.6 regardless of vendor.
 
 !!! warning "Native-image is only faster if you configure it — otherwise it is SLOWER than a JIT"
-    In the sweep above, **native without PGO (7.76 ns) is slower than every JIT measured**, including
-    plain Temurin. Native-image beats a JIT only when **both** an accurate PGO profile **and** the
-    inlining directive are supplied, and even then it is not guaranteed (see below). If you cannot
-    supply a representative profile, **a JIT is the safer choice** — Graal JIT at 5.56 ns is the best
-    unconditional number on this graph.
+    In the sweep above, **native without PGO (6.54 ns) is slower than every JIT measured**, including
+    plain Temurin. Native-image beats a JIT only when an accurate PGO profile **and** the inlining
+    directive **and** the configuration below are all present. If you cannot collect a representative
+    profile, **a JIT is the safer choice** — Graal JIT at 5.47 ns is the best unconditional number on
+    this graph, and no JIT vendor differs by more than 2%.
 
 **Read those two tables together.** 1.6 ns needs native-image **and** an accurate profile **and** the
 inlining directive **and** the configuration below. Miss any one and you are at 5.5–6.5 — still correct,
@@ -103,14 +103,16 @@ native-image --pgo=app.iprof \
 | step | cost of omitting it | where |
 |---|---|---|
 | force the dispatch chain to inline | **3.5×** (1.57 → 5.56) | native only |
-| supply a `ClockStrategy` | **5.8×** (5.03 → 29.08) | both |
-| accurate PGO profile | **4.2×** (1.57 → 6.53) | native only |
+| `setSupportNodeNameLookup(false)` | **3.5×** (1.62 → 5.61) | native only |
+| supply a `ClockStrategy` (or drop the auditors) | **5.8×** (5.03 → 29.08) | both |
+| accurate PGO profile | **4.0×** (1.62 → 6.54) | native only |
 | non-escaping processor | **2–3×** | native only |
 | void triggers + no dirty filtering | large; changes semantics | both |
 | `printEventToString(false)` when auditing | 208 bytes/event, rules out epsilon GC | both |
 
-**None of these is a micro-optimisation.** The first three are each worth more than everything else on
-this page combined, and the first is now emitted automatically by the generator (§*ship the directive*).
+**None of these is a micro-optimisation.** The first four are each worth more than everything else on
+this page combined. Only the inlining directive is emitted automatically by the generator
+(§*ship the directive*); **the rest you must ask for**, and omitting any one is silent.
 
 ---
 
@@ -145,9 +147,16 @@ processor.onEvent(ClockStrategy.registerClockEvent(() -> myStreamTime));
 // 2d  FORCE THE DISPATCH CHAIN TO INLINE — without this you lose 3.5x:            (§below)
 //     native-image -H:PriorityForceInline='com.your.pkg.YourProcessor.*'
 
-// ---- Handled for you, nothing to configure ------------------------------------------------
-// Node-name lookup is generated as a switch rather than a populated map. It was the single
-// largest cost; the generator now emits it as code and no capability is lost.          (§6)
+// 2e  NO NODE REGISTRATION — the single largest cost, and you must ask for it:
+//     otherwise every node is published into the auditor's HashMaps and none can be
+//     scalar-replaced. Lookup still works: the generator emits getInstanceById and
+//     lookupInstanceName as CODE, so nothing is lost.                                 (§6)
+config.setSupportNodeNameLookup(false);
+
+// 2f  NO AUDITORS, if you do not need the audit log: the Clock auditor alone reads the
+//     system clock on every event, and the three framework auditors together consume the
+//     escape-analysis budget the node graph needs.
+//     config.getAuditorMap().keySet().removeAll(config.getFrameworkAuditorNames());
 
 // ---- NOT needed — all measured free. Set only if you don't want the capability -------------
 //   config.setSupportReentrancy(false);        // wrapper free, guard free
