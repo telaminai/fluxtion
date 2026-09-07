@@ -71,6 +71,44 @@ just 3–4× slower, with no diagnostic. **Build it and measure it.**
 Every step on this page is worth 2× or more, and getting one wrong is silent — the program stays
 correct and simply runs slower.
 
+### Checklist for maximal performance
+
+Work down it. **Each item is silent when omitted** — the program stays correct and simply runs slower —
+so the only way to know you have them all is to check.
+
+**Build**
+
+- [ ] `config.performanceProfile(LOWEST_LATENCY)` — one line, and it sets the three below for you
+- [ ] &nbsp;&nbsp;↳ framework auditors dropped *(no `Clock` reading the system clock per event)*
+- [ ] &nbsp;&nbsp;↳ `setSupportDirtyFiltering(false)` *(no dirty flags, no guards)*
+- [ ] &nbsp;&nbsp;↳ `setSupportNodeNameLookup(false)` *(no node registration — the single largest cost)*
+- [ ] **void triggers on every node** — `@OnTrigger(failBuildIfMissingBooleanReturn = false)` and the
+      same on `@OnEventHandler`. **The profile cannot set this for you**; it lives on your classes.
+- [ ] If you need the audit log instead: `performanceProfile(AUDITED)` +
+      `addAuditedEventLog(LogLevel.INFO)` — keeps the log, drops the 208 bytes/event
+
+**Runtime shape**
+
+- [ ] processor constructed **inside** the method that runs the event loop, and never escapes it
+- [ ] **nothing between the constructor and the loop** — no timing call, no logging, no registration
+- [ ] if you kept the `Clock` auditor: supply a `ClockStrategy` **before** entering that method
+
+**Native image** *(skip all of this if you deploy on a JIT — none of it applies)*
+
+- [ ] `--pgo=<profile>` from a run that exercises **every path you deploy**
+- [ ] `-H:PriorityForceInline=<YourProcessor>.*` — emitted for you in
+      `META-INF/native-image/…/native-image.properties` when `generateReachabilityMetadata` is on
+- [ ] whole-class wildcard, **not** a curated method list — naming methods individually does not work
+- [ ] never reuse a profile across image kinds, or from a different entry point
+
+**Verify — do not assume**
+
+- [ ] run `tools/bench/latency-kit/run.sh` against your own graph
+- [ ] compare arms with `tools/bench/dispatch-bench.py`, which refuses to report until the arms
+      produce identical output
+- [ ] **if a number surprises you, check this list before concluding anything about the compiler** —
+      four times in round 59 a missing setting or a harness defect looked exactly like one
+
 ### The whole configuration
 
 ```java
@@ -78,8 +116,10 @@ correct and simply runs slower.
 @OnTrigger(failBuildIfMissingBooleanReturn = false)         // void trigger: no dirty flag, no guard
 @OnEventHandler(failBuildIfMissingBooleanReturn = false)
 
-config.setSupportDirtyFiltering(false);                     // no dirty-flag machinery at all
-config.addEventAudit(LogLevel.INFO, false, false);          // IF auditing: stringify + thread name OFF
+config.performanceProfile(LOWEST_LATENCY);                  // auditors off, no dirty flags,
+                                                            // no node registration
+// or, if the audit log is the point:
+// config.performanceProfile(AUDITED).addAuditedEventLog(LogLevel.INFO);
 
 // ---- runtime ----------------------------------------------------------------
 processor.onEvent(ClockStrategy.registerClockEvent(() -> myStreamTime));   // else it reads the
