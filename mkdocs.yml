@@ -103,6 +103,7 @@ nav:
       - Alternative comparisons: reference/alternative-comparisons.md
       - Performance results: reference/performance.md
       - Performance profiles: reference/performance-profiles.md
+      - Tuning for lowest latency: reference/performance-tuning.md
       - Audit latency harness: reference/audit-latency-harness.md
 
   - Reference guide:
