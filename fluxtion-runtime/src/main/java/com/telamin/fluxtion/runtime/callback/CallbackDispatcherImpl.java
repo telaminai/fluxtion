@@ -23,6 +23,17 @@ public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, N
     ArrayDeque<BooleanSupplier> myStack = new ArrayDeque<>();
     private boolean dispatching = false;
 
+    /**
+     * M50/W1 — every queueing path funnels through here so the processor's flag cannot drift from the
+     * queue. Adding a queueing method without calling this is the one way to break the optimisation,
+     * and {@code CallbackDispatcherPendingTest} fails if a public queueing method does not mark.
+     */
+    private void markPending() {
+        if (eventProcessor != null) {
+            eventProcessor.callbacksPending(true);
+        }
+    }
+
     @Override
     public void dispatchQueuedCallbacks() {
         // W2: the common case is an empty queue on every event. Return before touching
@@ -39,6 +50,7 @@ public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, N
             }
         }
         dispatching = false;
+        eventProcessor.callbacksPending(false);
     }
 
     @Override
@@ -46,6 +58,7 @@ public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, N
         SingleCallBackWrapper<Object> callBackWrapper = new SingleCallBackWrapper<>();
         callBackWrapper.setFilterId(id);
         myStack.add(callBackWrapper::dispatch);
+        markPending();
     }
 
     @Override
@@ -55,6 +68,7 @@ public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, N
         callBackWrapper.setFilterId(id);
         callBackWrapper.setData(item);
         myStack.add(callBackWrapper::dispatch);
+        markPending();
     }
 
     @Override
@@ -69,6 +83,7 @@ public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, N
             //System.out.println("adding iterator to BACK of callback queue id:" + callbackId);
             myStack.add(callBackWrapper::dispatch);
         }
+        markPending();
     }
 
     @Override
@@ -76,6 +91,7 @@ public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, N
         SingleEventPublishWrapper<Object> callBackWrapper = new SingleEventPublishWrapper<>();
         callBackWrapper.data = event;
         myStack.addFirst(callBackWrapper::dispatch);
+        markPending();
     }
 
     @Override
@@ -83,6 +99,7 @@ public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, N
         IteratingEventPublishWrapper publishingWrapper = new IteratingEventPublishWrapper();
         publishingWrapper.dataIterator = iterable.iterator();
         myStack.addFirst(publishingWrapper::dispatch);
+        markPending();
     }
 
     @Override
@@ -90,6 +107,7 @@ public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, N
         SingleEventPublishWrapper<Object> callBackWrapper = new SingleEventPublishWrapper<>();
         callBackWrapper.data = event;
         myStack.add(callBackWrapper::dispatch);
+        markPending();
     }
 
     @Override
