@@ -374,6 +374,39 @@ stays at 1.87, while `callbackDispatcher + nodeNameLookup + subscriptionManager`
 Elision has to be measured, not counted — and on an unprofiled native image it is close to
 all-or-nothing.
 
+### Why hand-rolled always lands and a generated processor does not
+
+This is the mechanism behind the 85% figure at the top of the page, and it is worth stating plainly
+because it explains why the two are not comparable in *stability* even when they are comparable in
+speed.
+
+A hand-rolled equivalent is **one object with primitive fields**. There is one allocation to dissolve
+and it is far below any budget, so it scalar-replaces in every build ever measured — 1.55 ns, no
+variance, no configuration required.
+
+A generated processor is **ten node objects plus its framework fields**, and with the configuration on
+this page that total sits *right at* the compiler's dissolution threshold. Both outcomes are
+reachable from the same source, which is why the result is bimodal rather than noisy: the compiler
+either dissolves the whole graph (~1.6) or gives up on it (~5.5), and there is nothing in between to
+land on.
+
+!!! danger "Perturbing the graph tips it, and NOT in the direction you would predict"
+    The obvious move is to shrink the graph. Tested: dropping `NodeNameAuditor` — three fewer objects,
+    two fewer virtual calls per event — took the fast-mode rate from **11 of 13 cycles to 0 of 5**. The
+    *faster* configuration is the one that executes strictly more code.
+
+    That result was published here briefly as an optimisation, on a 6-cycle sample, and is
+    **withdrawn**. No mechanism is offered for it — and none should be inferred. It is a local accident
+    of this graph, not a tuning rule, and the useful lesson is the general one: near the threshold,
+    **the sign of a change cannot be predicted, only measured.**
+
+    Corollary for anyone reading a small sample as a mechanism: a bimodal measurement cannot
+    distinguish 0% from 50% in five runs. Round 59 got that wrong twice.
+
+**What to take from this.** The configuration on this page is what gets you *to* the threshold — every
+item is load-bearing, and omitting one puts you at 5.5 with certainty rather than 85%. Getting over it
+is then the compiler's call, so **verify the build you ship**, and rebuild if it lands slow.
+
 ## PGO — an accurate profile removes the cliff; a bad one is worse than none
 
 **For an AOT Fluxtion processor a bad profile is worse than no profile.** This is not a caution, it is
@@ -451,7 +484,7 @@ scalar-replaced. That is the entire 3.5×. Forcing the inline removes the decisi
 to contain a second hot loop over the same processor, and 5.5 in one that did not. Do not rely on the
 inliner choosing correctly.
 
-### Verified repeatable
+### How repeatable it is
 
 Every shape below rebuilt with its own instrumented image and its own freshly collected profile,
 output verified identical:
@@ -464,7 +497,14 @@ output verified identical:
 | loop in its own class | 5.60 | **1.57** |
 | **the reusable kit, `tools/bench/latency-kit`** | 6.54 | **1.62** |
 
-Three independent full build cycles of one application gave 1.56 / 1.56 / 1.57.
+**But it is not certain — it is about 85%.** Widening that to 13 independent
+profile-and-build cycles of one application: **11 landed at ~1.6 ns and 2 at ~5.5.** Nothing in
+between. The flag is necessary and it is not sufficient; the residual is the bimodality of
+[oracle/graal#14387](https://github.com/oracle/graal/issues/14387), where two images built from
+identical classes, with byte-identical hot methods, measured 1.43 and 5.45.
+
+**So measure the build you ship**, and rebuild if it lands slow — a fresh profile usually recovers it.
+The table above is what a landing build looks like, not a guarantee that every build lands.
 
 !!! warning "A missing configuration setting looks exactly like an unstable compiler"
     The kit measured **6.22** for a long time with the directive correctly applied, and that was
@@ -528,8 +568,9 @@ Measured on macOS/aarch64, Oracle GraalVM 25.0.4, output verified identical on e
 
 **A note on provenance.** Round 58's published figures of 1.41–1.55 ns were measured on
 `BaseProcessor`, a hand-written stand-in, not on generated code. **That gap is closed**: with the
-configuration above the generator itself produces **1.57 ns**, repeatably, matching that control (1.58)
-and hand-rolled flat code (1.55).
+configuration above the generator itself produces **1.57 ns** — on a build that lands — matching that
+control (1.58) and hand-rolled flat code (1.55). Hand-rolled lands every time; the generated processor
+lands about 85% of the time. See *How repeatable it is*.
 
 Quote the shape, not the best number in the table.
 
