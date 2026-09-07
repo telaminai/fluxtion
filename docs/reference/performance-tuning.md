@@ -57,14 +57,16 @@ output verified identical, full configuration applied:
 The last row is the point: **with the full configuration, generated dispatch is within 3% of
 hand-rolled flat Java.** Every JIT lands at 5.5–5.6 regardless of vendor.
 
-!!! warning "The native + PGO figure lands about 85% of builds, not every build"
-    Measured over 13 independent profile-and-build cycles of the same source: **11 landed at
-    ~1.6 ns, 2 at ~5.5 ns.** There is nothing in between — it is bimodal, and which mode a build gets
-    varies with the profile collected. The JIT numbers are deterministic; this one is not.
-
-    **So verify each build.** `tools/bench/latency-kit/run.sh` exists for that. If a build lands in the
-    slow mode, rebuild — a fresh profile usually fixes it. Root cause is
+!!! warning "The native + PGO figure is per-build, and the build is a lottery"
+    Rebuilding the same source, with the same flags, gives **either ~1.6 ns or ~5.5 ns** and nothing in
+    between. One session landed 11 of 13; the next landed 3, then missed 15 in a row on identical
+    inputs. Feeding a build's own profile back in does not reproduce it. Nothing measurable
+    distinguishes the two — same profile counters, same image size, same builder memory. Root cause is
     [oracle/graal#14387](https://github.com/oracle/graal/issues/14387).
+
+    **So measure every build and keep the one that lands** — a binary reproduces its own mode exactly,
+    for ever. `tools/bench/latency-kit/run.sh` exists for that. The JIT numbers need none of this: they
+    are deterministic on all five JVMs.
 
 !!! warning "Native-image is only faster if you configure it — otherwise it is SLOWER than a JIT"
     In the sweep above, **native without PGO (6.54 ns) is slower than every JIT measured**, including
@@ -74,8 +76,8 @@ hand-rolled flat Java.** Every JIT lands at 5.5–5.6 regardless of vendor.
     this graph, and no JIT vendor differs by more than 2%.
 
 **Read those two tables together.** 1.6 ns needs native-image **and** an accurate profile **and** the
-inlining directive **and** the configuration below — and then it lands about 85% of the time. Miss any
-one of them and you are at 5.5–6.5 every time, still correct, just 3–4× slower, with no diagnostic.
+inlining directive **and** the configuration below — and then it still has to land. Miss any one of
+them and you are at 5.5–6.5 *every* time, still correct, just 3–4× slower, with no diagnostic.
 **Build it and measure it.**
 
 Every step on this page is worth 2× or more, and getting one wrong is silent — the program stays
@@ -109,7 +111,9 @@ so the only way to know you have them all is to check.
 - [ ] `-H:PriorityForceInline=<YourProcessor>.*` — emitted for you in
       `META-INF/native-image/…/native-image.properties` when `generateReachabilityMetadata` is on
 - [ ] whole-class wildcard, **not** a curated method list — naming methods individually does not work
-- [ ] never reuse a profile across image kinds, or from a different entry point
+- [ ] never reuse a profile across image kinds, from a different entry point, **or across a rebuild of
+      the instrumented image** — a stale profile measured 8.0 ns, worse than no profile at all, and the
+      build reports `PGO: user-provided` without a warning
 
 **Verify — do not assume**
 
@@ -374,38 +378,64 @@ stays at 1.87, while `callbackDispatcher + nodeNameLookup + subscriptionManager`
 Elision has to be measured, not counted — and on an unprofiled native image it is close to
 all-or-nothing.
 
-### Why hand-rolled always lands and a generated processor does not
+### Why a build lands, and why the next one may not
 
-This is the mechanism behind the 85% figure at the top of the page, and it is worth stating plainly
-because it explains why the two are not comparable in *stability* even when they are comparable in
-speed.
+This is the mechanism behind the repeatability caveat at the top of the page. It is shorter than you
+would like, because the honest version is short.
 
-A hand-rolled equivalent is **one object with primitive fields**. There is one allocation to dissolve
-and it is far below any budget, so it scalar-replaces in every build ever measured — 1.55 ns, no
-variance, no configuration required.
+**The mode is decided by the build.** Not by the source, and not by the profile. One build measured
+1.60; its profile was kept and fed back to two more builds — same instrumented image, same classes,
+same flags, nothing else changed — and they measured 6.66 and 5.66. Two builds from one profile also
+differ in SHA while measuring the same, so `native-image` is not byte-reproducible, and the
+nondeterminism reaches the decision that decides whether the processor dissolves.
 
-A generated processor is **ten node objects plus its framework fields**, and with the configuration on
-this page that total sits *right at* the compiler's dissolution threshold. Both outcomes are
-reachable from the same source, which is why the result is bimodal rather than noisy: the compiler
-either dissolves the whole graph (~1.6) or gives up on it (~5.5), and there is nothing in between to
-land on.
+**Once built, it is fixed.** A given binary reproduces its mode exactly, run after run. Padding the
+environment to shift the stack and varying the heap size to shift the heap change nothing. So the
+build is the lottery and the binary is the ticket: **keep the one that landed.**
 
-!!! danger "Perturbing the graph tips it, and NOT in the direction you would predict"
-    The obvious move is to shrink the graph. Tested: dropping `NodeNameAuditor` — three fewer objects,
-    two fewer virtual calls per event — took the fast-mode rate from **11 of 13 cycles to 0 of 5**. The
-    *faster* configuration is the one that executes strictly more code.
+!!! danger "Two things that look like this, and are not"
+    **Nothing about your graph.** Round 59 published, and this page carried for a day, an explanation
+    that the generated processor's ten node objects sit at a size threshold while hand-rolled is one
+    object and therefore always lands. **Withdrawn** — in a bad build the hand-rolled arm does not land
+    either, and it has nothing to dissolve that the processor could have spoiled.
 
-    That result was published here briefly as an optimisation, on a 6-cycle sample, and is
-    **withdrawn**. No mechanism is offered for it — and none should be inferred. It is a local accident
-    of this graph, not a tuning rule, and the useful lesson is the general one: near the threshold,
-    **the sign of a change cannot be predicted, only measured.**
+    **Nothing about your configuration.** Round 59 also reported that dropping the last auditor changed
+    the landing rate. **Withdrawn** — the same unmodified configuration measured 1.60/1.67/1.68 one
+    hour and 5.58/5.70/5.71/5.73 the next. Neither sample was measuring the auditor.
 
-    Corollary for anyone reading a small sample as a mechanism: a bimodal measurement cannot
-    distinguish 0% from 50% in five runs. Round 59 got that wrong twice.
+    The general lesson under both: this outcome is bimodal, so a handful of builds cannot tell you the
+    sign of a change. Round 59 concluded that it could, twice, and was wrong both times.
 
-**What to take from this.** The configuration on this page is what gets you *to* the threshold — every
-item is load-bearing, and omitting one puts you at 5.5 with certainty rather than 85%. Getting over it
-is then the compiler's call, so **verify the build you ship**, and rebuild if it lands slow.
+**How often does it land?** Not a stable number. 11 of 13 in one session; 3 of 18 in the next, with 15
+consecutive misses on inputs that had just produced three hits. The outcomes are not even independent —
+they arrive in runs — and nothing measurable separates a good build from a bad one: the profiles are
+identical on every hot counter, the images are the same size, the builder gets the same memory.
+
+**So verify the build you ship.** That is not a caution to add to the method; on this platform it *is*
+the method. Build, measure with `tools/bench/latency-kit/run.sh`, keep the binary that lands, rebuild
+when it doesn't.
+
+### The knobs that do not work
+
+`native-image --expert-options-all` offers a set of options whose names promise exactly what is wanted.
+Each was measured on a full fresh cycle, at 4–6× its default, against a floor of 5.6:
+
+| flag | result |
+|---|---|
+| `-H:IPEAMaxForce` · `-H:IPEAVirtualEscapeBoostSingle` | no effect |
+| `-H:TuneInlinerExploration` | no effect, and +530 KB of image |
+| `-H:BaseTargetSpending` · `-H:InliningCoefficient` family | no effect |
+| `-H:MaximumInliningSize` · `-H:SmallCompiledLowLevelGraphSize` | no effect |
+| `-H:EscapeAnalysisIterations` · `-H:EscapeAnalysisLoopCutoff` | no effect |
+| `-H:PriorityForceInline` widened to the nodes, the framework, the loop's own class | no effect |
+| **`-H:+InlineEverything`** | **no effect** |
+| `-H:NumberOfThreads=1` or `=4` *(hoping for a deterministic build)* | no effect, and still not byte-reproducible |
+
+`InlineEverything` failing to move it is the informative row: whatever bails is not reachable by
+turning inlining up.
+
+**`-H:PriorityForceInline=<YourProcessor>.*` is the only lever that works** — it is worth 3.5× and it
+is not optional. It is also not sufficient, which is what the rest of this section is about.
 
 ## PGO — an accurate profile removes the cliff; a bad one is worse than none
 
@@ -487,7 +517,8 @@ inliner choosing correctly.
 ### How repeatable it is
 
 Every shape below rebuilt with its own instrumented image and its own freshly collected profile,
-output verified identical:
+output verified identical. **These are the builds that landed** — see *Why a build lands* above for
+what that qualification is doing here:
 
 | program shape | without flag | with flag |
 |---|---|---|
@@ -497,14 +528,14 @@ output verified identical:
 | loop in its own class | 5.60 | **1.57** |
 | **the reusable kit, `tools/bench/latency-kit`** | 6.54 | **1.62** |
 
-**But it is not certain — it is about 85%.** Widening that to 13 independent
-profile-and-build cycles of one application: **11 landed at ~1.6 ns and 2 at ~5.5.** Nothing in
-between. The flag is necessary and it is not sufficient; the residual is the bimodality of
+**The flag is necessary and it is not sufficient.** Across two sessions of repeated
+profile-and-build cycles on unchanged inputs: 11 of 13, then 3 of 18. Nothing lands between ~1.6 and
+~5.5, and a build's own profile fed back in does not reproduce it. The residual is
 [oracle/graal#14387](https://github.com/oracle/graal/issues/14387), where two images built from
 identical classes, with byte-identical hot methods, measured 1.43 and 5.45.
 
-**So measure the build you ship**, and rebuild if it lands slow — a fresh profile usually recovers it.
-The table above is what a landing build looks like, not a guarantee that every build lands.
+**So measure the build you ship, and keep the binary that landed** — its mode is fixed once built.
+The table above is what a landing build looks like, not a guarantee that a build lands.
 
 !!! warning "A missing configuration setting looks exactly like an unstable compiler"
     The kit measured **6.22** for a long time with the directive correctly applied, and that was
@@ -569,8 +600,8 @@ Measured on macOS/aarch64, Oracle GraalVM 25.0.4, output verified identical on e
 **A note on provenance.** Round 58's published figures of 1.41–1.55 ns were measured on
 `BaseProcessor`, a hand-written stand-in, not on generated code. **That gap is closed**: with the
 configuration above the generator itself produces **1.57 ns** — on a build that lands — matching that
-control (1.58) and hand-rolled flat code (1.55). Hand-rolled lands every time; the generated processor
-lands about 85% of the time. See *How repeatable it is*.
+control (1.58) and hand-rolled flat code (1.55). See *How repeatable it is*: in a build that does not
+land, the hand-rolled control does not land either.
 
 Quote the shape, not the best number in the table.
 
