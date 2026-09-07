@@ -606,6 +606,138 @@ The generator knows its own fully-qualified class name at build time, so it can 
 the same partial-evaluation move the rest of this page describes, applied to the compiler's own
 configuration. That is open work (M50), not something the generator does today.
 
+## Wiring it into a Maven build
+
+Everything above is expressed as `native-image` flags. In a real project those come from
+`native-maven-plugin`, and the PGO steps become two Maven profiles. Verified against the
+[plugin documentation](https://graalvm.github.io/native-build-tools/latest/maven-plugin.html);
+latest release at the time of writing is **0.10.6**.
+
+Two things this project's own results change about the stock recipe, and they are the whole point of
+this section:
+
+1. **Commit the profile.** The stock workflow regenerates `default.iprof` on every build, so every
+   build rolls the dice again — collection is what varies, not the compiler (*Why a build lands*).
+   A profile that landed is a build input. Put it in the repository and point `--pgo` at it.
+2. **Nothing needs adding for the inlining directive.** `native-image` reads
+   `META-INF/native-image/**/native-image.properties` off the classpath, and the generated processor
+   carries its own. It shows up in the build log as
+   `- '-H:PriorityForceInline' (origin(s): 'META-INF/native-image/…')` — check for that line.
+
+### The two profiles
+
+```xml
+<properties>
+  <native.maven.plugin.version>0.10.6</native.maven.plugin.version>
+</properties>
+
+<profiles>
+  <!-- 1. mvn -Pinstrumented package  →  target/app-instrumented -->
+  <profile>
+    <id>instrumented</id>
+    <build><plugins><plugin>
+      <groupId>org.graalvm.buildtools</groupId>
+      <artifactId>native-maven-plugin</artifactId>
+      <version>${native.maven.plugin.version}</version>
+      <extensions>true</extensions>
+      <executions><execution>
+        <id>build-native</id><phase>package</phase>
+        <goals><goal>compile-no-fork</goal></goals>
+      </execution></executions>
+      <configuration>
+        <imageName>app-instrumented</imageName>
+        <buildArgs>
+          <buildArg>--pgo-instrument</buildArg>
+          <buildArg>--no-fallback</buildArg>
+        </buildArgs>
+      </configuration>
+    </plugin></plugins></build>
+  </profile>
+
+  <!-- 2. mvn -Pnative package  →  target/app, built from the COMMITTED profile -->
+  <profile>
+    <id>native</id>
+    <build><plugins><plugin>
+      <groupId>org.graalvm.buildtools</groupId>
+      <artifactId>native-maven-plugin</artifactId>
+      <version>${native.maven.plugin.version}</version>
+      <extensions>true</extensions>
+      <executions><execution>
+        <id>build-native</id><phase>package</phase>
+        <goals><goal>compile-no-fork</goal></goals>
+      </execution></executions>
+      <configuration>
+        <imageName>app</imageName>
+        <buildArgs>
+          <!-- one option expression per buildArg; this is a path in the repo, not default.iprof -->
+          <buildArg>--pgo=${project.basedir}/src/pgo/app.iprof</buildArg>
+          <buildArg>--gc=epsilon</buildArg>
+          <buildArg>--no-fallback</buildArg>
+        </buildArgs>
+      </configuration>
+    </plugin></plugins></build>
+  </profile>
+</profiles>
+```
+
+`--gc=epsilon` belongs only to a bounded-run benchmark or a service that genuinely allocates nothing;
+drop it otherwise. Everything else is independent of the collector.
+
+### Producing the profile you commit
+
+Run this when the graph changes — not on every build. The loop exists because a fresh collection lands
+only some of the time, while the profile it produces reproduces every time.
+
+```bash
+#!/usr/bin/env bash
+# Collect a PGO profile until the resulting image is fast, then keep that profile.
+set -euo pipefail
+TARGET_NS=2.0                      # what "landed" means for your workload
+mvn -q -Pinstrumented package
+
+for attempt in $(seq 1 10); do
+  # Exercise EVERY path you deploy. An unprofiled path is worse than no profile at all,
+  # and the app must EXIT cleanly - the profile is written when it stops.
+  ./target/app-instrumented --your --representative --workload
+  mv default.iprof "src/pgo/candidate-$attempt.iprof"
+
+  mvn -q -Pnative package -Dpgo.profile="src/pgo/candidate-$attempt.iprof"
+  ns=$(./target/app --benchmark | awk '/ns_per_event/{print $2}')
+  echo "attempt $attempt: $ns ns"
+
+  if awk "BEGIN{exit !($ns <= $TARGET_NS)}"; then
+      cp "src/pgo/candidate-$attempt.iprof" src/pgo/app.iprof
+      echo "landed on attempt $attempt — commit src/pgo/app.iprof"
+      exit 0
+  fi
+done
+echo "no attempt landed in 10; the best candidate is still in src/pgo/" >&2
+exit 1
+```
+
+Wire `-Dpgo.profile` to the `--pgo=` `buildArg` with a property, so the same POM serves the search and
+the committed build.
+
+!!! warning "Three ways this goes wrong silently"
+    **A profile from a rebuilt instrumented image.** Profiles belong to the instrumented image that
+    produced them. Carried across a rebuild of *that* image, one measured 8.0 ns — worse than no
+    profile at all — and the build still reported `PGO: user-provided` with no warning. Rebuild the
+    instrumented image and you must recollect.
+
+    **An instrumented run that did not exit.** `default.iprof` is written when the application stops.
+    A `kill -9` on a long-running service leaves you with no profile, or a stale one from last time.
+
+    **A workload that misses a path.** An unprofiled path is compiled *worse* than with no profile at
+    all. If you deploy two entry points, exercise both.
+
+### Gate the build, do not trust it
+
+The difference between a landing build and a missing one is 3.5×, and it is invisible — same image
+size, same log, no warning. Whatever your benchmark is, run it in the same job that produces the binary
+and fail on a regression. For this project's shape that is
+[`tools/bench/land-native.py`](https://github.com/telaminai/fluxtionauditlog-analyser/blob/main/tools/bench/land-native.py); for an application it is your own benchmark plus a threshold, which is
+what the script above does.
+
 ## Honest numbers
 
 Measured on macOS/aarch64, Oracle GraalVM 25.0.4, output verified identical on every arm.
