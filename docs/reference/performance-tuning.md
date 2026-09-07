@@ -335,7 +335,8 @@ generated arm is what changes; the hand-rolled arm is the control.
 | **C** + auditor off the event path *(W15)* | 5.155 | 1.6867 |
 | **D** + service registry gone *(post-W11)* | 5.155 | 1.6900 |
 | **E** + buffer, drain **and the re-entrancy guard** gone *(emulation)* | **4.893** | 1.6706 |
-| **F/G** what `LOWEST_LATENCY` now actually generates | 5.124 – 5.143 | 1.7176 |
+| **F** the emulation configured for real, re-entrancy off | 5.143 | 1.7176 *(1 build)* |
+| **G** what `LOWEST_LATENCY` now generates — **the shipped shape** | 5.124 | **1.638 – 1.682**, mean **1.666**, *5 of 5 fresh cycles* |
 | *hand-rolled control* | ~3.5 | ~1.53 – 1.56 |
 
 !!! danger "E is an emulation and it does not measure what you think"
@@ -348,6 +349,15 @@ generated arm is what changes; the hand-rolled arm is the control.
 
     **The lesson is the one this whole page keeps relearning: measure the artefact you will ship, not
     a hand-edit that stands in for it.**
+
+**The shipped row, measured properly.** Five independent profile-and-build cycles of G — fresh
+collection each time, none allowed to exit early — gave 1.6383 / 1.6487 / 1.6818 / 1.6799 / 1.6806,
+**5 of 5 in the fast mode, spread 0.044 ns.** The hand-rolled control drifted 1.4828 → 1.5622 across
+the same five as the machine warmed, so the portable quantity is the difference: **0.118 – 0.156 ns,
+mean 0.131.** Quote `generated − hand`, not the absolute, if you are comparing across machines.
+
+**But 5 of 5 is a sample, not a guarantee** — the same day produced 19 consecutive misses on a
+different shape with unmodified inputs. Keep the profile that landed (*Why a build lands*).
 
 **Read the two columns differently, because they are telling you different things.**
 
