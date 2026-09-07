@@ -57,6 +57,15 @@ output verified identical, full configuration applied:
 The last row is the point: **with the full configuration, generated dispatch is within 3% of
 hand-rolled flat Java.** Every JIT lands at 5.5–5.6 regardless of vendor.
 
+!!! warning "The native + PGO figure lands about 85% of builds, not every build"
+    Measured over 13 independent profile-and-build cycles of the same source: **11 landed at
+    ~1.6 ns, 2 at ~5.5 ns.** There is nothing in between — it is bimodal, and which mode a build gets
+    varies with the profile collected. The JIT numbers are deterministic; this one is not.
+
+    **So verify each build.** `tools/bench/latency-kit/run.sh` exists for that. If a build lands in the
+    slow mode, rebuild — a fresh profile usually fixes it. Root cause is
+    [oracle/graal#14387](https://github.com/oracle/graal/issues/14387).
+
 !!! warning "Native-image is only faster if you configure it — otherwise it is SLOWER than a JIT"
     In the sweep above, **native without PGO (6.54 ns) is slower than every JIT measured**, including
     plain Temurin. Native-image beats a JIT only when an accurate PGO profile **and** the inlining
@@ -65,8 +74,9 @@ hand-rolled flat Java.** Every JIT lands at 5.5–5.6 regardless of vendor.
     this graph, and no JIT vendor differs by more than 2%.
 
 **Read those two tables together.** 1.6 ns needs native-image **and** an accurate profile **and** the
-inlining directive **and** the configuration below. Miss any one and you are at 5.5–6.5 — still correct,
-just 3–4× slower, with no diagnostic. **Build it and measure it.**
+inlining directive **and** the configuration below — and then it lands about 85% of the time. Miss any
+one of them and you are at 5.5–6.5 every time, still correct, just 3–4× slower, with no diagnostic.
+**Build it and measure it.**
 
 Every step on this page is worth 2× or more, and getting one wrong is silent — the program stays
 correct and simply runs slower.
