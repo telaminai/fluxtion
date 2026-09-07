@@ -102,6 +102,7 @@ nav:
       - "FAQ: Common questions and tradeoffs": reference/faq.md
       - Alternative comparisons: reference/alternative-comparisons.md
       - Performance results: reference/performance.md
+      - Tuning for lowest latency: reference/performance-tuning.md
 
   - Reference guide:
       - Quick reference: reference/reference-documentation.md
