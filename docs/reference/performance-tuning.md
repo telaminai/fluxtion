@@ -26,19 +26,48 @@ So: **a figure without its shape is not a result.** Every number below carries o
 
 ## At a glance
 
-**A generated Fluxtion processor runs at 1.57 ns/event — about 637M events per second — matching
-hand-written flat Java and hand-optimised C++.** The nodes can come from a vendor jar the generator
+**A generated Fluxtion processor dispatches at about 1.67 ns/event — 600 million events per second on
+one core — within 10% of hand-written flat Java.** The nodes can come from a vendor jar the generator
 only saw as bytecode, with `getNodeById`, `lookupInstanceName`, re-entrancy, subscriptions and
 buffering all live.
 
-**Best measured**, and it has been reached in five independent harnesses — but see the caveat below:
+**The repeated measurement.** Five independent profile-and-build cycles of the same source — fresh PGO
+collection each time, `performanceProfile(LOWEST_LATENCY)`, the generated inlining directive, output
+verified identical, none allowed to exit early:
+
+| cycle | generated | hand-rolled | generated | gap |
+|---|---|---|---|---|
+| 1 | 1.6383 ns | 1.4828 ns | 610 M/s | 10.5% |
+| 2 | 1.6487 | 1.5184 | 607 M/s | 8.6% |
+| 3 | 1.6818 | 1.5505 | 595 M/s | 8.5% |
+| 4 | 1.6799 | 1.5581 | 595 M/s | 7.8% |
+| 5 | 1.6806 | 1.5622 | 595 M/s | 7.6% |
+| **mean** | **1.666** | **1.534** | **600 M/s** | **8.6%** |
+
+**5 of 5 landed in the fast mode, spread 0.044 ns.** One cycle came in at 10.5%, so *"within 10%"* is
+the average and not a bound — quote 8.6% mean, 7.6–10.5% observed.
+
+**Best ever measured**, on a cooler machine in an earlier session, and reached in five independent
+harnesses:
 
 | | ns/event | events/sec |
 |---|---|---|
-| **generated Fluxtion processor** (native + PGO + inlining directive) | **1.57** | **637M** |
+| generated Fluxtion processor (native + PGO + inlining directive) | 1.57 | 637M |
 | hand-rolled flat Java, same arithmetic | 1.55 | 645M |
 | hand-optimised C++ `-O3 -march=native` | 1.57 | 636M |
 | the same processor, misconfigured | 5.6 – 29 | 34M – 179M |
+
+!!! warning "Do not plan against the 1.3% gap in that second table"
+    It is a real measurement of a cooler machine, and the generated and hand-rolled figures in it come
+    from the same build, so the comparison is sound. **But the repeated measurement above puts the gap
+    at 8.6%, not 1.3%**, and a reader who expects 1.3% will measure 8 and think something is wrong.
+    The absolute figures move with machine state — the hand-rolled control drifted 1.4828 → 1.5622
+    across those five cycles as the machine warmed — so **`generated − hand` is the quantity that
+    travels**: 0.118 – 0.156 ns, mean 0.131, all day, across every shape measured.
+
+**What 600 M/s is and is not.** It is single-threaded dispatch cost on one core: one event type, a
+10-node graph, epsilon GC, back-to-back calls in a bounded loop, no I/O, no allocation, no contention.
+It is the cost of the dispatch machinery, not a system throughput figure.
 
 **Measured across five JVMs and two native builds**, from the reusable kit
 ([`tools/bench/latency-kit`](https://github.com/telaminai/fluxtionauditlog-analyser/blob/main/tools/bench/latency-kit)) — 10-node graph, nodes from a separately compiled jar, 200M events,
@@ -82,6 +111,40 @@ them and you are at 5.5–6.5 *every* time, still correct, just 3–4× slower, 
 
 Every step on this page is worth 2× or more, and getting one wrong is silent — the program stays
 correct and simply runs slower.
+
+### Is getting there a deterministic process now?
+
+**The procedure is. A single build is not.** That distinction is the whole of this page's hard-won
+content, and it is worth stating in one place.
+
+**Deterministic — you can rely on these:**
+
+| | evidence |
+|---|---|
+| A given **binary** reproduces its own figure, for ever | `v6` reads 5.34/5.46/5.43 and `v7` reads 1.43/1.44/1.44 across repeated runs, under a shifted stack and a shifted heap alike |
+| A given **profile** reproduces its own mode, on every rebuild | four rebuilds from one profile: 1.5987 / 1.6552 / 1.6804 / 1.6653 — and a *missing* profile reproduces just as faithfully: 5.7102 / 5.6310 / 5.6136 |
+| The **configuration** decides the floor | omit the inlining directive and you get 5.5–6.5 *every* time, not sometimes |
+| The **JIT** figures | 5.1 ns on all five JVMs, no vendor differing by more than 2% |
+
+**Not deterministic — do not rely on this:**
+
+| | evidence |
+|---|---|
+| That any *fresh* profile collection lands | 5 of 5 in one run, 11 of 13 in another, and 19 consecutive misses in a third — all on unmodified inputs |
+
+**So the process is: make the lottery someone else's problem by only entering it once.**
+
+1. Configure — the checklist below. This decides the floor, and it is fully deterministic.
+2. Collect a profile, build, measure. [`tools/bench/land-native.py`](https://github.com/telaminai/fluxtionauditlog-analyser/blob/main/tools/bench/land-native.py) does the loop.
+3. When it lands, **keep the profile**, not just the binary. It is a build input.
+4. Rebuild from that profile from then on — `--profile` — and the result comes back every time.
+5. Gate the build on the measurement, because a build that missed is 3.5× slower and silent.
+
+Steps 1, 3, 4 and 5 are deterministic. Step 2 is the only die roll, you only roll it when the graph
+changes, and the harness rolls it for you until it lands.
+
+**What that buys, measured:** ~1.67 ns/event, 600M events/sec on one core, **8.6% off hand-written
+flat Java** — from a processor generated out of a jar the compiler only saw as bytecode.
 
 ### Checklist for maximal performance
 
