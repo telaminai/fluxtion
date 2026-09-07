@@ -94,11 +94,13 @@ so the only way to know you have them all is to check.
 - [ ] &nbsp;&nbsp;↳ framework auditors dropped *(no `Clock` reading the system clock per event)*
 - [ ] &nbsp;&nbsp;↳ `setSupportDirtyFiltering(false)` *(no dirty flags, no guards)*
 - [ ] &nbsp;&nbsp;↳ `setSupportNodeNameLookup(false)` *(no node registration — the single largest cost)*
-- [ ] **`setSupportBufferAndTrigger(false)` and `setSupportSubscriptions(false)` — the profile does
-      NOT set these**, and they are not free: with the buffer and re-entrancy guards still emitted the
-      JIT measures 5.14 ns against 4.89 without them, **~5%, reproducible across interleaved reps with
-      no overlap.** Invisible on a landed native build (see below), so a JIT deployment pays and a
-      native one does not
+- [ ] &nbsp;&nbsp;↳ `setSupportBufferAndTrigger(false)` + `setSupportSubscriptions(false)` *(added to
+      the profile 2026-09-07 — they shrink the generated event path and, measured, are worth nothing;
+      they are there because the code is smaller and neither can change a result)*
+- [ ] `setSupportReentrancy(false)` — **yours to set, and the profile will not do it for you.** It is
+      the one setting here that can break a working graph: re-entrant dispatch stops being queued and
+      throws instead. Measured at the same time and worth nothing either. Set it only if your graph
+      provably never re-enters
 - [ ] **void triggers on every node** — `@OnTrigger(failBuildIfMissingBooleanReturn = false)` and the
       same on `@OnEventHandler`. **The profile cannot set this for you**; it lives on your classes.
 - [ ] If you need the audit log instead: `performanceProfile(AUDITED)` +
@@ -283,21 +285,21 @@ vanishing.
 `setSupportSubscriptions(false)` stops the constructor publishing the processor to the subscription
 manager — which matters for more than one reason, see below.
 
-!!! warning "`performanceProfile(LOWEST_LATENCY)` does not set either of these"
-    It sets exactly three things — `setSupportDirtyFiltering(false)`,
-    `setSupportNodeNameLookup(false)`, and clearing the auditors. `supportBufferAndTrigger` and
-    `supportReentrancy` both stay `true`, so the generated `processEvent` still carries a buffer
-    guard, a re-entrancy guard and a callback drain on every event:
+!!! note "The profile sets the first; the second is yours"
+    Until 2026-09-07 `performanceProfile(LOWEST_LATENCY)` set three things and left both of these on,
+    so the generated `processEvent` still carried a buffer guard on every event. It now also sets
+    `setSupportBufferAndTrigger(false)` and `setSupportSubscriptions(false)`.
 
-    ```java
-    if (buffering) { triggerCalculation(); }
-    if (processing) { callbackDispatcher.queueReentrantEvent(event); }
-    else { processing = true; onEventInternal(event);
-           callbackDispatcher.dispatchQueuedCallbacks(); processing = false; }
-    ```
+    **Measured, that is worth nothing on this graph** — three interleaved JIT reps read 5.177 before
+    and 5.124 after, overlapping; a landed native build reads inside the usual band. They are set
+    because the generated code is smaller and because neither can change a result: you either use the
+    capability or you do not.
 
-    **Measured, 3 interleaved reps, output identical:** 5.141 ns with them, 4.893 without — ~5% on the
-    JIT, and the two ranges do not overlap. Set them yourself.
+    **`setSupportReentrancy(false)` is deliberately NOT in the profile.** It is the one of the three
+    that can break a working graph — re-entrant dispatch stops being queued and throws
+    `IllegalStateException` instead — and build-time detection cannot be complete, because a node can
+    reach the dispatcher through a service or reflectively. It was measured at the same time and
+    bought nothing either, so the profile does not spend that capability for you.
 
 ---
 
@@ -332,8 +334,20 @@ generated arm is what changes; the hand-rolled arm is the control.
 | **A** as shipped | 5.141 | 1.54 – 1.68 |
 | **C** + auditor off the event path *(W15)* | 5.155 | 1.6867 |
 | **D** + service registry gone *(post-W11)* | 5.155 | 1.6900 |
-| **E** + buffer and re-entrancy guards gone | **4.893** | 1.6706 |
+| **E** + buffer, drain **and the re-entrancy guard** gone *(emulation)* | **4.893** | 1.6706 |
+| **F/G** what `LOWEST_LATENCY` now actually generates | 5.124 – 5.143 | 1.7176 |
 | *hand-rolled control* | ~3.5 | ~1.53 – 1.56 |
+
+!!! danger "E is an emulation and it does not measure what you think"
+    E was hand-edited to remove the buffer guard, the callback drain **and the re-entrancy guard**, and
+    it reads 4.893 — a clean 5%, reproducible, non-overlapping. It is tempting to attribute that to
+    `setSupportBufferAndTrigger(false)` + `setSupportReentrancy(false)`, **and this page did for an
+    hour.** It is wrong. The real configuration *keeps* a re-entrancy guard — it throws instead of
+    queueing — and that guard is where the cost sits. Configure it for real and you get row F/G:
+    5.124–5.143, i.e. nothing.
+
+    **The lesson is the one this whole page keeps relearning: measure the artefact you will ship, not
+    a hand-edit that stands in for it.**
 
 **Read the two columns differently, because they are telling you different things.**
 
