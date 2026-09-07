@@ -94,6 +94,11 @@ so the only way to know you have them all is to check.
 - [ ] &nbsp;&nbsp;↳ framework auditors dropped *(no `Clock` reading the system clock per event)*
 - [ ] &nbsp;&nbsp;↳ `setSupportDirtyFiltering(false)` *(no dirty flags, no guards)*
 - [ ] &nbsp;&nbsp;↳ `setSupportNodeNameLookup(false)` *(no node registration — the single largest cost)*
+- [ ] **`setSupportBufferAndTrigger(false)` and `setSupportSubscriptions(false)` — the profile does
+      NOT set these**, and they are not free: with the buffer and re-entrancy guards still emitted the
+      JIT measures 5.14 ns against 4.89 without them, **~5%, reproducible across interleaved reps with
+      no overlap.** Invisible on a landed native build (see below), so a JIT deployment pays and a
+      native one does not
 - [ ] **void triggers on every node** — `@OnTrigger(failBuildIfMissingBooleanReturn = false)` and the
       same on `@OnEventHandler`. **The profile cannot set this for you**; it lives on your classes.
 - [ ] If you need the audit log instead: `performanceProfile(AUDITED)` +
@@ -278,6 +283,22 @@ vanishing.
 `setSupportSubscriptions(false)` stops the constructor publishing the processor to the subscription
 manager — which matters for more than one reason, see below.
 
+!!! warning "`performanceProfile(LOWEST_LATENCY)` does not set either of these"
+    It sets exactly three things — `setSupportDirtyFiltering(false)`,
+    `setSupportNodeNameLookup(false)`, and clearing the auditors. `supportBufferAndTrigger` and
+    `supportReentrancy` both stay `true`, so the generated `processEvent` still carries a buffer
+    guard, a re-entrancy guard and a callback drain on every event:
+
+    ```java
+    if (buffering) { triggerCalculation(); }
+    if (processing) { callbackDispatcher.queueReentrantEvent(event); }
+    else { processing = true; onEventInternal(event);
+           callbackDispatcher.dispatchQueuedCallbacks(); processing = false; }
+    ```
+
+    **Measured, 3 interleaved reps, output identical:** 5.141 ns with them, 4.893 without — ~5% on the
+    JIT, and the two ranges do not overlap. Set them yourself.
+
 ---
 
 ### 6 · Node-name lookup generated as code — the largest single cost, and it costs you nothing
@@ -300,6 +321,39 @@ nothing.
 **The one case still to pay for it:** an auditor that consumes `nodeRegistered` — an audit log that
 names its nodes — still receives every node and still publishes them. An audited processor does not
 reach 1.57 by this route, and that is a trade worth making.
+
+## What is actually left on the event path — measured, not reasoned
+
+Four shapes of the same graph, each a real build, each verified to produce identical output. The
+generated arm is what changes; the hand-rolled arm is the control.
+
+| shape | JIT | native + PGO, landed |
+|---|---|---|
+| **A** as shipped | 5.141 | 1.54 – 1.68 |
+| **C** + auditor off the event path *(W15)* | 5.155 | 1.6867 |
+| **D** + service registry gone *(post-W11)* | 5.155 | 1.6900 |
+| **E** + buffer and re-entrancy guards gone | **4.893** | 1.6706 |
+| *hand-rolled control* | ~3.5 | ~1.53 – 1.56 |
+
+**Read the two columns differently, because they are telling you different things.**
+
+**On a landed native build, framework overhead is already gone.** Generated sits 0.12–0.14 ns above
+hand-rolled and *nothing in this table moves it* — not removing auditor calls, not removing the service
+registry, not removing the guards. With an accurate profile and the inlining directive the processor is
+scalar-replaced whole: `processing` and `buffering` become registers, their branches fold, and there is
+nothing left for a source-level change to remove. **This is the end of the road for this kind of
+tuning**, and it is why every remaining item on the M50 list should be justified by correctness,
+determinism or generated-code clarity rather than by a promised ns.
+
+**On the JIT the guards are real**, because the processor is a live object and those are real field
+loads and branches. That is the one measurable win here, it is ~5%, and the profile does not give it
+to you.
+
+**What the gap to hand-rolled is NOT.** Two hypotheses tested and both dead: it is not auditor
+callbacks (removing them changes nothing) and it is not the service registry's reflection —
+`Method.invoke` fires when a *service* registers, typically once at startup, and `serviceRegistry`
+does not appear anywhere in the generated dispatch block. Verified by reading the generated source,
+not inferred.
 
 ## Deployment shape — worth more than every flag combined
 
