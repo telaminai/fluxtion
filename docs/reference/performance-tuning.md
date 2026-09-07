@@ -40,17 +40,22 @@ buffering all live.
 | hand-optimised C++ `-O3 -march=native` | 1.57 | 636M |
 | the same processor, misconfigured | 5.6 – 29 | 34M – 179M |
 
-**Typical measured**, across five JVMs and two native builds, from a reusable kit
-(`tools/bench/latency-kit`), 10-node graph, 200M events, output verified identical:
+**Measured across five JVMs and two native builds**, from the reusable kit
+(`tools/bench/latency-kit`) — 10-node graph, nodes from a separately compiled jar, 200M events,
+output verified identical, full configuration applied:
 
 | runtime | generated | hand-rolled | ratio |
 |---|---|---|---|
-| Temurin 17.0.14 | 6.45 | 3.38 | 1.9× |
-| Temurin 21.0.5 | 6.48 | 3.46 | 1.9× |
-| OpenJDK 24 | 6.53 | 3.50 | 1.9× |
-| **GraalVM 25.0.4 (Graal JIT)** | **5.56** | 2.13 | 2.6× |
-| GraalVM 25.0.4 native-image, no PGO | 7.76 | 2.55 | 3.0× |
-| **GraalVM 25.0.4 native-image + PGO** | 6.22 | **1.57** | 4.0× |
+| Temurin 17.0.14 | 5.60 | 3.57 | 1.6× |
+| Temurin 21.0.5 | 5.58 | 3.69 | 1.5× |
+| Corretto 21.0.9 | 5.58 | 3.82 | 1.5× |
+| OpenJDK 24 | 5.58 | 3.77 | 1.5× |
+| **GraalVM 25.0.4 (Graal JIT)** | **5.47** | 2.18 | 2.5× |
+| GraalVM 25.0.4 native-image, no PGO | 6.54 | 2.54 | 2.6× |
+| **GraalVM 25.0.4 native-image + PGO** | **1.62** | **1.57** | **1.03×** |
+
+The last row is the point: **with the full configuration, generated dispatch is within 3% of
+hand-rolled flat Java.** Every JIT lands at 5.5–5.6 regardless of vendor.
 
 !!! warning "Native-image is only faster if you configure it — otherwise it is SLOWER than a JIT"
     In the sweep above, **native without PGO (7.76 ns) is slower than every JIT measured**, including
@@ -59,9 +64,9 @@ buffering all live.
     supply a representative profile, **a JIT is the safer choice** — Graal JIT at 5.56 ns is the best
     unconditional number on this graph.
 
-**Read those two tables together.** The 1.57 ns headline is real and reproducible in several
-harnesses; it is *not* what an arbitrary program gets. On this kit the same configuration lands at
-6.22 — see *It works in most shapes* below. **Build it and measure it; do not assume the number.**
+**Read those two tables together.** 1.6 ns needs native-image **and** an accurate profile **and** the
+inlining directive **and** the configuration below. Miss any one and you are at 5.5–6.5 — still correct,
+just 3–4× slower, with no diagnostic. **Build it and measure it.**
 
 Every step on this page is worth 2× or more, and getting one wrong is silent — the program stays
 correct and simply runs slower.
@@ -387,9 +392,9 @@ scalar-replaced. That is the entire 3.5×. Forcing the inline removes the decisi
 to contain a second hot loop over the same processor, and 5.5 in one that did not. Do not rely on the
 inliner choosing correctly.
 
-### It works in most shapes — but it is NOT a guarantee
+### Verified repeatable
 
-Every shape below was rebuilt with its own instrumented image and its own freshly collected profile,
+Every shape below rebuilt with its own instrumented image and its own freshly collected profile,
 output verified identical:
 
 | program shape | without flag | with flag |
@@ -398,20 +403,19 @@ output verified identical:
 | one loop + an unrelated hot loop | 5.58 | **1.57** |
 | one loop, nothing else | 5.55 | **1.58** |
 | loop in its own class | 5.60 | **1.57** |
-| **the reusable kit in `tools/bench/latency-kit`** | 7.76 | **6.22** ← *not recovered* |
+| **the reusable kit, `tools/bench/latency-kit`** | 6.54 | **1.62** |
 
 Three independent full build cycles of one application gave 1.56 / 1.56 / 1.57.
 
-**But the last row is the honest one.** A fifth harness — the reusable kit, whose loop lives in a
-generated `Runner` class called from a `Bench` main with a second arm — does **not** recover the floor,
-with the directive applied and confirmed read by `native-image`. Widening the pattern to include the
-`Runner` and node classes changed nothing (6.13–6.23).
+!!! warning "A missing configuration setting looks exactly like an unstable compiler"
+    The kit measured **6.22** for a long time with the directive correctly applied, and that was
+    published here as evidence the directive was unreliable. It was not: the kit's generator was
+    missing two settings — the framework auditors were still registered, and
+    `setSupportNodeNameLookup(false)` was absent, so every node was still published into the auditor's
+    maps. Adding them took it 6.22 → 5.61 → **1.62**.
 
-**So `PriorityForceInline` reliably helps and does not reliably fix.** The underlying decision is
-GraalVM's, it is filed as
-[oracle/graal#14387](https://github.com/oracle/graal/issues/14387), and until it is understood the
-only safe procedure is: **build it, measure it, and do not assume.** The conformance bench exists for
-exactly that.
+    **Check the configuration before concluding anything about the compiler.** Every item in *The
+    baseline configuration* is load-bearing, and omitting one is silent.
 ### Use the whole-class wildcard. Naming individual methods does NOT work.
 
 The pattern is GraalVM's `MethodFilter` syntax, so it is tempting to force only the event-path methods.
