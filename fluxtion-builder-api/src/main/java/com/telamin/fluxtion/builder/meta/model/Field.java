@@ -24,6 +24,7 @@ public class Field implements SourceField, Serializable {
     private final String fieldClassName;
     private boolean auditor;
     private boolean auditInvocations;
+    private boolean auditEventReceipt = true;
     private final boolean generic;
 
     public Field(String fqn, String name, Object instance, boolean publicAccess) {
@@ -36,9 +37,11 @@ public class Field implements SourceField, Serializable {
         if (instance instanceof Auditor) {
             auditor = true;
             auditInvocations = ((Auditor) instance).auditInvocations();
+            auditEventReceipt = ((Auditor) instance).auditEventReceipt();
         } else {
             auditor = false;
             auditInvocations = false;
+            auditEventReceipt = true;
         }
         this.generic = instance != null && instance.getClass().getTypeParameters().length > 0;
     }
@@ -51,6 +54,15 @@ public class Field implements SourceField, Serializable {
      * and silently disable per-node {@code nodeInvoked} emission.
      */
     public Field(String fqn, String name, boolean publicAccess, boolean isAuditor, boolean auditInvocations) {
+        this(fqn, name, publicAccess, isAuditor, auditInvocations, true);
+    }
+
+    /**
+     * As above, carrying the event-path flag as well. Both booleans are read from the live
+     * {@link Auditor} on the client side and cannot be re-derived here, so both have to travel.
+     */
+    public Field(String fqn, String name, boolean publicAccess, boolean isAuditor,
+                 boolean auditInvocations, boolean auditEventReceipt) {
         this.fqn = fqn;
         this.name = name;
         this.instance = null;
@@ -58,6 +70,7 @@ public class Field implements SourceField, Serializable {
         this.fieldClassName = null;
         this.auditor = isAuditor;
         this.auditInvocations = auditInvocations;
+        this.auditEventReceipt = auditEventReceipt;
         this.generic = false;
     }
 
@@ -102,6 +115,7 @@ public class Field implements SourceField, Serializable {
         if (instance instanceof Auditor) {
             auditor = true;
             auditInvocations = ((Auditor) instance).auditInvocations();
+            auditEventReceipt = ((Auditor) instance).auditEventReceipt();
         }
     }
 
@@ -118,6 +132,11 @@ public class Field implements SourceField, Serializable {
     @Override
     public boolean isAuditInvocations() {
         return auditInvocations;
+    }
+
+    @Override
+    public boolean isAuditEventReceipt() {
+        return auditEventReceipt;
     }
 
     public static class MappedField extends Field {

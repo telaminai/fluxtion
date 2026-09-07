@@ -59,4 +59,15 @@ public interface SourceField {
      * @return true if field audits invocations, false otherwise
      */
     boolean isAuditInvocations();
+
+    /**
+     * Whether this auditor wants the per-event callbacks — the event-path counterpart of
+     * {@link #isAuditInvocations()}. Defaulted to {@code true} so an implementor written before
+     * this method existed keeps the behaviour it had.
+     *
+     * @return true when the generated processor should call this auditor on the event path
+     */
+    default boolean isAuditEventReceipt() {
+        return true;
+    }
 }

@@ -123,6 +123,40 @@ public interface Auditor extends Lifecycle {
     }
 
     /**
+     * Indicates whether an auditor is interested in the per-event callbacks
+     * {@link #eventReceived(Object)}, {@link #eventReceived(Event)} and
+     * {@link #processingComplete()}. Some auditors exist only for their
+     * {@link #nodeRegistered(Object, String)} bookkeeping and do nothing on the event path.
+     * <ul>
+     * <li>true - auditor receives the per-event callbacks (the default, and the behaviour
+     * of every auditor written before this method existed)</li>
+     * <li>false - the generated event processor does not call this auditor on the event
+     * path at all</li>
+     * </ul>
+     * <p>
+     * This is the event-path counterpart of {@link #auditInvocations()}, and it is read at
+     * <b>build time</b> against the live auditor instance, exactly as that method is. Returning
+     * false does not make the calls cheap — it means the generated source never contains them.
+     * {@link NodeNameAuditor} returns false: it maps nodes to names during registration and
+     * inherits both {@code eventReceived} no-ops, so every generated processor was paying two
+     * inherited virtual calls per event for an auditor that had nothing to do.
+     *
+     * <p><b>If you override any of the three callbacks, this must return true.</b> The flag is read
+     * from the live instance at build time and is virtual like everything else, so a subclass that
+     * overrides {@code eventReceived} but inherits a {@code false} from its parent silently loses
+     * its callbacks — the generated source will not contain them and nothing will report it.
+     *
+     * <p>The gate is deliberately coarse: it covers all three per-event callbacks together, the way
+     * {@link #auditInvocations()} covers every {@code nodeInvoked} with one boolean. An auditor that
+     * wants only one of them returns true and takes all three.
+     *
+     * @return intention to receive the per-event callbacks
+     */
+    default boolean auditEventReceipt() {
+        return true;
+    }
+
+    /**
      * An Auditor marked with this interface will have {@link #processingComplete()}
      * called before the event nodes {@link AfterEvent}'s are processed
      * <p>
