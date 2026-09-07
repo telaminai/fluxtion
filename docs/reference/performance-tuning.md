@@ -57,16 +57,16 @@ output verified identical, full configuration applied:
 The last row is the point: **with the full configuration, generated dispatch is within 3% of
 hand-rolled flat Java.** Every JIT lands at 5.5–5.6 regardless of vendor.
 
-!!! warning "The native + PGO figure is per-build, and the build is a lottery"
-    Rebuilding the same source, with the same flags, gives **either ~1.6 ns or ~5.5 ns** and nothing in
-    between. One session landed 11 of 13; the next landed 3, then missed 15 in a row on identical
-    inputs. Feeding a build's own profile back in does not reproduce it. Nothing measurable
-    distinguishes the two — same profile counters, same image size, same builder memory. Root cause is
-    [oracle/graal#14387](https://github.com/oracle/graal/issues/14387).
+!!! warning "The native + PGO figure is a property of the PROFILE, not of the source"
+    Rebuild from a *freshly collected* profile and you get **either ~1.6 ns or ~5.5 ns**, nothing in
+    between. Rebuild from **the same profile** and you get the same answer every time — four rebuilds
+    from a landing profile gave 1.60/1.66/1.68/1.67, three from a missing one gave 5.71/5.63/5.61. The
+    compiler is deterministic; profile collection is not.
 
-    **So measure every build and keep the one that lands** — a binary reproduces its own mode exactly,
-    for ever. [`tools/bench/latency-kit/run.sh`](https://github.com/telaminai/fluxtionauditlog-analyser/blob/main/tools/bench/latency-kit/run.sh) exists for that. The JIT numbers need none of this: they
-    are deterministic on all five JVMs.
+    **So collect until one lands, then keep the profile** and rebuild from it. It is a build input, like
+    any other. [`tools/bench/land-native.py`](https://github.com/telaminai/fluxtionauditlog-analyser/blob/main/tools/bench/land-native.py) does both halves. The JIT numbers need none of this: they
+    are deterministic on all five JVMs. Related:
+    [oracle/graal#14387](https://github.com/oracle/graal/issues/14387).
 
 !!! warning "Native-image is only faster if you configure it — otherwise it is SLOWER than a JIT"
     In the sweep above, **native without PGO (6.54 ns) is slower than every JIT measured**, including
@@ -118,8 +118,10 @@ so the only way to know you have them all is to check.
 **Verify — do not assume**
 
 - [ ] run [`tools/bench/latency-kit/run.sh`](https://github.com/telaminai/fluxtionauditlog-analyser/blob/main/tools/bench/latency-kit/run.sh) against your own graph
-- [ ] **native only: check the build LANDED, and ship that binary** — [`tools/bench/land-native.py`](https://github.com/telaminai/fluxtionauditlog-analyser/blob/main/tools/bench/land-native.py)
-      builds until it does and keeps the one that did; a build that missed is 3.5× slower and silent
+- [ ] **native only: check the build LANDED** — [`tools/bench/land-native.py`](https://github.com/telaminai/fluxtionauditlog-analyser/blob/main/tools/bench/land-native.py) collects until it does;
+      a build that missed is 3.5× slower and silent
+- [ ] **native only: commit the profile that landed** and rebuild from it (`--profile`). It is a build
+      input, and it is the only thing that makes the result reproducible
 - [ ] compare arms with [`tools/bench/dispatch-bench.py`](https://github.com/telaminai/fluxtionauditlog-analyser/blob/main/tools/bench/dispatch-bench.py), which refuses to report until the arms
       produce identical output
 - [ ] **if a number surprises you, check this list before concluding anything about the compiler** —
@@ -380,64 +382,57 @@ stays at 1.87, while `callbackDispatcher + nodeNameLookup + subscriptionManager`
 Elision has to be measured, not counted — and on an unprofiled native image it is close to
 all-or-nothing.
 
-### Why a build lands, and why the next one may not
+### Why a build lands: the profile decides, and the compiler is deterministic
 
-This is the mechanism behind the repeatability caveat at the top of the page. It is shorter than you
-would like, because the honest version is short.
+**The PGO profile decides the mode.** Hold it fixed and the result reproduces — in both directions,
+every time. Profile passed explicitly, no collection, the profile's checksum verified unchanged across
+each build:
 
-**The mode is decided by the build.** Not by the source, and not by the profile. One build measured
-1.60; its profile was kept and fed back to two more builds — same instrumented image, same classes,
-same flags, nothing else changed — and they measured 6.66 and 5.66. Two builds from one profile also
-differ in SHA while measuring the same, so `native-image` is not byte-reproducible, and the
-nondeterminism reaches the decision that decides whether the processor dissolves.
+| profile | four rebuilds from it | image size |
+|---|---|---|
+| the one that produced 1.60 | **1.60 / 1.66 / 1.68 / 1.67** | identical every time |
+| the one that produced 5.70 | **5.71 / 5.63 / 5.61** | identical every time |
 
-**Once built, it is fixed.** A given binary reproduces its mode exactly, run after run. Padding the
-environment to shift the stack and varying the heap size to shift the heap change nothing. So the
-build is the lottery and the binary is the ticket: **keep the one that landed.**
+So there is no mystery in the compiler. **Two builds from one profile make the same decisions**; they
+are not byte-identical — the checksums differ, so layout or ordering is nondeterministic — but nothing
+that changes the outcome is.
+
+**What varies is the profile.** Collecting one means running an instrumented binary, so a profile is a
+*measurement*, and measurements vary. Two collections from the same instrumented image, same workload,
+minutes apart:
+
+| section | one profile | the other | contexts differing |
+|---|---|---|---|
+| `callCountProfiles` | 7,988 | 7,887 | **1,190** |
+| `conditionalProfiles` | 6,160 | 6,046 | **1,194** |
+
+The four hot methods match exactly, at 21,000,000 each. Over a thousand contexts around them do not —
+class initialisation, deoptimisation, GC and sampling land differently run to run, and one of those
+differences only has to sit on an inlining decision.
+
+!!! tip "So keep the profile, not just the binary"
+    A profile that lands is a **reproducible input**: commit it next to the source, rebuild from it,
+    get the result again. A binary that lands is one artifact that goes stale the moment your classes
+    change. Treat the `.iprof` files as build inputs under version control, exactly like the
+    `native-image.properties` that carries the inlining directive.
 
 !!! danger "Two things that look like this, and are not"
     **Nothing about your graph.** Round 59 published, and this page carried for a day, an explanation
     that the generated processor's ten node objects sit at a size threshold while hand-rolled is one
-    object and therefore always lands. **Withdrawn** — in a bad build the hand-rolled arm does not land
-    either, and it has nothing to dissolve that the processor could have spoiled.
+    object and therefore always lands. **Withdrawn** — in a missing build the hand-rolled arm does not
+    land either, and it has nothing to dissolve that the processor could have spoiled.
 
     **Nothing about your configuration.** Round 59 also reported that dropping the last auditor changed
     the landing rate. **Withdrawn** — the same unmodified configuration measured 1.60/1.67/1.68 one
-    hour and 5.58/5.70/5.71/5.73 the next. Neither sample was measuring the auditor.
+    hour and 5.58/5.70/5.71/5.73 the next, with a freshly collected profile each time. Neither sample
+    was measuring the auditor.
 
-    The general lesson under both: this outcome is bimodal, so a handful of builds cannot tell you the
-    sign of a change. Round 59 concluded that it could, twice, and was wrong both times.
+    The general lesson under both: a handful of builds cannot tell you the sign of a change unless you
+    hold the profile fixed. Round 59 concluded that it could, twice, and was wrong both times.
 
-**How often does it land?** Not a stable number. 11 of 13 in one session; 3 of 18 in the next, with 15
-consecutive misses on inputs that had just produced three hits. The outcomes are not even independent —
-they arrive in runs — and nothing measurable separates a good build from a bad one: the profiles are
-identical on every hot counter, the images are the same size, the builder gets the same memory.
-
-### The pragmatic route: build until it lands, keep the one that did
-
-Determinism would be better and is asked for upstream. Until it arrives, the lottery has one property
-that makes it entirely workable: **a binary reproduces its own mode for ever.** So a build that lands
-is a build you can ship — you only have to notice which one it was.
-
-```bash
-tools/bench/land-native.py --graal-home "$GRAAL_HOME" --cp "$CP" --main app.Bench \
-    --out target/bench --arm generated --arm hand --target 2.0 \
-    --attempts 10 --reinstrument-every 3
-```
-
-It builds, measures, and keeps the first binary that reaches the target; exit 0 when one lands, 1 when
-none does — with the best of them still kept and named, so a CI job can either gate on it or accept a
-slower binary knowingly. `--reinstrument-every` rebuilds the instrumented image periodically: after a
-run of 19 consecutive misses on unchanged inputs, a fresh instrumented image was followed by two hits
-in three. Whether that *causes* the re-roll is unproven — one sample — but it costs one build to try.
-
-**It refuses rather than reports**, because each refusal is a day this project already lost: arms that
-disagree on output are discarded unmeasured, a figure at or below the elimination floor is a deleted
-loop and not a result, a run with no `RESULT` line is a failure and never a zero, and every attempt is
-printed — including the discarded ones, so exhausting the attempts cannot read as coverage.
-
-Budget for it. An attempt is one instrumented run plus one image build; ten attempts is tens of minutes,
-not seconds, and belongs in a release job rather than an inner loop.
+**Once built, the binary is fixed.** A given image reproduces its own number run after run; padding the
+environment to shift the stack and varying the heap size to shift the heap change nothing. So a build
+that landed is a build you can ship.
 
 ### The knobs that do not work
 
@@ -552,14 +547,15 @@ what that qualification is doing here:
 | loop in its own class | 5.60 | **1.57** |
 | **the reusable kit, [`tools/bench/latency-kit`](https://github.com/telaminai/fluxtionauditlog-analyser/blob/main/tools/bench/latency-kit)** | 6.54 | **1.62** |
 
-**The flag is necessary and it is not sufficient.** Across two sessions of repeated
-profile-and-build cycles on unchanged inputs: 11 of 13, then 3 of 18. Nothing lands between ~1.6 and
-~5.5, and a build's own profile fed back in does not reproduce it. The residual is
+**The flag is necessary and it is not sufficient.** With a *freshly collected* profile each time, the
+landing rate is not a stable number: 11 of 13 across one session, 3 and then a long run of misses in
+the next. What is stable is the profile — rebuild from a landing one and it lands again, four times out
+of four. See *Why a build lands*. Related:
 [oracle/graal#14387](https://github.com/oracle/graal/issues/14387), where two images built from
-identical classes, with byte-identical hot methods, measured 1.43 and 5.45.
+identical classes with byte-identical hot methods measured 1.43 and 5.45.
 
-**So measure the build you ship, and keep the binary that landed** — its mode is fixed once built.
-The table above is what a landing build looks like, not a guarantee that a build lands.
+**So collect until one lands, then keep and reuse that profile.** The table above is what a landing
+build looks like, not a guarantee that a fresh collection lands.
 
 !!! warning "A missing configuration setting looks exactly like an unstable compiler"
     The kit measured **6.22** for a long time with the directive correctly applied, and that was
