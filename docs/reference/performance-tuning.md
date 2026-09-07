@@ -113,6 +113,32 @@ So **the percentage gap is a property of your alternative, not of the generated 
 Quote 8.6% only for the shape it was measured on. **The transferable number is the absolute:
 ~1.67 ns/event, ~595–600M events/sec on one core, stable across both shapes.**
 
+### Against a hand-written library, on a realistic graph
+
+The figures above compare against hand-written *flat* code — one class, primitive fields, the type
+known at every call site. That is the right control for "how much does the framework cost", and the
+wrong one for "what would I otherwise build". A real alternative is a **library**: wiring decided by
+configuration, nodes reached through interfaces, dispatch resolved from data.
+
+14 nodes, three event types, dependency edges, injected strategies, **the same node classes in both
+arms** — only the wiring differs. Outputs identical:
+
+| | JIT | native + PGO | native speed-up |
+|---|---|---|---|
+| **generated** | 6.22 | **2.12** | **2.93×** |
+| hand-written library | 18.84 | 20.06 | **0.94× — slower** |
+| **ratio** | **3.0×** | **9.5×** | |
+
+**Read the last column.** Ahead-of-time compilation makes the generated processor nearly 3× faster and
+makes the library 6% *slower*. A library's wiring is data the compiler cannot see, so there is nothing
+for AOT to specialise — it pays the closed world's costs and collects none of its benefits.
+
+**The generated advantage is a function of node weight**, and it cuts both ways. On light nodes (a few
+flops, which is what most graphs are) the whole graph inlines and the ratio is 9.5×. On heavy nodes —
+measured with 4×4 matrix multiplies — neither arm's bodies inline, the advantage is capped by the
+compiler's inlining budget, and at 50 such nodes it inverts to 1.3× *against* the generated processor.
+**Measure your own graph; the answer depends on what your nodes do.**
+
 **What 600 M/s is and is not.** It is single-threaded dispatch cost on one core: one event type, a
 10-node graph, epsilon GC, back-to-back calls in a bounded loop, no I/O, no allocation, no contention.
 It is the cost of the dispatch machinery, not a system throughput figure.
