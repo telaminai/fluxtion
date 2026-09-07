@@ -27,7 +27,10 @@ So: **a figure without its shape is not a result.** Every number below carries o
 ## At a glance
 
 **A generated Fluxtion processor dispatches at about 1.67 ns/event — 600 million events per second on
-one core — within 10% of hand-written flat Java.** The nodes can come from a vendor jar the generator
+one core — and does so whether the graph has one event type or three.** Against hand-written flat Java
+that is 8.6% on a single-type straight line and 22.5% on a three-type branching graph: **the processor's
+cost is flat, the hand-rolled floor is what moves.** See *Multiple event types* below before quoting
+either percentage. The nodes can come from a vendor jar the generator
 only saw as bytecode, with `getNodeById`, `lookupInstanceName`, re-entrancy, subscriptions and
 buffering all live.
 
@@ -64,6 +67,51 @@ harnesses:
     The absolute figures move with machine state — the hand-rolled control drifted 1.4828 → 1.5622
     across those five cycles as the machine warmed — so **`generated − hand` is the quantity that
     travels**: 0.118 – 0.156 ns, mean 0.131, all day, across every shape measured.
+
+### Multiple event types and branching paths — the gap depends on your alternative, not on the processor
+
+The figures above are a single event type down a straight line. A second graph in the kit has **three
+event types taking three different paths**, which is what a real system looks like:
+
+| event | nodes fired |
+|---|---|
+| `MarketTick` | tickIn → mid, ewma, spread, notional, vol → *shared tail* |
+| `TradeEvent` | tradeIn → position → *shared tail* |
+| `LimitEvent` | limitIn → limit, and nothing downstream |
+| *shared tail* | exposure, charge, buffer, limit |
+
+**Correctness is gated before anything is timed.** `app.CorrectnessMulti` drives both arms through
+200,000 interleaved events and compares **every published field after every event**, bit-exact — not
+the three values the throughput harness prints, and not only at the end, because an ordering error that
+cancels by the last event is still an ordering error.
+
+*(The hand-rolled arm's firing order was read off the generated source, not reasoned about. Two of the
+orderings are not what a person writes by hand — the tick path fires `mid, ewma, spread, notional,
+vol`, and the shared tail puts `limit` last — and the generator factors the tail shared by two paths
+into one method rather than emitting it twice.)*
+
+**Measured, mixed stream (~75% ticks, 25% trades, 0.1% control), outputs identical:**
+
+| | JIT *(3 reps)* | native + PGO *(3 cycles, 3 of 3 landed)* |
+|---|---|---|
+| generated | 5.541 | **1.681** — 595 M/s |
+| hand-rolled | 2.680 | 1.372 |
+| **gap** | **2.07×** | **22.5%** |
+
+**Read that against the single-type figures and the useful fact appears: the generated processor costs
+the same either way.** 1.666 ns on one event type, 1.681 on three — the dispatch cost is flat. What
+moved is the *floor*: hand-rolled dropped from 1.534 to 1.372, because a quarter of the events now take
+a much shorter path and a hand-written `if` chain gets all of that saving.
+
+So **the percentage gap is a property of your alternative, not of the generated code**:
+
+| shape | generated | hand-rolled | gap |
+|---|---|---|---|
+| one event type, straight line | 1.666 | 1.534 | 8.6% |
+| three types, branching paths | 1.681 | 1.372 | 22.5% |
+
+Quote 8.6% only for the shape it was measured on. **The transferable number is the absolute:
+~1.67 ns/event, ~595–600M events/sec on one core, stable across both shapes.**
 
 **What 600 M/s is and is not.** It is single-threaded dispatch cost on one core: one event type, a
 10-node graph, epsilon GC, back-to-back calls in a bounded loop, no I/O, no allocation, no contention.
