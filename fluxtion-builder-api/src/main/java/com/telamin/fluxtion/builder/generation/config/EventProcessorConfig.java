@@ -280,9 +280,31 @@ public class EventProcessorConfig {
          * event, and no {@code NodeNameLookup} map — turns off dirty filtering, and stops node
          * registration. Node lookup still works: the generator emits it as code.
          *
+         * <p><b>It also gives up buffer-and-trigger and subscriptions</b>, which removes the buffer
+         * branch from every event and stops the constructor publishing the processor to the
+         * subscription manager. <b>Measured, that is worth nothing on a 10-node graph</b> — five
+         * interleaved JIT reps with output verified identical read 5.124 ns before and 5.143 after,
+         * and a landed native build reads 1.7176 against a 1.54–1.69 band. They are set because the
+         * generated code is smaller and because neither can change a result, not because they are
+         * faster.
+         *
+         * <p><b>Re-entrancy is deliberately left alone.</b> {@code setSupportReentrancy(false)} is the
+         * one setting in this family that can break a working graph — re-entrant dispatch stops being
+         * queued and throws {@link IllegalStateException} instead — and it was measured at the same
+         * time and bought nothing either. Build-time detection cannot be complete, because a node can
+         * reach the dispatcher through a service or reflectively. Set it yourself if your graph
+         * provably never re-enters; a profile should not spend that capability for you.
+         *
+         * <p><b>What giving up re-entrancy means, precisely.</b> A node that dispatches back into the
+         * processor while an event is in flight is no longer queued — the generated code keeps a guard
+         * and throws {@link IllegalStateException} naming the event. It fails loudly; it does not
+         * silently drop or reorder. Build-time detection cannot be complete, because a node can reach
+         * the dispatcher through a service or reflectively, which is why the runtime guard is retained.
+         * If your graph re-enters, call {@code setSupportReentrancy(true)} after the profile.
+         *
          * <p>Requires void triggers on the nodes themselves
          * ({@code failBuildIfMissingBooleanReturn = false}), which this profile cannot set for you.
-         * Measured on a 10-node graph: 5.5 ns on any JIT, ~1.6 ns native with PGO and the generated
+         * Measured on a 10-node graph: ~4.9 ns on any JIT, ~1.6 ns native with PGO and the generated
          * inlining directive.
          */
         LOWEST_LATENCY
@@ -301,6 +323,22 @@ public class EventProcessorConfig {
         if (profile == PerformanceProfile.LOWEST_LATENCY) {
             setSupportDirtyFiltering(false);
             setSupportNodeNameLookup(false);
+            // Added 2026-09-07. Both remove work from the generated event path — the buffer branch,
+            // and the constructor publishing the processor to the subscription manager — and neither
+            // can change a result: you either use the capability or you do not.
+            //
+            // Measured, and the measurement is the point: on a 10-node graph this is worth NOTHING.
+            // Five interleaved JIT reps read 5.124 before and 5.143 after; a landed native build reads
+            // 1.7176 against a 1.54-1.69 band. They are here because the generated code is smaller and
+            // the profile's own documentation already lists them as baseline configuration, not
+            // because they are faster.
+            //
+            // setSupportReentrancy(false) is deliberately NOT set here. It is the one of the three
+            // that can break a working graph: re-entrant dispatch stops queueing and throws instead.
+            // It was measured at the same time and bought nothing either, so the profile does not
+            // spend a capability on it. Set it yourself if your graph provably never re-enters.
+            setSupportBufferAndTrigger(false);
+            setSupportSubscriptions(false);
             if (getAuditorMap() != null) {
                 getAuditorMap().keySet().removeAll(new HashSet<>(getFrameworkAuditorNames()));
             }
