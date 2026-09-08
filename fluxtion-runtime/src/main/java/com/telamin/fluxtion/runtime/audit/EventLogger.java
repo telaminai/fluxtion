@@ -41,6 +41,76 @@ public class EventLogger {
      * Whether this logger's record accepts integer ids. Exposed to subclasses so a record-specialised
      * logger can take the id path without duplicating the resolution.
      */
+    /**
+     * Keys this logger's node can log, declared once, indexed by ordinal.
+     *
+     * <p>The source-level form of what a code model or annotation processor would generate: seeing
+     * {@code auditLog.info("price", price)} in node source it knows both the node and the key, and can
+     * emit {@code auditLog.info(0, price)} against a declared key list. The runtime then resolves each
+     * key to a record id <b>once</b> instead of comparing a {@code String} reference per call.
+     *
+     * <p>No bytecode rewriting and no vendor-jar rewriting, so the generated source remains the code
+     * that runs — the property an ASM transform would have cost.
+     */
+    private String[] declaredKeys;
+    private int[] declaredKeyRefs;
+    private static final int UNRESOLVED = LogRecord.NO_ID - 1;
+
+    /** Declare the keys this node logs, in the order its ordinal calls use. */
+    public EventLogger declareKeys(String... keys) {
+        this.declaredKeys = keys;
+        this.declaredKeyRefs = new int[keys.length];
+        java.util.Arrays.fill(this.declaredKeyRefs, UNRESOLVED);
+        return this;
+    }
+
+    protected int ordinalRef(int ordinal) {
+        int ref = declaredKeyRefs[ordinal];
+        if (ref != UNRESOLVED) {
+            return ref;
+        }
+        ref = logrecord.internName(declaredKeys[ordinal]);
+        declaredKeyRefs[ordinal] = ref;
+        return ref;
+    }
+
+    /** Ordinal-indexed logging at INFO; the key is an index into {@link #declareKeys}. */
+    public EventLogger info(int keyOrdinal, double value) {
+        return log(keyOrdinal, value, LogLevel.INFO);
+    }
+
+    public EventLogger info(int keyOrdinal, long value) {
+        return log(keyOrdinal, value, LogLevel.INFO);
+    }
+
+    public EventLogger log(int keyOrdinal, double value, LogLevel logLevel) {
+        if (this.logLevel.level >= logLevel.level) {
+            if (useIds()) {
+                logrecord.addRecord(sourceRef, ordinalRef(keyOrdinal), value);
+            } else {
+                // A record with no id space still gets the entry. An ordinal is a way of NAMING a key,
+                // not a second wire format, so a record that declines ids must see the same write it
+                // would have seen from the String API rather than silently lose it.
+                logrecord.addRecord(logSourceId, declaredKeys[keyOrdinal], value);
+            }
+        }
+        return this;
+    }
+
+    public EventLogger log(int keyOrdinal, long value, LogLevel logLevel) {
+        if (this.logLevel.level >= logLevel.level) {
+            if (useIds()) {
+                logrecord.addRecord(sourceRef, ordinalRef(keyOrdinal), value);
+            } else {
+                // A record with no id space still gets the entry. An ordinal is a way of NAMING a key,
+                // not a second wire format, so a record that declines ids must see the same write it
+                // would have seen from the String API rather than silently lose it.
+                logrecord.addRecord(logSourceId, declaredKeys[keyOrdinal], value);
+            }
+        }
+        return this;
+    }
+
     protected boolean useIds() {
         if (!idsResolved) {
             idsResolved = true;
