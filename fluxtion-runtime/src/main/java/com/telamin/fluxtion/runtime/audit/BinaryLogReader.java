@@ -5,6 +5,12 @@
 package com.telamin.fluxtion.runtime.audit;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -50,53 +56,152 @@ public final class BinaryLogReader {
         }
     }
 
+    /**
+     * The largest file that can be handled by one {@code FileChannel.map} call. Not arbitrary:
+     * {@link MappedByteBuffer} inherits {@code Buffer}'s {@code int} capacity, so a single mapping
+     * cannot address more than {@link Integer#MAX_VALUE} bytes.
+     */
+    public static final long MAX_SINGLE_MAP = Integer.MAX_VALUE;
+
+    /** Chunk size for the streamed path. Package-visible so a test can force the straddle case. */
+    static final int DEFAULT_CHUNK = 1 << 20;
+
     private BinaryLogReader() {
+    }
+
+    /**
+     * Reads a log file, memory-mapping it when it fits a single mapping and streaming it when it does
+     * not. Both paths produce identical results; the difference is only how the bytes are obtained.
+     */
+    public static Result read(Path path, Visitor visitor) throws IOException {
+        long size = Files.size(path);
+        if (size <= MAX_SINGLE_MAP) {
+            try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) {
+                MappedByteBuffer map = channel.map(FileChannel.MapMode.READ_ONLY, 0, size);
+                byte[] all = new byte[(int) size];
+                map.get(all);
+                return read(all, visitor);
+            }
+        }
+        try (InputStream in = Files.newInputStream(path)) {
+            return readStreamed(in, DEFAULT_CHUNK, visitor);
+        }
+    }
+
+    /**
+     * The streamed path, for files past {@link #MAX_SINGLE_MAP}.
+     *
+     * <p>A frame can straddle a chunk boundary, so whatever the parser could not consume is carried to
+     * the front of the next chunk. Without that a record spanning the boundary would be reported as a
+     * truncation in the middle of a perfectly good file — which is why the straddle case is tested with
+     * a deliberately small chunk rather than left to a 2 GiB fixture nobody will build.
+     *
+     * @param chunk bytes to read at a time; a test uses a small value to force straddles
+     */
+    static Result readStreamed(InputStream in, int chunk, Visitor visitor) throws IOException {
+        byte[] buffer = new byte[Math.max(chunk, BinaryLogFile.HEADER_BYTES)];
+        int held = 0;
+        Result total = new Result();
+        boolean first = true;
+        List<String> names = total.dictionary;
+
+        while (true) {
+            int room = buffer.length - held;
+            if (room == 0) {
+                // a single frame is larger than the chunk: grow rather than stall
+                byte[] bigger = new byte[buffer.length * 2];
+                System.arraycopy(buffer, 0, bigger, 0, held);
+                buffer = bigger;
+                room = buffer.length - held;
+            }
+            int n = in.read(buffer, held, room);
+            if (n < 0) {
+                break;
+            }
+            held += n;
+            if (first && held < BinaryLogFile.HEADER_BYTES) {
+                // not enough yet to validate the header — read more before parsing anything
+                continue;
+            }
+
+            byte[] slice = new byte[held];
+            System.arraycopy(buffer, 0, slice, 0, held);
+            Cursor cursor = parse(slice, first, names, total, visitor);
+            first = false;
+            int consumed = cursor.consumed;
+            System.arraycopy(buffer, consumed, buffer, 0, held - consumed);
+            held -= consumed;
+        }
+        if (first) {
+            // the stream ended before a header could be validated — the mapped path throws here and
+            // the two paths must agree, or "read a file" means something different depending on size
+            throw new IOException("not an audit log: stream ended after " + held
+                    + " bytes, need at least " + BinaryLogFile.HEADER_BYTES);
+        }
+        total.truncatedBytes = held;
+        return total;
     }
 
     public static Result read(byte[] data, Visitor visitor) throws IOException {
         Result result = new Result();
-        if (data.length < BinaryLogFile.HEADER_BYTES) {
-            throw new IOException("not an audit log: " + data.length + " bytes, need at least "
-                    + BinaryLogFile.HEADER_BYTES);
-        }
-        for (int i = 0; i < BinaryLogFile.MAGIC.length; i++) {
-            if (data[i] != BinaryLogFile.MAGIC[i]) {
-                throw new IOException("not an audit log: bad magic");
-            }
-        }
-        int version = u16(data, 4);
-        if (version != BinaryLogFile.FORMAT_VERSION) {
-            throw new IOException("audit log format version " + version + ", this reader understands "
-                    + BinaryLogFile.FORMAT_VERSION);
-        }
+        Cursor c = parse(data, true, result.dictionary, result, visitor);
+        result.truncatedBytes = data.length - c.consumed;
+        return result;
+    }
 
-        List<String> names = result.dictionary;
-        int p = BinaryLogFile.HEADER_BYTES;
+    /** How far the parser got. */
+    private static final class Cursor {
+        int consumed;
+    }
+
+    /**
+     * Parses whole frames from {@code data}, stopping at the first incomplete one.
+     *
+     * @param expectHeader true for the first slice of a file, false when resuming mid-stream
+     * @return how many bytes were consumed; the remainder is an incomplete frame to carry or report
+     */
+    private static Cursor parse(byte[] data, boolean expectHeader, List<String> names,
+                                Result result, Visitor visitor) throws IOException {
+        Cursor cursor = new Cursor();
+        int p = 0;
+        if (expectHeader) {
+            if (data.length < BinaryLogFile.HEADER_BYTES) {
+                throw new IOException("not an audit log: " + data.length + " bytes, need at least "
+                        + BinaryLogFile.HEADER_BYTES);
+            }
+            for (int i = 0; i < BinaryLogFile.MAGIC.length; i++) {
+                if (data[i] != BinaryLogFile.MAGIC[i]) {
+                    throw new IOException("not an audit log: bad magic");
+                }
+            }
+            int version = u16(data, 4);
+            if (version != BinaryLogFile.FORMAT_VERSION) {
+                throw new IOException("audit log format version " + version
+                        + ", this reader understands " + BinaryLogFile.FORMAT_VERSION);
+            }
+            p = BinaryLogFile.HEADER_BYTES;
+            cursor.consumed = p;
+        }
         while (p < data.length) {
             int frame = data[p] & 0xFF;
             if (frame == BinaryLogFile.FRAME_DICT) {
-                if (p + 5 > data.length) { result.truncatedBytes = data.length - p; break; }
+                if (p + 5 > data.length) { break; }
                 int id = u16(data, p + 1);
                 int len = u16(data, p + 3);
-                if (p + 5 + len > data.length) { result.truncatedBytes = data.length - p; break; }
+                if (p + 5 + len > data.length) { break; }
                 while (names.size() <= id) { names.add(null); }
                 names.set(id, new String(data, p + 5, len, java.nio.charset.StandardCharsets.UTF_8));
                 p += 5 + len;
+                cursor.consumed = p;
             } else if (frame == BinaryLogFile.FRAME_RECORD) {
-                if (p + BinaryLogFile.RECORD_FIXED_BYTES > data.length) {
-                    result.truncatedBytes = data.length - p;
-                    break;
-                }
+                if (p + BinaryLogFile.RECORD_FIXED_BYTES > data.length) { break; }
                 int entries = u16(data, p + 1);
                 int eventTypeId = u16(data, p + 3);
                 long eventTime = i64(data, p + 5);
                 long logTime = i64(data, p + 13);
                 long endTime = i64(data, p + 21);
                 int slotBytes = entries * 16;
-                if (p + BinaryLogFile.RECORD_FIXED_BYTES + slotBytes > data.length) {
-                    result.truncatedBytes = data.length - p;
-                    break;
-                }
+                if (p + BinaryLogFile.RECORD_FIXED_BYTES + slotBytes > data.length) { break; }
                 int base = p + BinaryLogFile.RECORD_FIXED_BYTES;
                 String eventType = name(names, eventTypeId, result);
                 result.records++;
@@ -112,12 +217,13 @@ public final class BinaryLogReader {
                 }
                 result.entries += entries;
                 p = base + slotBytes;
+                cursor.consumed = p;
             } else {
                 throw new IOException("unknown frame type 0x" + Integer.toHexString(frame)
                         + " at byte " + p);
             }
         }
-        return result;
+        return cursor;
     }
 
     /** An id with no dictionary entry renders as {@code #id} and is counted, never thrown. */
