@@ -49,6 +49,14 @@ public class EventLogManager implements Auditor {
     @Inject
     public Clock clock;
     private boolean canTrace = false;
+    /**
+     * Build the binary record at {@link #init()} rather than swapping one in at runtime.
+     *
+     * <p>Selected by {@code EventProcessorConfig.addLowLatencyEventLog(level, BINARY)}, so it is a
+     * build input. The runtime swap through {@code EventLogControlEvent} still works and is still the
+     * way to change format on a running processor; this is the way to start in the right one.
+     */
+    public boolean binaryRecord = false;
     private LogLevel logLevel = LogLevel.INFO;
 
 
@@ -186,6 +194,11 @@ public class EventLogManager implements Auditor {
         canTrace = trace && node2Logger.values().stream().filter(e -> e.canLog(traceLevel)).findAny().isPresent();
     }
 
+    /** Visible for tests: confirms {@link #init()} built the format the profile asked for. */
+    public boolean lastRecordIsBinaryForTest() {
+        return logRecord instanceof BinaryLogRecord;
+    }
+
     public void setLogSink(LogRecordListener sink) {
         this.sink = sink;
     }
@@ -228,9 +241,18 @@ public class EventLogManager implements Auditor {
         }
     }
 
+    /**
+     * Build a {@link BinaryLogRecord} at {@link #init()} instead of the text record. Set by
+     * {@code EventProcessorConfig.addLowLatencyEventLog(level, BINARY)} so the format is a build input.
+     */
+    public EventLogManager binaryRecord(boolean binaryRecord) {
+        this.binaryRecord = binaryRecord;
+        return this;
+    }
+
     @Override
     public void init() {
-        logRecord = new LogRecord(clock);
+        logRecord = binaryRecord ? new BinaryLogRecord(clock) : new LogRecord(clock);
         logRecord.printEventToString(printEventToString);
         logRecord.setPrintThreadName(printThreadName);
         node2Logger = new HashMap<>();

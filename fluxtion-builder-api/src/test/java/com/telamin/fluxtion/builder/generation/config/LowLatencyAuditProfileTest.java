@@ -167,4 +167,36 @@ public class LowLatencyAuditProfileTest {
         assertNotNull("LOW_LATENCY_AUDIT keeps the audit log",
                 lowLatencyAudit.getAuditorMap().get(EventLogManager.NODE_NAME));
     }
+
+    /**
+     * The record format is a <b>build input</b> selected through the profile, not something swapped in
+     * at runtime. Default stays TEXT because nothing can read the binary form yet — the analyser
+     * registers only a YAML reader.
+     */
+    @Test
+    public void defaultRecordFormatIsTextBecauseNothingCanReadBinaryYet() {
+        EventProcessorConfig config = new EventProcessorConfig();
+        config.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
+        config.addLowLatencyEventLog(com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel.INFO);
+
+        EventLogManager manager = (EventLogManager) config.getAuditorMap().get(EventLogManager.NODE_NAME);
+        assertFalse("a binary log nothing can open is not a safe default", manager.binaryRecord);
+    }
+
+    @Test
+    public void binaryRecordIsSelectableThroughTheProfileAndBuildsAtInit() {
+        EventProcessorConfig config = new EventProcessorConfig();
+        config.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
+        config.addLowLatencyEventLog(com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel.INFO,
+                EventProcessorConfig.AuditRecordFormat.BINARY);
+
+        EventLogManager manager = (EventLogManager) config.getAuditorMap().get(EventLogManager.NODE_NAME);
+        assertTrue("the profile must carry the format", manager.binaryRecord);
+
+        manager.clock = new com.telamin.fluxtion.runtime.time.Clock();
+        manager.clock.init();
+        manager.init();
+        assertTrue("and init must build the binary record, not swap one in later",
+                manager.lastRecordIsBinaryForTest());
+    }
 }
