@@ -63,20 +63,48 @@ public class LowLatencyAuditProfileTest {
     }
 
     /**
-     * The two the profile must NOT touch. Dirty filtering changes what the graph computes; re-entrancy
-     * turns queued re-entrant dispatch into an exception. An audit profile that altered either would be
-     * changing behaviour to buy speed, which is not a trade a profile gets to make on the author's
-     * behalf — the same reasoning {@code LOWEST_LATENCY} documents for re-entrancy.
+     * Re-entrancy is the one setting this profile must not touch: turning it off converts queued
+     * re-entrant dispatch into an {@link IllegalStateException}, which can break a working graph. That
+     * is not a trade a profile gets to make on the author's behalf — the same reasoning
+     * {@code LOWEST_LATENCY} documents for it at length.
      */
     @Test
-    public void leavesAloneTheTwoThatCanChangeBehaviour() {
+    public void leavesReentrancyAlone() {
         EventProcessorConfig config = new EventProcessorConfig();
         config.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
 
-        assertTrue("an audit profile must not change what the graph computes",
-                config.isSupportDirtyFiltering());
         assertTrue("re-entrancy is the author's call, not the profile's",
                 config.isSupportReentrancy());
+    }
+
+    /**
+     * Guards off. Measured with the harness version held equal across both arms — 7.6 ns/event better
+     * with no audit, indistinguishable with it. An earlier measurement said the opposite because it
+     * compared a pre-h3 binary against an h3 one: two variables, not one. The audit output was
+     * identical throughout, which is what said the difference had to be an artifact.
+     */
+    @Test
+    public void turnsGuardsOffBecauseTheyAreFreeToRemoveOnTheAuditedPath() {
+        EventProcessorConfig config = new EventProcessorConfig();
+        config.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
+
+        assertFalse("guards cost 7.6 ns/event with no audit and are indistinguishable with it "
+                        + "(144.11 vs 142.83 native, inside the lottery); on this shape they also "
+                        + "skip nothing, verified by tracing",
+                config.isSupportDirtyFiltering());
+    }
+
+    /** And the author can still put them back — a profile is a starting point, not a lock. */
+    @Test
+    public void theAuthorCanPutGuardsBack() {
+        EventProcessorConfig config = new EventProcessorConfig();
+        config.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
+        config.setSupportDirtyFiltering(true);
+
+        assertTrue(config.isSupportDirtyFiltering());
+        assertNotNull("and doing so must not disturb the audit log",
+                config.addLowLatencyEventLog(com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel.INFO)
+                        .getAuditorMap().get(EventLogManager.NODE_NAME));
     }
 
     /** The whole point of the profile: unlike LOWEST_LATENCY, the audit log survives it. */
@@ -119,26 +147,24 @@ public class LowLatencyAuditProfileTest {
     }
 
     /**
-     * The two profiles must remain distinguishable on the settings that cost, not just on the audit
-     * log. {@code LOWEST_LATENCY} turns dirty filtering off; this one does not — a 17 ns/event
-     * difference on the reference graph, charged whether or not anything is audited.
-     *
-     * <p>Pinned because that difference was once measured as "audit cost": a baseline built with
-     * {@code LOWEST_LATENCY} has 172 fewer {@code isDirty_} references than an audited processor, so
-     * the delta between them was audit <em>plus</em> dirty filtering. A fair baseline has to differ from
-     * the audited build by the auditor alone.
+     * With guards off in both, the two profiles now differ by the audit log alone. Pinned because that
+     * is what makes an audit measurement meaningful: a baseline that also differs in dirty filtering
+     * produced a delta 32% larger than the real audit cost, and nothing reported the confound.
      */
     @Test
-    public void differsFromLowestLatencyOnDirtyFilteringAndThatCostsSeventeenNanos() {
+    public void differsFromLowestLatencyOnTheAuditLogNotTheGuards() {
         EventProcessorConfig lowLatencyAudit = new EventProcessorConfig();
         lowLatencyAudit.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
 
         EventProcessorConfig lowestLatency = new EventProcessorConfig();
         lowestLatency.performanceProfile(PerformanceProfile.LOWEST_LATENCY);
 
-        assertTrue("LOW_LATENCY_AUDIT keeps conditional propagation",
-                lowLatencyAudit.isSupportDirtyFiltering());
-        assertFalse("LOWEST_LATENCY gives it up — that is the documented difference",
-                lowestLatency.isSupportDirtyFiltering());
+        assertFalse("both give up conditional propagation", lowLatencyAudit.isSupportDirtyFiltering());
+        assertFalse("both give up conditional propagation", lowestLatency.isSupportDirtyFiltering());
+        // the difference between them is the audit log, not the guards
+        lowLatencyAudit.addLowLatencyEventLog(
+                com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel.INFO);
+        assertNotNull("LOW_LATENCY_AUDIT keeps the audit log",
+                lowLatencyAudit.getAuditorMap().get(EventLogManager.NODE_NAME));
     }
 }

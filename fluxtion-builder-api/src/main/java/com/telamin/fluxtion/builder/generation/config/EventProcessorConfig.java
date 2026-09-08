@@ -314,10 +314,22 @@ public class EventProcessorConfig {
          * <p>{@link #AUDITED} keeps every capability; {@link #LOWEST_LATENCY} drops the audit log
          * entirely. Neither is the deployed case, which is "I want the audit log and I want it cheap".
          *
-         * <p>Keeps: the {@link EventLogManager} auditor — the audit log is the point — and the
-         * {@link Clock}, which every timestamp in the record depends on. Dirty filtering is kept
-         * deliberately: an audit profile must not change what the graph computes. Re-entrancy is kept
-         * for the reason {@link #LOWEST_LATENCY} documents at length.
+         * <p>Keeps: the {@link EventLogManager} auditor — the audit log is the point — the
+         * {@link Clock}, which every timestamp in the record depends on, and node registration, which
+         * is how every node gets its {@code EventLogger}. Re-entrancy is kept for the reason
+         * {@link #LOWEST_LATENCY} documents at length.
+         *
+         * <p><b>Conditional propagation is given up.</b> Measured with the harness version held equal
+         * across both arms: guards cost <b>7.6 ns/event on a graph with no auditing</b> and are
+         * <b>indistinguishable once auditing</b> (144.11 against 142.83 on native, inside the build
+         * lottery). On this graph they also decide nothing — tracing shows guards-on and guards-off
+         * invoking identical nodes, because each event reaches its chain by topology.
+         *
+         * <p><b>What you give up:</b> an {@code @OnTrigger} method now runs whenever the wave reaches
+         * it, not only when a parent is dirty. Invisible for pure recomputation; not invisible for a
+         * node that accumulates or has side effects. If your graph has heavy nodes behind a
+         * sometimes-cold join, call {@code setSupportDirtyFiltering(true)} after the profile — a guard
+         * breaks even at about a 4% skip rate for a node doing real work.
          *
          * <p>Gives up: per-node method tracing, the event's {@code toString()}, the thread name in each
          * record, buffer-and-trigger and subscriptions. <b>It does not give up node-name lookup</b>,
@@ -336,12 +348,9 @@ public class EventProcessorConfig {
          *   LOW_LATENCY_AUDIT with the auditor and a record    84.41 ns   <- +55.3 ns of audit
          * </pre>
          *
-         * The middle row is this profile's own overhead over {@code LOWEST_LATENCY} with nothing
-         * audited: <b>~17 ns, essentially all of it dirty filtering</b> on a ~12-node path. That is the
-         * price of not changing what the graph computes, and it is charged whether or not you audit.
-         * If your graph provably does not need conditional propagation, call
-         * {@code setSupportDirtyFiltering(false)} yourself after the profile — the profile will not
-         * spend that semantic guarantee for you, for the same reason it will not spend re-entrancy.
+         * The middle row was measured before this profile turned guards off, and is what they cost:
+         * <b>~17 ns on JIT and ~23 on native</b> for a ~12-node path on which they skipped nothing.
+         * Turning them off is what closes that row against the {@code LOWEST_LATENCY} line.
          *
          * <p>Stating the split matters because the two were conflated: an earlier measurement compared
          * this profile against a {@code LOWEST_LATENCY} baseline and reported the whole 72 ns gap as
@@ -406,8 +415,38 @@ public class EventProcessorConfig {
             // sink actually saw records. LowLatencyAuditProfileTest now pins this both ways.
             setSupportBufferAndTrigger(false);
             setSupportSubscriptions(false);
-            // NOT setSupportDirtyFiltering(false): that changes propagation, and an audit profile must
-            // not alter what the graph computes. NOT setSupportReentrancy(false): see LOWEST_LATENCY.
+            // Guards OFF, on measurements that took three attempts to get right.
+            //
+            // Interleaved, minimum of 5-8, both arms built from the SAME harness version:
+            //
+            //                            guards ON   guards OFF    delta
+            //   no audit,     JIT            27.99        20.33    -7.66
+            //   no audit,     native         25.66        18.02    -7.63
+            //   AUDITED,      native        144.11       142.83    -1.28   (inside the lottery)
+            //
+            // So: clearly better with no audit, and indistinguishable once auditing. Free on the path
+            // this profile serves, worth 7.6 ns on the path it does not - an easy call.
+            //
+            // On this graph the guards also decide nothing, and that is a measured fact rather than an
+            // assumption: with tracing on, guards-on and guards-off invoke IDENTICAL nodes (13/10/11),
+            // because each event reaches its chain by topology. Guards only decide anything where a
+            // node has several parents and only some are dirty.
+            //
+            // An intermediate measurement said guards-off was 23% SLOWER on the audited native path.
+            // It compared a guards-on binary built from a pre-h3 harness against a guards-off binary
+            // built from h3 - two variables, not one. Rebuilt with the harness held equal, and two
+            // builds per configuration to bound the lottery, the difference vanished. The audit output
+            // was identical throughout (recPerEvent 1.000, 180.8 B/record, same checksum), which is
+            // what said the timing difference had to be an artifact.
+            //
+            // WHAT THIS GIVES UP: an @OnTrigger method now runs whenever the wave reaches it, not only
+            // when a parent is dirty. Invisible for pure recomputation; NOT invisible for a node that
+            // accumulates or has side effects. An author with heavy nodes behind a sometimes-cold join
+            // calls setSupportDirtyFiltering(true) after the profile - it breaks even at about a 4%
+            // skip rate for a node doing real work.
+            setSupportDirtyFiltering(false);
+            // NOT setSupportReentrancy(false): see LOWEST_LATENCY. It is the one setting here that can
+            // turn a working graph into an exception, and a profile should not spend that.
             // The EventLogManager's own settings are applied by addLowLatencyEventLog() below.
             return this;
         }
