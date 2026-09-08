@@ -113,7 +113,7 @@ public class EventLogManager implements Auditor {
 
     @Override
     public void nodeRegistered(Object node, String nodeName) {
-        EventLogger logger = new EventLogger(logRecord, nodeName);
+        EventLogger logger = newLogger(nodeName);
         logger.setLevel(logLevel);
         if (node instanceof EventLogSource) {
             EventLogSource calcSource = (EventLogSource) node;
@@ -124,11 +124,22 @@ public class EventLogManager implements Auditor {
         canTrace = trace && node2Logger.values().stream().filter(e -> e.canLog(traceLevel)).findAny().isPresent();
     }
 
+    /**
+     * The logger every node receives. A {@link BinaryLogRecord} gets a {@link BinaryEventLogger}, which
+     * holds the record as a concrete type so the per-entry write is a direct call. No generation is
+     * needed for this: nothing about the logger varies per processor.
+     */
+    private EventLogger newLogger(String nodeName) {
+        return logRecord instanceof BinaryLogRecord
+                ? new BinaryEventLogger((BinaryLogRecord) logRecord, nodeName)
+                : new EventLogger(logRecord, nodeName);
+    }
+
     private void updateLogRecord() {
         for (Map.Entry<String, EventLogSource> stringEventLogSourceEntry : name2LogSourceMap.entrySet()) {
             String nodeName = stringEventLogSourceEntry.getKey();
             EventLogSource calcSource = stringEventLogSourceEntry.getValue();
-            EventLogger logger = new EventLogger(logRecord, nodeName);
+            EventLogger logger = newLogger(nodeName);
             logger.setLevel(logLevel);
             calcSource.setLogger(logger);
             name2LogSourceMap.put(nodeName, calcSource);

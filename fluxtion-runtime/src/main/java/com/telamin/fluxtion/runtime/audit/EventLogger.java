@@ -29,7 +29,7 @@ public class EventLogger {
      * fixed set of them. No hashing, no map — the measurement that motivated this showed the cost was
      * performing a lookup at all, so the fast path must be a reference compare and nothing more.
      */
-    private int sourceRef = LogRecord.NO_ID;
+    protected int sourceRef = LogRecord.NO_ID;
     private boolean idsResolved;
     private boolean idsUsable;
     private static final int KEY_SLOTS = 4;
@@ -37,7 +37,11 @@ public class EventLogger {
     private final int[] keyRefs = new int[KEY_SLOTS];
     private int keyCount;
 
-    private boolean useIds() {
+    /**
+     * Whether this logger's record accepts integer ids. Exposed to subclasses so a record-specialised
+     * logger can take the id path without duplicating the resolution.
+     */
+    protected boolean useIds() {
         if (!idsResolved) {
             idsResolved = true;
             sourceRef = logrecord.internName(logSourceId);
@@ -46,7 +50,9 @@ public class EventLogger {
         return idsUsable;
     }
 
-    private int keyRef(String key) {
+    /** The id for a property key, resolved once and cached by reference. Subclass-visible for the same
+     *  reason as {@link #useIds()}. */
+    protected int keyRef(String key) {
         for (int i = 0; i < keyCount; i++) {
             if (keyNames[i] == key) {          // identity: keys are literals, so interned constants
                 return keyRefs[i];
