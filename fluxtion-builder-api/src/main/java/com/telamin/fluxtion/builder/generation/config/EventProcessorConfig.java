@@ -307,7 +307,28 @@ public class EventProcessorConfig {
          * Measured on a 10-node graph: ~4.9 ns on any JIT, ~1.6 ns native with PGO and the generated
          * inlining directive.
          */
-        LOWEST_LATENCY
+        LOWEST_LATENCY,
+        /**
+         * <b>The audit log, at the lowest cost that keeps it.</b> M52.2.
+         *
+         * <p>{@link #AUDITED} keeps every capability; {@link #LOWEST_LATENCY} drops the audit log
+         * entirely. Neither is the deployed case, which is "I want the audit log and I want it cheap".
+         *
+         * <p>Keeps: the {@link EventLogManager} auditor — the audit log is the point — and the
+         * {@link Clock}, which every timestamp in the record depends on. Dirty filtering is kept
+         * deliberately: an audit profile must not change what the graph computes. Re-entrancy is kept
+         * for the reason {@link #LOWEST_LATENCY} documents at length.
+         *
+         * <p>Gives up: per-node method tracing, the event's {@code toString()}, the thread name in each
+         * record, the runtime node-name map, buffer-and-trigger and subscriptions. The first three are
+         * what make a record readable when you do not know what you are looking for — the right trade
+         * for a production hot path and the wrong one for a development run, where {@link #AUDITED}
+         * remains the profile to use.
+         *
+         * <p>Measured on a 30-node, 5-event-type graph with a converging tail — see
+         * {@code docs/experience/runs/round-63} in the analyser repo.
+         */
+        LOW_LATENCY_AUDIT
     }
 
     /**
@@ -343,6 +364,17 @@ public class EventProcessorConfig {
                 getAuditorMap().keySet().removeAll(new HashSet<>(getFrameworkAuditorNames()));
             }
         }
+        if (profile == PerformanceProfile.LOW_LATENCY_AUDIT) {
+            // Keep the audit log and the clock. Drop the runtime name map — the generator emits node
+            // lookup as code — and the two capabilities LOWEST_LATENCY drops for generated-code size.
+            setSupportNodeNameLookup(false);
+            setSupportBufferAndTrigger(false);
+            setSupportSubscriptions(false);
+            // NOT setSupportDirtyFiltering(false): that changes propagation, and an audit profile must
+            // not alter what the graph computes. NOT setSupportReentrancy(false): see LOWEST_LATENCY.
+            // The EventLogManager's own settings are applied by addLowLatencyEventLog() below.
+            return this;
+        }
         // AUDITED intentionally changes nothing here: its two settings live on the EventLogManager
         // and are applied by addEventAudit(level, printEventToString, printThreadName). Naming the
         // profile still documents the choice, and auditedEventLogConfig() below applies it.
@@ -355,6 +387,25 @@ public class EventProcessorConfig {
      */
     public EventProcessorConfig addAuditedEventLog(LogLevel tracingLogLevel) {
         return addEventAudit(tracingLogLevel, false, false);
+    }
+
+    /**
+     * The audit configuration {@link PerformanceProfile#LOW_LATENCY_AUDIT} means: records on, method
+     * tracing <b>off</b>, and neither of the two defaults that allocate.
+     *
+     * <p>Tracing is the expensive half. Measured on a 30-node converging-tail graph: tracing on costs
+     * ~184 ns/event more than tracing off, on top of the record itself.
+     *
+     * @param entryLevel threshold for {@code EventLogger} entries the nodes themselves write
+     */
+    public EventProcessorConfig addLowLatencyEventLog(LogLevel entryLevel) {
+        EventLogManager manager = new EventLogManager()
+                .tracingOff()
+                .logLevel(entryLevel == null ? LogLevel.INFO : entryLevel)
+                .printEventToString(false)
+                .printThreadName(false);
+        addFrameworkAuditor(manager, EventLogManager.NODE_NAME);
+        return this;
     }
 
     public Set<String> getFrameworkAuditorNames() {
