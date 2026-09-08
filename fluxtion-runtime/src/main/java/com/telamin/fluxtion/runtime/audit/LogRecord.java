@@ -87,6 +87,57 @@ public class LogRecord {
         sb.append(newBuffer);
     }
 
+    /**
+     * Resolve a node name or property key to a small integer this record can use in place of the
+     * string, or return {@link #NO_ID} to say it does not work that way.
+     *
+     * <p><b>Why this exists.</b> Every name reaching {@code addRecord} is a compile-time constant: the
+     * node name comes from the generated processor, the property key is a literal in the node's own
+     * source. A record that encodes names as integers must therefore resolve the same handful of
+     * strings on every event forever. Measured on a 30-node graph logging 11.75 entries per event, that
+     * is 23.5 lookups and <b>26 ns/event on JIT, 27 on native</b> — about a third of a binary audit
+     * record, and an open-addressed identity table recovered only 7% of it, because the cost is doing a
+     * lookup at all rather than which lookup.
+     *
+     * <p>{@link EventLogger} is created per node and holds its node name in a final field, so it can
+     * resolve once and reuse. This hook is what lets it. <b>Node code does not change</b> —
+     * {@code auditLog.info("v", v)} is unaffected.
+     *
+     * @param name a node name or property key, always a constant in practice
+     * @return a non-negative id, or {@link #NO_ID} if this record encodes names directly
+     */
+    public int internName(String name) {
+        return NO_ID;
+    }
+
+    /** Returned by {@link #internName} when a record does not use integer ids. */
+    public static final int NO_ID = -1;
+
+    /**
+     * The id-carrying counterparts of the {@code addRecord} overloads. A record that returns real ids
+     * from {@link #internName} MUST override the ones it can receive; the defaults delegate nowhere and
+     * exist so that adding this to the API breaks no existing subclass.
+     */
+    public void addRecord(int sourceRef, int keyRef, double value) {
+        throw new UnsupportedOperationException("record returned ids from internName but did not "
+                + "override addRecord(int, int, double)");
+    }
+
+    public void addRecord(int sourceRef, int keyRef, long value) {
+        throw new UnsupportedOperationException("record returned ids from internName but did not "
+                + "override addRecord(int, int, long)");
+    }
+
+    public void addRecord(int sourceRef, int keyRef, int value) {
+        throw new UnsupportedOperationException("record returned ids from internName but did not "
+                + "override addRecord(int, int, int)");
+    }
+
+    public void addRecord(int sourceRef, int keyRef, boolean value) {
+        throw new UnsupportedOperationException("record returned ids from internName but did not "
+                + "override addRecord(int, int, boolean)");
+    }
+
     public void addRecord(String sourceId, String propertyKey, double value) {
         addSourceId(sourceId, propertyKey);
         sb.append(value);

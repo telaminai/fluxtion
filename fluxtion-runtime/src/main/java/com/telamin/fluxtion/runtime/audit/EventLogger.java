@@ -23,6 +23,44 @@ public class EventLogger {
     private final String logSourceId;
     private LogLevel logLevel;
 
+    /**
+     * Ids resolved once against {@link #logrecord}, if it uses them. {@code logSourceId} is final, so
+     * the node's id never changes; keys are a tiny reference-compared cache because a node logs a small
+     * fixed set of them. No hashing, no map — the measurement that motivated this showed the cost was
+     * performing a lookup at all, so the fast path must be a reference compare and nothing more.
+     */
+    private int sourceRef = LogRecord.NO_ID;
+    private boolean idsResolved;
+    private boolean idsUsable;
+    private static final int KEY_SLOTS = 4;
+    private final String[] keyNames = new String[KEY_SLOTS];
+    private final int[] keyRefs = new int[KEY_SLOTS];
+    private int keyCount;
+
+    private boolean useIds() {
+        if (!idsResolved) {
+            idsResolved = true;
+            sourceRef = logrecord.internName(logSourceId);
+            idsUsable = sourceRef != LogRecord.NO_ID;
+        }
+        return idsUsable;
+    }
+
+    private int keyRef(String key) {
+        for (int i = 0; i < keyCount; i++) {
+            if (keyNames[i] == key) {          // identity: keys are literals, so interned constants
+                return keyRefs[i];
+            }
+        }
+        int ref = logrecord.internName(key);
+        if (keyCount < KEY_SLOTS) {
+            keyNames[keyCount] = key;
+            keyRefs[keyCount] = ref;
+            keyCount++;
+        }
+        return ref;
+    }
+
     public EventLogger(LogRecord logrecord, String logSourceId) {
         this.logrecord = logrecord;
         this.logSourceId = logSourceId;
@@ -251,21 +289,33 @@ public class EventLogger {
 
     public EventLogger log(String key, double value, LogLevel logLevel) {
         if (this.logLevel.level >= logLevel.level) {
-            logrecord.addRecord(logSourceId, key, value);
+            if (useIds()) {
+                logrecord.addRecord(sourceRef, keyRef(key), value);
+            } else {
+                logrecord.addRecord(logSourceId, key, value);
+            }
         }
         return this;
     }
 
     public EventLogger log(String key, int value, LogLevel logLevel) {
         if (this.logLevel.level >= logLevel.level) {
-            logrecord.addRecord(logSourceId, key, value);
+            if (useIds()) {
+                logrecord.addRecord(sourceRef, keyRef(key), value);
+            } else {
+                logrecord.addRecord(logSourceId, key, value);
+            }
         }
         return this;
     }
 
     public EventLogger log(String key, long value, LogLevel logLevel) {
         if (this.logLevel.level >= logLevel.level) {
-            logrecord.addRecord(logSourceId, key, value);
+            if (useIds()) {
+                logrecord.addRecord(sourceRef, keyRef(key), value);
+            } else {
+                logrecord.addRecord(logSourceId, key, value);
+            }
         }
         return this;
     }
@@ -286,7 +336,11 @@ public class EventLogger {
 
     public EventLogger log(String key, boolean value, LogLevel logLevel) {
         if (this.logLevel.level >= logLevel.level) {
-            logrecord.addRecord(logSourceId, key, value);
+            if (useIds()) {
+                logrecord.addRecord(sourceRef, keyRef(key), value);
+            } else {
+                logrecord.addRecord(logSourceId, key, value);
+            }
         }
         return this;
     }
