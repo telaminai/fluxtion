@@ -320,7 +320,9 @@ public class EventProcessorConfig {
          * for the reason {@link #LOWEST_LATENCY} documents at length.
          *
          * <p>Gives up: per-node method tracing, the event's {@code toString()}, the thread name in each
-         * record, the runtime node-name map, buffer-and-trigger and subscriptions. The first three are
+         * record, buffer-and-trigger and subscriptions. <b>It does not give up node-name lookup</b>,
+         * because node registration is what supplies every node's {@code EventLogger} — dropping it
+         * silently disables the audit log rather than making it cheaper. The first three are
          * what make a record readable when you do not know what you are looking for — the right trade
          * for a production hot path and the wrong one for a development run, where {@link #AUDITED}
          * remains the profile to use.
@@ -365,9 +367,21 @@ public class EventProcessorConfig {
             }
         }
         if (profile == PerformanceProfile.LOW_LATENCY_AUDIT) {
-            // Keep the audit log and the clock. Drop the runtime name map — the generator emits node
-            // lookup as code — and the two capabilities LOWEST_LATENCY drops for generated-code size.
-            setSupportNodeNameLookup(false);
+            // Keep the audit log and the clock, and the two capabilities LOWEST_LATENCY drops purely
+            // for generated-code size.
+            //
+            // setSupportNodeNameLookup(false) is deliberately NOT set, and the reason is the whole
+            // point of this profile. That flag does not merely drop a name map: it stops NODE
+            // REGISTRATION, and node registration is how EventLogManager.nodeRegistered() hands each
+            // node its EventLogger. Without it every node's auditLog is the null logger, no node ever
+            // records anything, and the audit log this profile exists to keep is silently dead — the
+            // processor still runs, still looks right, and simply publishes nothing.
+            //
+            // An earlier version of this profile did set it. The generated processor emitted ZERO
+            // nodeRegistered calls against 33 for AUDITED, and the benchmark that was supposed to be
+            // measuring the cost of auditing was measuring a graph with no audit at all - and duly
+            // reported it as a speed-up. Found only because the harness was made to assert that the
+            // sink actually saw records. LowLatencyAuditProfileTest now pins this both ways.
             setSupportBufferAndTrigger(false);
             setSupportSubscriptions(false);
             // NOT setSupportDirtyFiltering(false): that changes propagation, and an audit profile must

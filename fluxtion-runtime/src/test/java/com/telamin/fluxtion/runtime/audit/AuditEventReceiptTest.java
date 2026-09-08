@@ -73,4 +73,32 @@ public class AuditEventReceiptTest {
         };
         assertThat(keen.auditEventReceipt(), is(true));
     }
+
+    /**
+     * The second auditor in the same position as {@link NodeNameAuditor}, missed when W15 landed.
+     * {@code ServiceRegistryNode} does all its work in {@code registerService},
+     * {@code deRegisterService} and {@code nodeRegistered}; it must not be on the event path.
+     */
+    @Test
+    public void serviceRegistryOptsOutOfTheEventPath() {
+        assertThat(new com.telamin.fluxtion.runtime.service.ServiceRegistryNode().auditEventReceipt(),
+                is(false));
+    }
+
+    /**
+     * The premise the opt-out depends on: it overrides none of the three per-event callbacks, so opting
+     * out cannot lose behaviour. If someone later gives it a real {@code eventReceived}, this fails and
+     * tells them to reconsider the flag — which is the failure mode W15's javadoc warns about.
+     */
+    @Test
+    public void serviceRegistryInheritsTheCallbacksItOptsOutOf() throws NoSuchMethodException {
+        Class<?> c = com.telamin.fluxtion.runtime.service.ServiceRegistryNode.class;
+        assertThat(c.getMethod("processingComplete").getDeclaringClass().getName(),
+                is(Auditor.class.getName()));
+        assertThat(c.getMethod("eventReceived", Object.class).getDeclaringClass().getName(),
+                is(Auditor.class.getName()));
+        assertThat(c.getMethod("eventReceived", com.telamin.fluxtion.runtime.event.Event.class)
+                        .getDeclaringClass().getName(),
+                is(Auditor.class.getName()));
+    }
 }
