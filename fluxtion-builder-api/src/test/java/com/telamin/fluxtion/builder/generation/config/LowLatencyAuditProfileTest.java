@@ -117,4 +117,28 @@ public class LowLatencyAuditProfileTest {
         assertFalse("LOWEST_LATENCY gives up the audit log; that is its documented trade",
                 audited.getAuditorMap().containsKey(EventLogManager.NODE_NAME));
     }
+
+    /**
+     * The two profiles must remain distinguishable on the settings that cost, not just on the audit
+     * log. {@code LOWEST_LATENCY} turns dirty filtering off; this one does not — a 17 ns/event
+     * difference on the reference graph, charged whether or not anything is audited.
+     *
+     * <p>Pinned because that difference was once measured as "audit cost": a baseline built with
+     * {@code LOWEST_LATENCY} has 172 fewer {@code isDirty_} references than an audited processor, so
+     * the delta between them was audit <em>plus</em> dirty filtering. A fair baseline has to differ from
+     * the audited build by the auditor alone.
+     */
+    @Test
+    public void differsFromLowestLatencyOnDirtyFilteringAndThatCostsSeventeenNanos() {
+        EventProcessorConfig lowLatencyAudit = new EventProcessorConfig();
+        lowLatencyAudit.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
+
+        EventProcessorConfig lowestLatency = new EventProcessorConfig();
+        lowestLatency.performanceProfile(PerformanceProfile.LOWEST_LATENCY);
+
+        assertTrue("LOW_LATENCY_AUDIT keeps conditional propagation",
+                lowLatencyAudit.isSupportDirtyFiltering());
+        assertFalse("LOWEST_LATENCY gives it up — that is the documented difference",
+                lowestLatency.isSupportDirtyFiltering());
+    }
 }

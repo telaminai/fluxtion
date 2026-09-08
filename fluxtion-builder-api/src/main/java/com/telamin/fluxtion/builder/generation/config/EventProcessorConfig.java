@@ -327,6 +327,28 @@ public class EventProcessorConfig {
          * for a production hot path and the wrong one for a development run, where {@link #AUDITED}
          * remains the profile to use.
          *
+         * <p><b>What keeping dirty filtering costs, measured.</b> On a 30-node, 5-event-type converging
+         * graph where every node on the path logs, JIT, minimum of 6 interleaved reps:
+         *
+         * <pre>
+         *   LOWEST_LATENCY, no auditors, dirty filtering OFF   12.05 ns
+         *   LOW_LATENCY_AUDIT, no auditor installed            29.08 ns   <- +17.0 ns
+         *   LOW_LATENCY_AUDIT with the auditor and a record    84.41 ns   <- +55.3 ns of audit
+         * </pre>
+         *
+         * The middle row is this profile's own overhead over {@code LOWEST_LATENCY} with nothing
+         * audited: <b>~17 ns, essentially all of it dirty filtering</b> on a ~12-node path. That is the
+         * price of not changing what the graph computes, and it is charged whether or not you audit.
+         * If your graph provably does not need conditional propagation, call
+         * {@code setSupportDirtyFiltering(false)} yourself after the profile — the profile will not
+         * spend that semantic guarantee for you, for the same reason it will not spend re-entrancy.
+         *
+         * <p>Stating the split matters because the two were conflated: an earlier measurement compared
+         * this profile against a {@code LOWEST_LATENCY} baseline and reported the whole 72 ns gap as
+         * "audit cost". <b>It was 55 ns of audit and 17 ns of dirty filtering</b>, and the only way to
+         * see that was to build a baseline whose sole difference from the audited processor was the
+         * auditor itself — 172 {@code isDirty_} references on both sides instead of 172 against zero.
+         *
          * <p>Measured on a 30-node, 5-event-type graph with a converging tail — see
          * {@code docs/experience/runs/round-63} in the analyser repo.
          */
