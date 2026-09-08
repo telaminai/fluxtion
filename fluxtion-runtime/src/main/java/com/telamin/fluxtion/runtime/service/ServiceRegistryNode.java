@@ -212,6 +212,25 @@ public class ServiceRegistryNode
         return new ServiceDependency(cls, name, new ArrayList<>(dedup.values()));
     }
 
+    /**
+     * M50/W15 — this auditor takes no part in the event path.
+     *
+     * <p>All of its work happens in {@link #registerService}, {@link #deRegisterService} and
+     * {@link #nodeRegistered}. It overrides none of the three per-event callbacks, so before this
+     * declaration every generated processor carried {@code serviceRegistry.eventReceived(event)} and
+     * {@code serviceRegistry.processingComplete()} on every single event, both inherited no-ops.
+     *
+     * <p>This is the same finding as {@link com.telamin.fluxtion.runtime.audit.NodeNameAuditor}, which
+     * W15 fixed; the second auditor in the same position was missed at the time. Found by asking
+     * whether any other auditor was adding indirection to the event path.
+     *
+     * @return false — nothing to do per event
+     */
+    @Override
+    public boolean auditEventReceipt() {
+        return false;
+    }
+
     @Override
     public void nodeRegistered(Object node, String nodeName) {
         if (node instanceof DataFlowContextListener) {
