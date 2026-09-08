@@ -82,13 +82,13 @@ public class BinaryLogFileRoundTripTest {
         Collector(boolean accept) { this.accept = accept; }
 
         @Override
-        public boolean onRecord(String eventType, long eventTime, long logTime, long endTime, int n) {
+        public boolean onRecord(int typeId, String eventType, long eventTime, long logTime, long endTime, int n) {
             records.add(eventType + "|" + eventTime + "|" + logTime + "|" + endTime + "|" + n);
             return accept;
         }
 
         @Override
-        public void onEntry(String node, String key, int tag, long rawBits) {
+        public void onEntry(int nodeId, String node, int keyId, String key, int tag, long rawBits) {
             entries.add(node + "." + key + "=" + BinaryRecordDecoder.renderValue(tag, rawBits));
         }
     }

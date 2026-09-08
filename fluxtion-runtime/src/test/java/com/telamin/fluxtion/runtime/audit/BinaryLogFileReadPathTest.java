@@ -74,13 +74,13 @@ public class BinaryLogFileReadPathTest {
         int records;
 
         @Override
-        public boolean onRecord(String t, long ev, long lg, long en, int n) {
+        public boolean onRecord(int typeId, String t, long ev, long lg, long en, int n) {
             records++;
             return true;
         }
 
         @Override
-        public void onEntry(String node, String key, int tag, long bits) {
+        public void onEntry(int nodeId, String node, int keyId, String key, int tag, long bits) {
             entries.add(node + "." + key + "=" + BinaryRecordDecoder.renderValue(tag, bits));
         }
     }

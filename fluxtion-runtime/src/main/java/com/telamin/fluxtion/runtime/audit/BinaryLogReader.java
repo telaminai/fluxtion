@@ -30,15 +30,29 @@ import java.util.List;
  */
 public final class BinaryLogReader {
 
-    /** Receives each record, then each of its entries. */
+    /**
+     * Receives each record, then each of its entries.
+     *
+     * <p>Both ids and resolved names are passed. A filter should match on the <b>id</b> — an integer
+     * compare against a set resolved once when the dictionary entry arrived — and use the name only
+     * for output. Matching names per entry costs more than reading the file.
+     */
     public interface Visitor {
         /**
          * @return {@code true} to receive this record's entries, {@code false} to skip them —
          * the cheap path a time-range or event-type filter takes
          */
-        boolean onRecord(String eventType, long eventTime, long logTime, long endTime, int entryCount);
+        boolean onRecord(int eventTypeId, String eventType,
+                         long eventTime, long logTime, long endTime, int entryCount);
 
-        void onEntry(String node, String key, int tag, long rawBits);
+        void onEntry(int nodeId, String node, int keyId, String key, int tag, long rawBits);
+
+        /**
+         * A name has been resolved to an id. A filter resolves its patterns here, once per name, and
+         * matches on ids thereafter.
+         */
+        default void onDictionaryEntry(int id, String name) {
+        }
     }
 
     /** What the read found, including what it could not use. */
@@ -190,7 +204,9 @@ public final class BinaryLogReader {
                 int len = u16(data, p + 3);
                 if (p + 5 + len > data.length) { break; }
                 while (names.size() <= id) { names.add(null); }
-                names.set(id, new String(data, p + 5, len, java.nio.charset.StandardCharsets.UTF_8));
+                String name = new String(data, p + 5, len, java.nio.charset.StandardCharsets.UTF_8);
+                names.set(id, name);
+                visitor.onDictionaryEntry(id, name);
                 p += 5 + len;
                 cursor.consumed = p;
             } else if (frame == BinaryLogFile.FRAME_RECORD) {
@@ -205,13 +221,14 @@ public final class BinaryLogReader {
                 int base = p + BinaryLogFile.RECORD_FIXED_BYTES;
                 String eventType = name(names, eventTypeId, result);
                 result.records++;
-                if (visitor.onRecord(eventType, eventTime, logTime, endTime, entries)) {
+                if (visitor.onRecord(eventTypeId, eventType, eventTime, logTime, endTime, entries)) {
                     for (int e = 0; e < entries; e++) {
                         long header = i64(data, base + e * 16);
                         long bits = i64(data, base + e * 16 + 8);
-                        visitor.onEntry(
-                                name(names, BinaryRecordDecoder.nodeId(header), result),
-                                name(names, BinaryRecordDecoder.keyId(header), result),
+                        int nodeId = BinaryRecordDecoder.nodeId(header);
+                        int keyId = BinaryRecordDecoder.keyId(header);
+                        visitor.onEntry(nodeId, name(names, nodeId, result),
+                                keyId, name(names, keyId, result),
                                 BinaryRecordDecoder.tag(header), bits);
                     }
                 }
