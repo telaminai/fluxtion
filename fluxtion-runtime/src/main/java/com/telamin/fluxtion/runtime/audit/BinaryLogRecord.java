@@ -235,7 +235,9 @@ public final class BinaryLogRecord extends LogRecord {
             slots[slot] = ((long) sourceRef << 48) | ((long) (keyRef & 0xFFFF) << 32) | (tag & 0xFFL);
             slots[slot + 1] = bits;
             slot += 2;
-            firstProp = false;
+            // firstProp is deliberately NOT written here. It exists so terminateRecord can answer
+            // "did anything get logged", and on this path `slot` already answers it — so the store
+            // was pure repetition, 11.75 times per event on the measured graph.
         } else {
             overflow = true;
         }
@@ -330,7 +332,11 @@ public final class BinaryLogRecord extends LogRecord {
         eventTime = clock.getEventTime();
         logTime = now();
         endTime = 0;
-        eventTypeId = intern(type.getName());
+        // tableId, NOT intern. intern() is an IdentityHashMap lookup, and this line runs once per
+        // EVENT — a profile of the audited graph put IdentityHashMap.get at 19% of samples, reached
+        // only from here. Class.getName() returns the same cached String reference every call, so the
+        // identity table that already exists for node and key names resolves it in one probe.
+        eventTypeId = tableId(type.getName());
     }
 
     /** Time the event was created. */
@@ -347,7 +353,9 @@ public final class BinaryLogRecord extends LogRecord {
 
     @Override
     public boolean terminateRecord() {
-        boolean logged = !firstProp;
+        // slot > 0 covers the id path, where writeSlots no longer touches firstProp; !firstProp
+        // covers the String and trace paths, which still do.
+        boolean logged = slot > 0 || !firstProp;
         endTime = now();
         firstProp = true;
         sourceId = null;
@@ -362,10 +370,14 @@ public final class BinaryLogRecord extends LogRecord {
         slot = 0;
     }
 
-    /** The encoded record. The sink writes {@code buf[0..length)} and nothing else. */
+    /**
+     * The byte buffer used by the {@code String}-key and trace paths only. On the id path — the one the
+     * latency profile takes — nothing is written here, and {@link #length()} describes {@link #slots()}
+     * rather than this array. {@code BinaryLogWriter} reads the slots; so should any other sink.
+     */
     public byte[] buffer() { return buf; }
 
-    /** Bytes the sink should write: the slot region, then whatever the text-shaped header wrote. */
+    /** Size of the entry region, in bytes. A sink reads {@link #slots()}, not {@link #buffer()}. */
     public int length() { return slot * 8; }
 
     /** The entry slots. A reader consumes {@code slots()[0 .. length()/8)}. */
