@@ -100,6 +100,19 @@ public final class BinaryLogRecord extends LogRecord {
     private final long[] slots;
     private int slot;
 
+    /**
+     * The record header. Held as fields rather than written into the slot array so that entries stay
+     * uniformly two slots each — the property a reader relies on to skip an entry without decoding it.
+     *
+     * <p>An earlier version wrote the header into the byte buffer while entries went to slots, and
+     * {@link #length()} reported only the slots. The header was therefore built and then silently
+     * discarded: no sink could see the event time, the log time, the event type or the end time.
+     */
+    private long eventTime;
+    private long logTime;
+    private long endTime;
+    private int eventTypeId;
+
     private final byte[] buf;
     private int pos;
     private boolean overflow;
@@ -314,17 +327,28 @@ public final class BinaryLogRecord extends LogRecord {
         pos = 0;
         slot = 0;
         overflow = false;
-        u8(1);
-        i64(clock.getEventTime());
-        i64(now());
-        u16(intern(type.getName()));
+        eventTime = clock.getEventTime();
+        logTime = now();
+        endTime = 0;
+        eventTypeId = intern(type.getName());
     }
+
+    /** Time the event was created. */
+    public long eventTime() { return eventTime; }
+
+    /** Time processing began — {@code Clock.getProcessTime()}, see {@link LogRecord#logTime()}. */
+    public long logTime() { return logTime; }
+
+    /** Time processing completed; 0 until {@link #terminateRecord()} has run. */
+    public long endTime() { return endTime; }
+
+    /** Interned id of the event type. Resolve through {@link #dictionary()}. */
+    public int eventTypeId() { return eventTypeId; }
 
     @Override
     public boolean terminateRecord() {
         boolean logged = !firstProp;
-        u8(0);
-        i64(now());
+        endTime = now();
         firstProp = true;
         sourceId = null;
         return logged;
