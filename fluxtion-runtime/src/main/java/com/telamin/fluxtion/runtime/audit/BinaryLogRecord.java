@@ -36,15 +36,16 @@ public final class BinaryLogRecord extends LogRecord {
     private static final byte TAG_DOUBLE = 1, TAG_LONG = 2, TAG_INT = 3, TAG_CHAR = 4,
             TAG_CHARSEQ = 5, TAG_OBJECT = 6, TAG_BOOL = 7, TAG_TRACE = 8;
 
-    /** {@code live} = stock behaviour, {@code process} = reuse the clock read Clock already did,
-     *  {@code none} = no wall-clock read at all. Z-arm switch for round 63 §7.4. */
-    public static String clockMode = System.getProperty("clock", "live");
-
-    /** Resolved once at construction. The String switch this replaces cost a hash and an equals on
-     *  every header and every terminator — twice per record — and was an artifact of the class
-     *  carrying three experiment modes. A real encoder has one mode. */
-    private final boolean useProcessTime = "process".equals(clockMode);
-    private final boolean noClock = "none".equals(clockMode);
+    /**
+     * Retained only so existing harnesses that set {@code -Dclock=...} still start. It no longer selects
+     * anything: this record now takes its times the way {@link LogRecord} documents them, which is the
+     * only correct behaviour and was never one of the three modes this switch offered.
+     *
+     * @deprecated the clock mode was a benchmark switch that reached production code. It will be
+     *             removed; nothing should read it.
+     */
+    @Deprecated
+    public static String clockMode = "fixed";
 
 
 
@@ -205,9 +206,24 @@ public final class BinaryLogRecord extends LogRecord {
         } else { overflow = true; }
     }
 
-    private long now() {
-        if (useProcessTime) { return clock.getProcessTime(); }
-        if (noClock) { return 0L; }
+    /**
+     * The time processing BEGAN — {@link Clock#getProcessTime()}, the reading {@code Clock.eventReceived}
+     * already took for this event. Not a fresh wall-clock call: {@link LogRecord#logTime()} documents
+     * why, and this subclass previously ignored it.
+     */
+    private long logTimeNow() {
+        return clock.getProcessTime();
+    }
+
+    /**
+     * The time processing COMPLETED — deliberately a live reading, because {@code endTime - logTime} is
+     * the processing duration and a cached value would report every event as taking zero time.
+     *
+     * <p>Only called when {@link #recordEndTime} is set. It is off by default: it is the second clock
+     * read on an audited event path, and a deployment that does not consume the duration is paying for
+     * a field nothing looks at.
+     */
+    private long endTimeNow() {
         return clock.getWallClockTime();
     }
 
@@ -341,7 +357,7 @@ public final class BinaryLogRecord extends LogRecord {
         slot = 0;
         overflow = false;
         eventTime = clock.getEventTime();
-        logTime = now();
+        logTime = logTimeNow();
         endTime = 0;
         // tableId, NOT intern. intern() is an IdentityHashMap lookup, and this line runs once per
         // EVENT — a profile of the audited graph put IdentityHashMap.get at 19% of samples, reached
@@ -367,7 +383,7 @@ public final class BinaryLogRecord extends LogRecord {
         // slot > 0 covers the id path, where writeSlots no longer touches firstProp; !firstProp
         // covers the String and trace paths, which still do.
         boolean logged = slot > 0 || !firstProp;
-        endTime = now();
+        endTime = recordEndTime ? endTimeNow() : 0L;
         firstProp = true;
         sourceId = null;
         return logged;

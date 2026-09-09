@@ -15,17 +15,19 @@ It assumes you have read [Audit logging in a DataFlow](audit-logging-dataflow.md
 Choose the binary record when **audit density is high** — many nodes logging many values per event — and
 the event path is latency-sensitive. Audit density, not graph size, is the variable that decides:
 
-| every node on the path logs | JIT | native AOT | bytes/record |
+| record | JIT | native AOT | bytes/record |
 |---|---:|---:|---:|
-| text record | 403 ns · 2.5 M/s | 699 ns · 1.4 M/s | 548 |
-| **binary record** | **42.6 ns · 23.5 M/s** | **41.1 ns · 24.3 M/s** | **188** |
+| text | 42.3 ns · 24 M/s | 50.6 ns · 20 M/s | 404 |
+| **binary** | **20.4 ns · 49 M/s** | **18.2 ns · 55 M/s** | 188 |
 
-Measured on a 30-node graph, five event types, one shared tail, 11.75 logged values per event, no-op
-sink, zero allocation, **excluding the disk or network write**. Native figures are the mean of three
-independent PGO builds.
+Measured on the four-node price-ladder graph from [Performance results](../reference/performance.md),
+no-op sink, zero allocation, **excluding the disk or network write** — and on a graph whose nodes log
+**nothing explicitly**, so this is the cost of the machinery. Binary is **2.1× cheaper on JIT and 2.8× on
+native** before a single value is logged.
 
-If only one node on the path logs, the gap is 3.2× rather than 9.5× — worth having, rarely worth
-changing a default for.
+The gap widens with audit density, because the text record formats a node name, a key and a value
+*inside the event cycle* for every entry while the binary record writes two aligned longs. On a graph
+where every node logs, the ratio measured around 8×.
 
 ## Turning it on
 

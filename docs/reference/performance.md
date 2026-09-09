@@ -5,24 +5,42 @@ Fluxtion can generate ahead-of-time, high-performance event processors suitable 
 This page explains the benchmark used, how to reproduce it, and why the generated code is able to reach the reported
 numbers. New diagrams illustrate the event flow, dependency ordering, and the benchmark harness.
 
-JMH is used to measure throughput and average time per event, and HdrHistogram records latency percentiles across a run.
+Every figure here is ns/event on a single thread, taken with the latency kit described under
+*Benchmark harness*: interleaved arms, minimum of six batches, repeatability gated, and a checksum that
+must agree across every arm before a number is reported at all.
 
 !!! note "Results are in the nanosecond range"
-    Fluxtion operates with sub‑microsecond response times for realistic graphs. The event dispatch overhead of the
-    generated processor is in the low‑nanosecond range; most time is spent in user logic.
+    Fluxtion operates with sub-microsecond response times for realistic graphs. The event dispatch
+    overhead of the generated processor is in the low-nanosecond range; on this benchmark it is **0.18 ns
+    over hand-written Java**. Most time is spent in user logic — which on a four-node benchmark is a
+    small amount, so the framework's share here is larger than it will be in your application.
 
 ## Summary results
 
-- 50 million events processed per second
-- Average latency: ~20 ns to process one event (including application logic)
-- Event processor dispatch overhead: low‑nanosecond range
-- Zero GC during steady state
-- Single‑threaded benchmark
+One application graph — a market-data price ladder, four nodes, real array work — measured under every
+profile, on both toolchains, against a hand-written Java control and a hand-written C++ control that are
+proven to compute the identical result.
+
+| | JIT | native AOT |
+|---|---:|---:|
+| **Dispatch, no audit** (`LOWEST_LATENCY`) | 9.4 ns · 106 M/s | **4.5 ns · 222 M/s** |
+| **Audited, binary record** | 20.4 ns · 49 M/s | **18.2 ns · 55 M/s** |
+| Hand-written Java, no framework | 6.4 ns · 156 M/s | 4.3 ns · 233 M/s |
+
+- **The framework costs 0.18 ns/event — 4% — over hand-written flat Java under native AOT.**
+- Zero allocation in steady state on every un-audited arm.
+- Single thread, no core pinning, no OS isolation.
+
+!!! warning "These figures replace an earlier version of this page, and the change is large"
+    This page previously reported **50 M events/sec and ~20 ns/event**, from a JMH benchmark built
+    against **Fluxtion 9.7.5 (January 2025)** under the old `com.fluxtion` group id, on an unrecorded
+    machine, JIT only, at a single configuration. It was not wrong when written; it had simply stopped
+    describing this framework. The current figures come from the same benchmark **ported to the current
+    runtime** and re-measured from scratch.
 
 ## Test subject and setup
 
-The [test project]({{fluxtion_example_src}}/compiler/aot-compiler) processes a market data update and performs a small
-set of calculations for each price ladder event:
+The benchmark processes a market data update and performs four calculations per price ladder event:
 
 ```java
 public class PriceLadder {
@@ -33,396 +51,101 @@ public class PriceLadder {
 }
 ```
 
-- A graph with four nodes, each performing calculations
-- 10,000 randomly generated events per iteration to avoid data bias
-- Single thread, no core pinning or OS isolation
-- AOT‑generated event processor under test (no reflection, no graph traversal at runtime)
-
-The goal is a representative test with randomly distributed inputs to mitigate branch prediction artifacts and hot
-value reuse.
-
-### Nodes and evaluation order
-
-| Eval order | Class                                                                                                                                                        | Description                                                                                         |
-|------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
-| Node 1     | [MidCalculator]({{fluxtion_example_src}}/compiler/aot-compiler/src/main/java/com/telamin/fluxtion/example/compile/aot/node/MidCalculator.java)               | Mid price calculator                                                                                |
-| Node 2     | [SkewCalculator]({{fluxtion_example_src}}/compiler/aot-compiler/src/main/java/com/telamin/fluxtion/example/compile/aot/node/SkewCalculator.java)             | Adjust each level by a configurable skew                                                            |
-| Node 3     | [LevelsCalculator]({{fluxtion_example_src}}/compiler/aot-compiler/src/main/java/com/telamin/fluxtion/example/compile/aot/node/LevelsCalculator.java)         | Remove levels (set price/volume to 0) if max levels < input ladder level count                      |
-| Node 4     | [PriceLadderPublisher]({{fluxtion_example_src}}/compiler/aot-compiler/src/main/java/com/telamin/fluxtion/example/compile/aot/node/PriceLadderPublisher.java) | Publish the calculated PriceLadder to a consumer                                                    |
-
-#### Dependency flow (logical)
-
-```mermaid
-flowchart TD
-    E[Event: PriceLadder update] --> N1[MidCalculator]
-    N1 --> N2[SkewCalculator]
-    N2 --> N3[LevelsCalculator]
-    N3 --> PUB[PriceLadderPublisher]
-    PUB --> OUT[(Downstream consumer)]
-```
-### Calculation code for nodes
-
-To simulate realistic application logic, each node performs a small set of calculations.
-
-#### MidCalculator
-
-```java
-import com.telamin.fluxtion.example.compile.aot.pricer.PriceLadder;
-import com.telamin.fluxtion.example.compile.aot.pricer.PriceLadderConsumer;
-import com.telamin.fluxtion.runtime.annotations.ExportService;
-
-public class MidCalculator implements @ExportService PriceLadderConsumer {
-
-    private int mid;
-    private PriceLadder priceLadder;
-
-    @Override
-    public boolean newPriceLadder(PriceLadder priceLadder) {
-        mid = (priceLadder.getAskPrices()[0] + priceLadder.getBidPrices()[0]) / 2;
-        this.priceLadder = priceLadder;
-        //If the JMH results seems quick un-comment the lines below to see the effect on the results
-//        try {
-//            Thread.sleep(1);
-//        } catch (InterruptedException e) {
-//            throw new RuntimeException(e);
-//        }
-        return true;
-    }
-
-    public int getMid() {
-        return mid;
-    }
-
-    public PriceLadder getPriceLadder() {
-        return priceLadder;
-    }
-}
-```
-
-#### SkewCalculator
-
-```java
-import com.telamin.fluxtion.example.compile.aot.pricer.PriceCalculator;
-import com.telamin.fluxtion.example.compile.aot.pricer.PriceLadder;
-import com.telamin.fluxtion.runtime.annotations.ExportService;
-import com.telamin.fluxtion.runtime.annotations.OnTrigger;
-
-public class SkewCalculator implements @ExportService(propagate = false)PriceCalculator {
-
-    private final MidCalculator midCalculator;
-    private PriceLadder skewedPriceLadder;
-    private int skew;
-
-    public SkewCalculator(MidCalculator midCalculator) {
-        this.midCalculator = midCalculator;
-    }
-
-    public SkewCalculator() {
-        this(new MidCalculator());
-    }
-
-    @Override
-    public void setSkew(int skew) {
-        this.skew = skew;
-    }
-
-    @OnTrigger
-    public boolean calculateSkewedLadder(){
-        PriceLadder priceLadder = midCalculator.getPriceLadder();
-
-        int[] bidPrices = priceLadder.getBidPrices();
-        for (int i = 0, bidPricesLength = bidPrices.length; i < bidPricesLength; i++) {
-            int bidPrice = bidPrices[i];
-            bidPrices[i] = bidPrice + skew;
-        }
-
-        int[] askPrices = priceLadder.getAskPrices();
-        for (int i = 0, askPricesLength = askPrices.length; i < askPricesLength; i++) {
-            int askPrice = askPrices[i];
-            askPrices[i] = askPrice + skew;
-        }
-
-        return true;
-    }
-
-    public PriceLadder getSkewedPriceLadder() {
-        return midCalculator.getPriceLadder();
-    }
-}
-```
-
-#### LevelsCalculator
-
-```java
-import com.telamin.fluxtion.example.compile.aot.pricer.PriceCalculator;
-import com.telamin.fluxtion.example.compile.aot.pricer.PriceLadder;
-import com.telamin.fluxtion.runtime.annotations.ExportService;
-import com.telamin.fluxtion.runtime.annotations.OnTrigger;
-
-public class LevelsCalculator implements @ExportService(propagate = false)PriceCalculator {
-    
-    private final SkewCalculator SkewCalculator;
-    private PriceLadder skewedPriceLadder;
-    private int maxLevels;
-
-    public LevelsCalculator(SkewCalculator SkewCalculator) {
-        this.SkewCalculator = SkewCalculator;
-    }
-
-    public LevelsCalculator() {
-        this(new SkewCalculator());
-    }
-
-    @Override
-    public void setLevels(int maxLevels) {
-        this.maxLevels = maxLevels;
-    }
-
-    @OnTrigger
-    public boolean calculateLevelsForLadder(){
-        PriceLadder priceLadder = SkewCalculator.getSkewedPriceLadder();
-
-        int[] bidPrices = priceLadder.getBidPrices();
-        int[] bidSizes = priceLadder.getBidSizes();
-        for (int i = maxLevels, bidPricesLength = bidPrices.length; i < bidPricesLength; i++) {
-            bidPrices[i] = 0;
-            bidSizes[i] = 0;
-        }
-
-        int[] askPrices = priceLadder.getAskPrices();
-        int[] askSizes = priceLadder.getAskSizes();
-        for (int i = maxLevels, askPricesLength = askPrices.length; i < askPricesLength; i++) {
-            askPrices[i] = 0;
-            askSizes[i] = 0;
-        }
-
-        return true;
-    }
-
-    public PriceLadder getLevelAdjustedPriceLadder() {
-        return SkewCalculator.getSkewedPriceLadder();
-    }
-}
-```
-
-#### PriceLadderPublisher
-
-```java
-import com.telamin.fluxtion.example.compile.aot.pricer.PriceCalculator;
-import com.telamin.fluxtion.example.compile.aot.pricer.PriceLadder;
-import com.telamin.fluxtion.runtime.annotations.ExportService;
-import com.telamin.fluxtion.runtime.annotations.OnTrigger;
-
-public class PriceLadderPublisher implements @ExportService(propagate = false)PriceCalculator {
-    
-    private final LevelsCalculator LevelsCalculator;
-    private PriceLadder skewedPriceLadder;
-    private PriceDistributor priceDistributor;
-
-    public PriceLadderPublisher(LevelsCalculator LevelsCalculator) {
-        this.LevelsCalculator = LevelsCalculator;
-    }
-
-    public PriceLadderPublisher() {
-        this(new LevelsCalculator());
-    }
-
-    @Override
-    public void setPriceDistributor(PriceDistributor priceDistributor) {
-        this.priceDistributor = priceDistributor;
-    }
-
-    @OnTrigger
-    public boolean publishPriceLadder(){
-        priceDistributor.setPriceLadder(LevelsCalculator.getLevelAdjustedPriceLadder());
-        return true;
-    }
-}
-```
-
-### Why AOT helps: generated event processor
-
-Fluxtion generates an ahead‑of‑time (AOT) event processor specialized to the declared graph and dependencies. The
-resulting class:
-
-- Routes events without reflection or dynamic lookup
-- Holds direct references to nodes and runs them in dependency order
-- Avoids general graph traversal and allocation on the hot path
-- Uses straight‑line, branch‑predictable logic
-- Monomorphic dispatch within the event processor allows the jvm to optimises method calls
-
-Generated code for this test: [PriceLadderProcessor.java]({{fluxtion_example_src}}/compiler/aot-compiler/src/main/java/com/telamin/fluxtion/example/compile/aot/generated/PriceLadderProcessor.java)
-
-A conceptual view of event dispatch in the generated processor:
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant P as Producer
-    participant EP as AOT EventProcessor<br/>PriceLadderConsumer
-    participant N1 as MidCalculator<br/>PriceLadderConsumer
-    participant N2 as SkewCalculator
-    participant N3 as LevelsCalculator
-    participant PUB as Publisher
-    participant C as Consumer
-
-    P->>EP: newPriceLadder(PriceLadder)
-    EP->>N1: newPriceLadder / compute mid
-    EP->>N2: apply skew
-    EP->>N3: adjust levels
-    EP->>PUB: publish result
-    PUB->>C: push updated ladder
-```
-
-#### AOT generated dispatch method for PriceLadder
-
-The Fluxtion compiler calculates the dependency order for each method and generates a bespoke dispatch method for each
-event type. In this case, the event processor dispatches to the exported interface method `PriceLadderConsumer#newPriceLadder(PriceLadder)`, 
-to process PriceLadder events. 
-
-#### Generaing the event processor AOY
-To generate a DataFlow ahead of time use the closed source utility `Fluxtion.compileAot`
-
-```java
-public class GenerateProcessorsAot {
-    public static void main(String[] args) {
-        Fluxtion.compileAot(
-                "com.telamin.fluxtion.example.compile.aot.generated",
-                "PriceLadderProcessor",
-                new PriceLadderPublisher());
-    }
-}
-```
-
-As the MidCalculator exports the service interface `PriceLadderConsumer`, the event processor also implements the
-PriceLadderConsumer interface and proxies calls to the MidCalculator. Client code calls the interface method directly on the processor.
-
-#### Sample dispatch java code
-
-```java
-public class PriceLadderProcessor
-        implements CloneableDataFlow<PriceLadderProcessor>,
-        /*--- @ExportService start ---*/
-        @ExportService PriceCalculator,
-        @ExportService PriceLadderConsumer,
-        @ExportService ServiceListener,
-        /*--- @ExportService end ---*/
-        DataFlow,
-        InternalEventProcessor,
-        BatchHandler {
-            
-    // Code removed for brevity       
-            
-    //EXPORTED SERVICE FUNCTIONS - START
-    @Override
-    public boolean newPriceLadder(com.telamin.fluxtion.example.compile.aot.pricer.PriceLadder arg0) {
-        beforeServiceCall(
-                "public boolean com.telamin.fluxtion.example.compile.aot.node.MidCalculator.newPriceLadder(com.telamin.fluxtion.example.compile.aot.pricer.PriceLadder)");
-        ExportFunctionAuditEvent typedEvent = functionAudit;
-        isDirty_midCalculator_3 = midCalculator_3.newPriceLadder(arg0);
-        if (guardCheck_skewCalculator_2()) {
-            isDirty_skewCalculator_2 = skewCalculator_2.calculateSkewedLadder();
-        }
-        if (guardCheck_levelsCalculator_1()) {
-            isDirty_levelsCalculator_1 = levelsCalculator_1.calculateLevelsForLadder();
-        }
-        if (guardCheck_priceLadderPublisher_0()) {
-            priceLadderPublisher_0.publishPriceLadder();
-        }
-        afterServiceCall();
-        return true;
-    }
-}
-```
-
-## Throughput and average time
-
-```console
-Benchmark                                            Mode  Cnt         Score   Error  Units
-PriceLadderBenchmark.throughPut_BranchingProcessor  thrpt    2  50872626.050          ops/s
-PriceLadderBenchmark.avgTime_BranchingProcessor      avgt    2        20.234          ns/op
-```
-
-The average time to process one event is ~20 ns, including all application logic executed by each node.
-
-## Latency distribution
-
-At 99.99% the latency is ~0.083 µs, which necessarily includes machine jitter. HdrHistogram adds a few nanoseconds per
-recorded sample. The tail aligns with a “no‑work” jitter baseline on the same machine, indicating the tail is dominated
-by platform jitter rather than application logic.
-
-[![](../images/aot_latency_histogram.png)](../images/aot_latency_histogram.png){:target="_blank"}
-
-- Blue: total latency with application work
-- Red: baseline machine jitter (“no processing”)
-
-## The audit log — what keeping a full audit trail costs
-
-The figures above are dispatch. The deployed question is usually different: **what does it cost to keep
-the audit trail?**
-
-Measured on a 30-node graph, five event types, one shared tail, where **every node on the path logs** —
-11.75 recorded values per event, no-op sink, zero allocation, excluding the disk or network write.
-Native figures are the mean of three independent PGO builds.
-
-| record | JIT | native AOT | bytes/record |
-|---|---:|---:|---:|
-| text | 403 ns · 2.5 M/s | 699 ns · 1.4 M/s | 548 |
-| **binary** | **42.6 ns · 23.5 M/s** | **41.1 ns · 24.3 M/s** | **188** |
-
-Against the *same graph with auditing off*, the audit machinery costs **29.2 ns/event on JIT and 39.0 on
-native**. See [Binary audit logging](../how-to/binary-audit-logging.md) for how to enable it.
-
-**AOT and JIT are level here.** They were not until the record's hot path was profiled: native ran
-1.5–1.9× behind, and that gap was never a property of the toolchain.
-
-### How this number was found, and why it is worth reading
-
-The audited path was 56.3 ns on JIT and audit cost 43.4. Two rounds of benchmark discipline —
-interleaved arms, three builds per configuration, runtime digests, refusing unrepeatable results — had
-not moved it, and had produced a confident conclusion that the remaining cost was inherent to the call
-sites, with a design proposal attached.
-
-One JFR profile put **56% of the audited path in code that resolves names which never change**:
-
-| leaf frame | share |
-|---|---:|
-| `EventLogger.keyRef(String)` | 37% |
-| `java.util.IdentityHashMap.get(Object)` | 19% |
-| the actual dispatch | 33% |
-
-Three faults, each a few lines:
-
-1. **The event type was interned through a fallback `IdentityHashMap` on every event**, while the
-   256-entry identity table built for exactly that sat unused by its hottest caller.
-2. **Every node has its own `EventLogger`, and each held its own key-cache arrays** — three cache lines
-   touched per entry, ~35 per event, to answer a question fixed after warm-up. The first two key ids are
-   now fields on the logger, which had to be loaded anyway.
-3. **`useIds()` re-checked a resolved-once decision on every entry.** The logger receives the record and
-   the node name in its constructor; there was never anything to wait for.
-
-That is **24% off the JIT audited path** and a third off audit cost.
-
-### The part worth generalising
-
-The same profile also showed `EventLogger.info` as the leaf frame in **71% of samples** on the no-audit
-control. Building an arm with the audit call sites physically deleted put its real cost at **1.40 ns
-across 11.75 call sites** — 0.12 ns each. HotSpot had inlined the node's arithmetic *into* `info`, and
-the sampler reported the inlined frame as the leaf.
-
-A sampling profiler gives **proportions, never magnitudes**, and its attribution is only as honest as the
-inlining beneath it. **Profile to generate hypotheses; measure differentially to size them.**
-
-The proposal the old numbers supported — a code model rewriting audit call sites into indexed calls —
-was measured at a 10.3 ns prize, built, and then withdrawn: with the data structure fixed, the indexed
-path is *slower* than the plain one. It would have been a permanent complication optimising around a bug.
-See [the audit latency harness](audit-latency-harness.md).
+| Eval order | Node | Work |
+|---|---|---|
+| 1 | `MidCalculator` | mid price from the touch |
+| 2 | `SkewCalculator` | add a configurable skew to all ten price levels |
+| 3 | `LevelsCalculator` | zero every level beyond `maxLevels` |
+| 4 | `PriceLadderPublisher` | publish the result to a consumer |
+
+- 10,000 randomly generated ladders from a **fixed seed**, cycled. Every arm sees identical input; the
+  published benchmark reseeded per iteration, which is right for JMH's statistics and useless for
+  comparing two arms, because they then do arithmetic on different numbers.
+- Single thread, no pinning. Apple M4, OpenJDK 25.0.2, Oracle GraalVM 25.0.4+7.1.
+- Native: `--gc=epsilon`, `-H:-SpawnIsolates`, PGO collected per image.
+- **The nodes mutate the input ladder in place**, so state accumulates across passes. That is inherent
+  to this workload and identical for every arm at equal iteration counts.
+
+**Every arm prints a checksum and they must all agree.** The C++, hand-written-Java, and generated-
+processor arms produce the same value to the digit at every iteration count. Without that, a benchmark
+compares two different programs and reports the difference as a result.
+
+## Results: the whole configuration spectrum
+
+Some applications want an audit trail and some do not, so both are reported. All figures ns/event, one
+thread, no-op audit sink, **excluding any disk or network write**.
+
+| configuration | audit | JIT ns | JIT M/s | native ns | native M/s |
+|---|:---:|---:|---:|---:|---:|
+| C++ `-O3 -march=native`, hand-written | — | — | — | **1.16** | 864 |
+| Hand-written Java, no framework | no | 6.39 | 156 | 4.30 | 233 |
+| **`LOWEST_LATENCY`** | no | 9.41 | 106 | **4.47** | **222** |
+| No configuration at all | no | 15.07 | 66 | 14.71 | 68 |
+| **`LOW_LATENCY_AUDIT` + `BINARY`** | yes | 20.44 | 49 | **18.16** | **55** |
+| `LOW_LATENCY_AUDIT` + `TEXT` | yes | 42.30 | 24 | 50.61 | 20 |
+| `AUDITED` — every capability on, tracing | yes | **112.33** | 8.9 | 200.81 | 5.0 |
+
+Native no-audit figures are the mean of three independent PGO builds — hand
+4.299 / 4.292 / 4.301, generated 4.511 / 4.507 / 4.404. The spread is **0.009 ns** on the hand-written arm
+and 0.107 on the generated one: the build lottery that dominates an audited path is essentially absent
+when the path is lean.
+
+### What the table says
+
+- **Native AOT is the right choice for a lean path, by a wide margin** — 4.5 ns against 9.4, and with a
+  far tighter spread. It is also *closer to hand-written Java* than the JIT manages: 5% against 49%.
+- **Native AOT is the wrong choice for a text-heavy audit path.** At `AUDITED` the JIT wins by 1.8×
+  (112.3 against 200.8), and on a text record by 1.2×. Closed-world compilation cannot speculate its way
+  through string formatting the way HotSpot does. **Choose the toolchain for the profile, not the other
+  way round.**
+- **Configuring nothing costs 3.3× the tuned configuration** — 14.7 ns against 4.5 on native. Per event
+  that is a clock read, three dirty-flag stores, three guard checks and three resets, plus a node-name
+  auditor and subscription manager in the generated class. None of it is wrong; all of it is optional.
+  See [performance profiles](performance-profiles.md).
+- **Keeping an audit trail costs 13.7 ns on native**, binary record — for a graph whose nodes log nothing
+  explicitly. That is the machinery: timestamps, record lifecycle, node registration. A graph whose nodes
+  log values pays more, in proportion to how much they log.
+
+## How close is this to C++?
+
+Close on the framework, not on the platform, and the distinction matters.
+
+| | native ns | vs hand-written Java |
+|---|---:|---:|
+| C++, `-O3 -march=native` | 1.16 | — |
+| Hand-written Java | 4.30 | — |
+| **Fluxtion generated processor** | **4.47** | **+0.18 ns (+4.1%)** |
+
+**What Fluxtion costs is 0.18 ns.** That is the number this page can defend: the generated processor
+against a human writing the same four calculations as straight-line Java, same data, same result, three
+independent builds each with a spread under 0.02 ns.
+
+**The remaining 3.1 ns is Java, not Fluxtion.** It is present in full in the hand-written Java arm, which
+uses no framework at all. Two candidate explanations were tested and **both were refuted**:
+
+- *Auto-vectorisation of the five-element loops.* Rebuilding the C++ with `-fno-vectorize
+  -fno-slp-vectorize` made it **faster** (1.06 ns), not slower.
+- *Data layout* — a C++ ladder is one flat 80-byte struct, a Java ladder is five heap objects. A Java
+  variant using one flat `int[]` for all 10,000 ladders was **slower** (5.91 ns), not faster: the
+  object form's fixed-length-5 arrays let the compiler remove bounds checks that a computed base index
+  defeats.
+
+Array bounds checking is the leading remaining candidate — roughly twenty checks per event, none of
+which C++ performs — but **it has not been measured, and it is not claimed here.** What is claimed is
+narrower and better supported: *on this workload the Java-to-C++ gap belongs to the platform, and
+Fluxtion adds 5% on top of what a good Java programmer writes by hand.*
+
+!!! note "An earlier version of this page claimed parity with C++"
+    It reported 1.57 ns for a generated processor against 1.57 ns for hand-optimised C++. That
+    measurement was real, but it was taken on a **dispatch-only graph** whose nodes do almost no work —
+    where the event path is nearly all framework and there is little for a C++ compiler to be better at.
+    On a graph doing real array work the gap opens up, and it opens up for hand-written Java too.
 
 ## Performance as business value
 
 In event-driven systems, performance is not just a technical metric — it is a primary driver of operational efficiency and cost reduction:
 
-- **Lower Infrastructure Spend**: Processing 50M events per second on a single core allows for massive consolidation of infrastructure.
+- **Lower Infrastructure Spend**: 222M events per second on a single core, or 55M with an audit trail, allows for substantial consolidation of infrastructure.
 - **Fewer Instances**: High throughput per core means your application requires fewer servers, reducing both cloud costs and maintenance overhead.
 - **Stable Tail Latency**: Predictable p99/p99.9 latency reduces the need for "over-provisioning" resources to handle occasional spikes caused by GC or coordination overhead.
 - **Operational Confidence**: A system that responds in nanoseconds with zero GC has a much larger "headroom" before reaching saturation, providing a buffer against unexpected market volatility.
@@ -433,35 +156,44 @@ In event-driven systems, performance is not just a technical metric — it is a 
 
 ```mermaid
 flowchart LR
-    subgraph JMH[JMH Runner]
-      DIR[Warmup & Measurement Iterations]
+    GEN[10k fixed-seed ladders] --> ARM
+    subgraph ARM[one arm]
+      EP[processor / hand Java / C++]
     end
-    GEN[Random input generator] -->|10k events/iter| EP[AOT EventProcessor]
-    EP --> REC[HdrHistogram recorder]
-    DIR --> EP
-    REC --> OUT[(Percentiles & reports)]
+    ARM --> CHK[checksum]
+    ARM --> T[min of 6 batches]
+    CHK --> GATE{all arms agree?}
+    T --> GATE
+    GATE -->|no| REF[refuse to report]
+    GATE -->|yes| OUT[(ns/event, M/s)]
 ```
+
+Every arm proves what it measured before it is allowed to report: the profile asked for is the profile
+generated (un-audited arms must publish **no** records, audited arms must publish them), and every arm
+must produce the same checksum. Each of those assertions exists because its absence once produced a
+plausible wrong number — including a `LOW_LATENCY_AUDIT` profile that had silently disabled the audit
+log and therefore benchmarked very well indeed.
+
+Repeatability is gated rather than assumed: three batches of six, refused if the coefficient of variation
+of the batch minima exceeds 2% native or 8% JIT. Measured repeatability on this machine is **0.05%
+native and around 5% JIT**, so a JIT difference under a few percent is not a difference and is not
+reported as one.
 
 ## Reproducibility and guidance
 
-You can reproduce results from the example project referenced above. Typical steps:
-
-1. Clone the examples repository and build it.
-2. Run the aot‑compiler benchmark target with your local JDK.
-
-Example (from the examples project root, adjust for your environment):
-
-```bash
-./mvnw -q -pl compiler/aot-compiler -am -DskipTests package
-java -jar compiler/aot-compiler/target/benchmarks.jar PriceLadderBenchmark -wi 5 -i 5 -f 1
-```
+Native results additionally need **three independent builds per arm**. Rebuilding one configuration moves
+an *audited* figure by up to ±8 ns, because the PGO profile decides which regime a build lands in and
+profile collection is itself a measurement. Minimise *within* a build to remove measurement noise;
+average *across* builds, because minimising across builds samples the lucky tail of the lottery and
+reports a figure no deployment will see. On the lean un-audited path the lottery is absent — the spread
+across three builds here was under 0.02 ns.
 
 Tips for consistent results:
 
-- Use Java 21 (matching Fluxtion’s toolchain)
-- Disable turbo boost / set a fixed CPU frequency if possible
-- Run on an isolated core; avoid background load
-- Prefer Linux with performance governor for stable jitter characteristics
+- Match the toolchain versions recorded above; a figure from another environment is not comparable
+- Run on an idle machine — the harness refuses above a load average of 4
+- Construct the processor **inside** the measured method; letting it escape costs 4.3× under native AOT
+- Disable turbo boost / fix the CPU frequency if you can, and avoid background load
 - Ensure warmup is sufficient for steady state
 
 ## Notes on GC and memory
@@ -473,12 +205,21 @@ free or are moved outside the hot path.
 ## Caveats
 
 - Absolute numbers depend on hardware, OS, JVM flags, and background load
-- HdrHistogram introduces minimal measurement overhead which is included in reported numbers
-- The example graph is deliberately small; more complex graphs will scale very well but absolute ns/op will reflect the
-  extra application work
+- The graph is deliberately small — four nodes — so the framework is a large fraction of the measurement.
+  That is the point when measuring a framework, and the opposite of what you want when sizing an
+  application: a bigger graph doing more work per node will show a **smaller** relative framework cost,
+  not a larger one
+- The audited figures exclude the disk or network write. A sink that writes is a different measurement
+- Audit figures are for a graph whose nodes log **nothing explicitly** — it is the cost of the machinery.
+  A graph where every node logs values costs more; see the audit log guide
 
 ---
 
 ## See also
 
+* **[Performance profiles](performance-profiles.md)**: what each profile turns on and off, what it costs,
+  and how to choose between them.
+* **[Binary audit logging](../how-to/binary-audit-logging.md)**: the low-latency audit record.
+* **[The audit latency harness](audit-latency-harness.md)**: how these numbers are produced, what the
+  harness refuses to report, and why a profiler sizes nothing.
 * **[Comparison with RxJava and Kafka Streams](alternative-comparisons.md)**: Understand the architectural differences and why Fluxtion's compiled approach delivers superior performance.

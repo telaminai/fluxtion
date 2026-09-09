@@ -70,18 +70,33 @@ public class Clock implements Auditor, Auditor.FirstAfterEvent {
     }
 
     /**
-     * Current wallclock time in milliseconds UTC
+     * Current wall-clock time from the installed {@link ClockStrategy}. Nanoseconds since the epoch
+     * under the default strategy; whatever unit a supplied strategy uses otherwise.
      *
-     * @return time in milliseconds UTC
+     * @return current time from the clock strategy
      */
     public long getWallClockTime() {
         return wallClock.getWallClockTime();
     }
 
+    /**
+     * The default strategy is {@link ClockStrategy#nanoEpochClock()} — <b>nanoseconds</b> since the
+     * epoch, derived from {@code System.nanoTime()} and anchored once.
+     *
+     * <p>It was {@code System::currentTimeMillis}, which is both slower and unable to represent what it
+     * is read for. Measured on an Apple M4: {@code currentTimeMillis} costs 12.9 ns a call against 8.0
+     * for {@code nanoTime}, and it advances a thousand times a second — so on any event faster than a
+     * millisecond, a duration taken across two readings is always exactly zero. An audited path reads
+     * the clock once here per event.
+     *
+     * <p><b>The unit changed with this.</b> {@link #getWallClockTime()} now returns nanoseconds where it
+     * returned milliseconds. Call {@link #setClockStrategy} with {@code () -> System.currentTimeMillis()}
+     * to restore the old behaviour, or supply a data-driven strategy for replay.
+     */
     @Initialise
     @Override
     public void init() {
-        wallClock = System::currentTimeMillis;
+        wallClock = ClockStrategy.nanoEpochClock();
     }
 
 }

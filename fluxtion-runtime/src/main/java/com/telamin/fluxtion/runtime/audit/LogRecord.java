@@ -56,6 +56,19 @@ public class LogRecord {
     protected final StringBuilder sb;
     protected String sourceId;
     protected boolean firstProp;
+    /**
+     * Whether to take a second clock reading for {@code endTime}. <b>Off by default.</b>
+     *
+     * <p>{@code endTime} exists so {@code endTime - logTime} gives the processing duration, and it has
+     * to be a live reading to do that — a cached one reports every event as taking zero time. But that
+     * costs a clock read on every event, and on any event faster than the clock's resolution the answer
+     * is zero anyway. An audited event path reads a clock twice per event; this is the second one, and
+     * most deployments do not need it.
+     *
+     * <p>Enable it when you actually consume the duration, and pair it with a clock that can resolve it:
+     * {@link com.telamin.fluxtion.runtime.time.ClockStrategy#nanoEpochClock()}.
+     */
+    protected boolean recordEndTime = false;
     @Setter
     protected Clock clock;
     protected boolean printEventToString = false;
@@ -80,6 +93,15 @@ public class LogRecord {
         if (!loggingEnabled()) {
             sb.setLength(0);
         }
+    }
+
+    /** @see #recordEndTime */
+    public void setRecordEndTime(boolean recordEndTime) {
+        this.recordEndTime = recordEndTime;
+    }
+
+    public boolean isRecordEndTime() {
+        return recordEndTime;
     }
 
     public void replaceBuffer(CharSequence newBuffer) {
@@ -309,8 +331,10 @@ public class LogRecord {
             if (this.sourceId != null) {
                 sb.append("}");
             }
-            sb.append("\n    endTime: ");
-            timeFormatter.accept(sb, clock.getWallClockTime());
+            if (recordEndTime) {
+                sb.append("\n    endTime: ");
+                timeFormatter.accept(sb, clock.getWallClockTime());
+            }
         }
         firstProp = true;
         sourceId = null;

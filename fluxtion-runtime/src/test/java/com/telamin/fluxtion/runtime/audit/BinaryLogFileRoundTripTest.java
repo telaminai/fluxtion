@@ -53,8 +53,9 @@ public class BinaryLogFileRoundTripTest {
         try (BinaryLogWriter writer = new BinaryLogWriter(bytes)) {
             manager.setLogSink(writer);
             manager.init();
-            manager.calculationLogConfig(
-                    new EventLogControlEvent(new BinaryLogRecord(clock, 4096)));
+            BinaryLogRecord rec = new BinaryLogRecord(clock, 4096);
+            rec.setRecordEndTime(true);     // off by default; this test asserts the header carries it
+            manager.calculationLogConfig(new EventLogControlEvent(rec));
             Book a = new Book();
             Book b = new Book();
             manager.nodeRegistered(a, "bookA");
