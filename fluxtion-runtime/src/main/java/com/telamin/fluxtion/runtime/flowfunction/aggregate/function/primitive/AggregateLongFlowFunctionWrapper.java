@@ -21,7 +21,11 @@ public class AggregateLongFlowFunctionWrapper<F extends AggregateLongFlowFunctio
         super(inputEventStream, null);
         this.windowFunctionSupplier = windowFunctionSupplier;
         this.mapFunction = windowFunctionSupplier.get();
-        auditInfo = mapFunction.getClass().getSimpleName() + "->aggregateInt";
+        // aggregateLong, not aggregateInt. Both wrappers were copied from the int one and kept
+        // its audit name, so a double or long aggregate reported a method it never called. Nothing in
+        // Java could see it: the name is only ever read out of an audit log. Found by comparing the log
+        // against the C++ target, which derived the name from the wrapper it was actually emitting.
+        auditInfo = mapFunction.getClass().getSimpleName() + "->aggregateLong";
     }
 
     protected void initialise() {
