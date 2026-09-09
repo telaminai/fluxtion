@@ -147,14 +147,31 @@ The Fluxtion-generated processor's structure — one object per node holding poi
 dirty flag written per node, a guard check before each trigger, a service prologue and epilogue — was
 transliterated into C++ and measured against the flat hand-written version:
 
+On the four-node ladder graph, the generated structure costs nothing in C++:
+
 | | native ns |
 |---|---:|
 | C++ hand-written, flat | 1.159 |
-| **C++ in the generated processor's shape** | **1.157** |
+| C++ in the generated processor's shape | 1.157 |
 
-Identical. Every node object, dirty flag and guard check inlines away completely. **The code shape a
-generator emits is not what costs anything** — in either language. It costs 4% in Java and 0% in C++,
-which says the overhead is the runtime's, not the generation strategy's.
+**That result does not generalise, and the way it fails is the interesting part.** Repeated on a
+30-node graph with five event types and a converging tail — all three arms checksum-identical:
+
+| | native ns | M/s |
+|---|---:|---:|
+| C++, transliterated literally (parent pointers, as the Java looks) | 5.625 | 178 |
+| **C++, emitted as a generator would (parents named directly)** | **0.854** | **1171** |
+| Fluxtion generated Java, native | 2.054 | 487 |
+
+At four nodes the compiler inlines through the pointer indirection and the two forms are identical. At
+thirty it does not, and **the literal transliteration is 6.6× slower than the same graph emitted
+idiomatically.**
+
+So the topology and ordering decisions — what to call, in what order, behind which guard — are sound and
+language-independent. **The emission strategy is not portable.** Fluxtion's Java generator emits field
+references that Graal scalar-replaces when the processor does not escape; a C++ backend that copied that
+structure literally would lose most of its advantage, and one that names parents directly beats the JVM
+by 2.4× on this graph.
 
 ### How would C++ handle an audit log?
 
