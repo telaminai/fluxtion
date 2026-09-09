@@ -38,6 +38,34 @@ public interface ClockStrategy {
      * <p><b>The unit changes.</b> This returns nanoseconds where the default returns milliseconds, so it
      * is opt-in: a consumer reading a log has to know which it is looking at.
      */
+    /**
+     * <b>The default.</b> Epoch <b>milliseconds</b>, read through {@link System#nanoTime()}.
+     *
+     * <p>Fast and monotonic like {@link #nanoEpochClock()}, and — unlike it — in the unit the rest of
+     * the framework means by wall-clock time. {@code System.currentTimeMillis()} costs 12.9 ns a call
+     * on an Apple M4 against 8.0 for {@code nanoTime}, and an audited path reads the clock once per
+     * event, so the anchor-once form is worth having as the default.
+     *
+     * <p><b>Why milliseconds, when the clock is deliberately unit-free.</b>
+     * {@link Clock#getWallClockTime()} returns a bare {@code long} and says nothing about its unit —
+     * that is a runtime concern, decided by whichever strategy is installed, which is exactly what
+     * makes data-driven replay possible. What the framework does require is that the strategy and the
+     * time-based nodes <b>agree</b>, and some of those nodes name their unit in their own API:
+     * {@code FixedRateTrigger.atMillis(300)} is milliseconds by construction.
+     *
+     * <p>The default was briefly {@link #nanoEpochClock()}, on the reasoning that milliseconds cannot
+     * express a sub-millisecond duration. True, and beside the point: it left {@code atMillis} callers
+     * comparing a millisecond window against a nanosecond clock, so every tumbling and sliding window
+     * silently stopped rolling — 30 tests, arithmetic off by a factor of a million, and not one of
+     * them mentioning a clock. A default has to agree with the unit the framework's own API names;
+     * a graph that installs its own strategy is free to choose any unit, provided its nodes use it.
+     */
+    static ClockStrategy fastEpochMillisClock() {
+        final long epochMillis = System.currentTimeMillis();
+        final long nanoBase = System.nanoTime();
+        return () -> epochMillis + (System.nanoTime() - nanoBase) / 1_000_000L;
+    }
+
     static ClockStrategy nanoEpochClock() {
         final long epochNanos = System.currentTimeMillis() * 1_000_000L;
         final long nanoBase = System.nanoTime();

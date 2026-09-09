@@ -80,23 +80,33 @@ public class Clock implements Auditor, Auditor.FirstAfterEvent {
     }
 
     /**
-     * The default strategy is {@link ClockStrategy#nanoEpochClock()} — <b>nanoseconds</b> since the
-     * epoch, derived from {@code System.nanoTime()} and anchored once.
+     * The default strategy is {@link ClockStrategy#fastEpochMillisClock()} — <b>milliseconds</b> since
+     * the epoch, derived from {@code System.nanoTime()} and anchored once.
      *
-     * <p>It was {@code System::currentTimeMillis}, which is both slower and unable to represent what it
-     * is read for. Measured on an Apple M4: {@code currentTimeMillis} costs 12.9 ns a call against 8.0
-     * for {@code nanoTime}, and it advances a thousand times a second — so on any event faster than a
-     * millisecond, a duration taken across two readings is always exactly zero. An audited path reads
-     * the clock once here per event.
+     * <p>It was {@code System::currentTimeMillis}, which is slower for no benefit: measured on an
+     * Apple M4, {@code currentTimeMillis} costs 12.9 ns a call against 8.0 for {@code nanoTime}, and an
+     * audited path reads the clock once here per event. The default is now anchored once and read
+     * through {@code nanoTime} — same unit, less cost.
      *
-     * <p><b>The unit changed with this.</b> {@link #getWallClockTime()} now returns nanoseconds where it
-     * returned milliseconds. Call {@link #setClockStrategy} with {@code () -> System.currentTimeMillis()}
-     * to restore the old behaviour, or supply a data-driven strategy for replay.
+     * <p><b>{@link #getWallClockTime()} is deliberately unit-free</b> — a bare {@code long}, with the
+     * unit a runtime concern belonging to whichever {@link ClockStrategy} is installed. That is what
+     * lets a replay drive the graph from recorded data. The requirement is only that the strategy and
+     * the graph's time-based nodes agree.
+     *
+     * <p>The DEFAULT, though, has to agree with the unit the framework's own API names, and
+     * {@code FixedRateTrigger.atMillis()} names milliseconds. This default was briefly
+     * {@link ClockStrategy#nanoEpochClock()}; every tumbling and sliding window stopped rolling,
+     * thirty tests failed, and not one of them mentioned a clock. Recorded rather than quietly
+     * reverted, because the failure was silent and a long way from its cause.
+     *
+     * <p>Sub-millisecond precision is still available and still opt-in: call {@link #setClockStrategy}
+     * with {@link ClockStrategy#nanoEpochClock()} if a graph wants nanosecond timestamps and has no
+     * time-windowed nodes, or supply a data-driven strategy for replay.
      */
     @Initialise
     @Override
     public void init() {
-        wallClock = ClockStrategy.nanoEpochClock();
+        wallClock = ClockStrategy.fastEpochMillisClock();
     }
 
 }
