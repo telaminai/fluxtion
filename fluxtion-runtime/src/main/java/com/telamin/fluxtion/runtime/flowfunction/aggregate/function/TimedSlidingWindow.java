@@ -121,6 +121,21 @@ public class TimedSlidingWindow
             intSlidingFunction.roll(rollTrigger.getTriggerCount());
             if (intSlidingFunction.isAllBucketsFilled()) {
                 cacheWindowValue();
+                // publishOverrideTriggered, and it is not optional. The three primitive
+                // specialisations each overrode this method and dropped the line the base class has,
+                // so a timed sliding window over an int, double or long flow NEVER PROPAGATED whenever
+                // the rolling event also carried data - which is the normal case.
+                //
+                // The order is what makes it fatal: timeTriggerFired sets inputStreamTriggered, then
+                // inputUpdated CLEARS it while aggregating that same event's value, and triggered()
+                // then reads false. publishOverrideTriggered is the separate latch the input path does
+                // not clear, which is exactly why the base class sets it.
+                //
+                // TumblingWindow has no primitive override of this method and so was never affected -
+                // which is why a tumbling window agreed across languages and a sliding one did not.
+                // Found by the C++ audit oracle: the C++ target implements the BASE semantics, so it
+                // published where Java stayed silent.
+                publishOverrideTriggered = !overridePublishTrigger & !overrideUpdateTrigger;
                 inputStreamTriggered_1 = true;
                 inputStreamTriggered = true;
             }
@@ -182,6 +197,21 @@ public class TimedSlidingWindow
             intSlidingFunction.roll(rollTrigger.getTriggerCount());
             if (intSlidingFunction.isAllBucketsFilled()) {
                 cacheWindowValue();
+                // publishOverrideTriggered, and it is not optional. The three primitive
+                // specialisations each overrode this method and dropped the line the base class has,
+                // so a timed sliding window over an int, double or long flow NEVER PROPAGATED whenever
+                // the rolling event also carried data - which is the normal case.
+                //
+                // The order is what makes it fatal: timeTriggerFired sets inputStreamTriggered, then
+                // inputUpdated CLEARS it while aggregating that same event's value, and triggered()
+                // then reads false. publishOverrideTriggered is the separate latch the input path does
+                // not clear, which is exactly why the base class sets it.
+                //
+                // TumblingWindow has no primitive override of this method and so was never affected -
+                // which is why a tumbling window agreed across languages and a sliding one did not.
+                // Found by the C++ audit oracle: the C++ target implements the BASE semantics, so it
+                // published where Java stayed silent.
+                publishOverrideTriggered = !overridePublishTrigger & !overrideUpdateTrigger;
                 inputStreamTriggered_1 = true;
                 inputStreamTriggered = true;
             }
@@ -243,6 +273,21 @@ public class TimedSlidingWindow
             intSlidingFunction.roll(rollTrigger.getTriggerCount());
             if (intSlidingFunction.isAllBucketsFilled()) {
                 cacheWindowValue();
+                // publishOverrideTriggered, and it is not optional. The three primitive
+                // specialisations each overrode this method and dropped the line the base class has,
+                // so a timed sliding window over an int, double or long flow NEVER PROPAGATED whenever
+                // the rolling event also carried data - which is the normal case.
+                //
+                // The order is what makes it fatal: timeTriggerFired sets inputStreamTriggered, then
+                // inputUpdated CLEARS it while aggregating that same event's value, and triggered()
+                // then reads false. publishOverrideTriggered is the separate latch the input path does
+                // not clear, which is exactly why the base class sets it.
+                //
+                // TumblingWindow has no primitive override of this method and so was never affected -
+                // which is why a tumbling window agreed across languages and a sliding one did not.
+                // Found by the C++ audit oracle: the C++ target implements the BASE semantics, so it
+                // published where Java stayed silent.
+                publishOverrideTriggered = !overridePublishTrigger & !overrideUpdateTrigger;
                 inputStreamTriggered_1 = true;
                 inputStreamTriggered = true;
             }
