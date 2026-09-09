@@ -307,26 +307,40 @@ public final class BinaryLogRecord extends LogRecord {
         head(sourceId, propertyKey); u8(TAG_BOOL); u8(value ? 1 : 0); firstProp = false;
     }
 
+    /**
+     * A string value, written as a normal two-slot entry with the value INTERNED.
+     *
+     * <p>It used to write a length and then the characters into the byte buffer, and that buffer is
+     * not the structure {@code length()} describes — so every string-valued entry was silently dropped
+     * from the record. Not a rendering problem: the reader parses two-slot entries and there was no
+     * entry to parse, so {@code auditLog.info("mapFunction", auditInfo)} produced nothing at all. This
+     * is the same defect that hid {@code addTrace}, in the one overload family it was not fixed for.
+     *
+     * <p>Found by comparing the audit log a Java data flow writes against the log the C++ target writes
+     * for the same graph: the C++ side had six entries per event the Java side did not, and all six
+     * were the string-valued ones naming WHICH function ran.
+     *
+     * <p>Interning rather than inlining the characters is what makes it fit: a value slot is 64 bits,
+     * and an audit string is nearly always a constant — a method reference's audit name, an event type
+     * — so the dictionary already holds it and the id costs nothing to repeat.
+     */
     @Override
     public void addRecord(String sourceId, String propertyKey, CharSequence value) {
-        head(sourceId, propertyKey);
-        u8(TAG_CHARSEQ);
-        int n = value == null ? 0 : value.length();
-        u16(n);
-        for (int i = 0; i < n; i++) { u8(value.charAt(i)); }
-        firstProp = false;
+        writeSlots(tableId(sourceId), propertyKey == null ? 0 : keyId(propertyKey),
+                TAG_CHARSEQ, value == null ? 0 : tableId(value.toString()));
     }
 
+    /**
+     * An arbitrary object, rendered once and interned. Same fix, same reason as the CharSequence
+     * overload above: the byte-buffer form was invisible to every reader.
+     *
+     * <p>A deployment aiming at the latency profile should not be logging Objects — {@code toString()}
+     * allocates. It is here so the record is complete, not because it is fast.
+     */
     @Override
     public void addRecord(String sourceId, String propertyKey, Object value) {
-        // The only overload that cannot avoid text. A deployment aiming at the latency profile should
-        // not be logging Objects; it is here so the record is complete, not because it is fast.
-        head(sourceId, propertyKey);
-        u8(TAG_OBJECT);
-        String s = value == null ? "NULL" : value.toString();
-        u16(s.length());
-        for (int i = 0; i < s.length(); i++) { u8(s.charAt(i)); }
-        firstProp = false;
+        writeSlots(tableId(sourceId), propertyKey == null ? 0 : keyId(propertyKey),
+                TAG_OBJECT, tableId(value == null ? "NULL" : value.toString()));
     }
 
     /**
