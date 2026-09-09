@@ -130,10 +130,51 @@ uses no framework at all. Two candidate explanations were tested and **both were
   object form's fixed-length-5 arrays let the compiler remove bounds checks that a computed base index
   defeats.
 
-Array bounds checking is the leading remaining candidate — roughly twenty checks per event, none of
-which C++ performs — but **it has not been measured, and it is not claimed here.** What is claimed is
-narrower and better supported: *on this workload the Java-to-C++ gap belongs to the platform, and
-Fluxtion adds 5% on top of what a good Java programmer writes by hand.*
+- *Array bounds checking* — twenty-odd checks per event that C++ does not perform. Adding **explicit
+  bounds and null checks to the C++**, one per access, cost **nothing at all**: 1.160 ns against 1.159.
+  The compiler proves the indices in range and deletes them, which is exactly what a JIT tries and
+  largely fails to do here.
+
+Three hypotheses, three refutations. What is claimed is narrower and better supported: *on this workload
+the Java-to-C++ gap belongs to the platform, and Fluxtion adds 4% on top of what a good Java programmer
+writes by hand.*
+
+### Would generating C++ close it?
+
+On the evidence, yes — because **the generated shape costs nothing in C++**.
+
+The Fluxtion-generated processor's structure — one object per node holding pointers to its parents, a
+dirty flag written per node, a guard check before each trigger, a service prologue and epilogue — was
+transliterated into C++ and measured against the flat hand-written version:
+
+| | native ns |
+|---|---:|
+| C++ hand-written, flat | 1.159 |
+| **C++ in the generated processor's shape** | **1.157** |
+
+Identical. Every node object, dirty flag and guard check inlines away completely. **The code shape a
+generator emits is not what costs anything** — in either language. It costs 4% in Java and 0% in C++,
+which says the overhead is the runtime's, not the generation strategy's.
+
+### How would C++ handle an audit log?
+
+Very well, and the gap is much wider than on dispatch.
+
+| | native ns | audit cost |
+|---|---:|---:|
+| C++, no audit | 1.159 | — |
+| C++ + binary audit machinery | 4.074 | **2.92** |
+| C++ + audit, 4 values logged/event | 4.327 | 3.17 (**0.06 ns per logged value**) |
+| Java `LOWEST_LATENCY` | 4.474 | — |
+| Java `LOW_LATENCY_AUDIT` + `BINARY` | 18.161 | **13.69** |
+
+Same record layout — two aligned 64-bit slots per entry, ids not names, one clock read per event, the
+same publish decision. **C++ carries the audit machinery for 2.9 ns where Java pays 13.7**, and a logged
+value costs it **0.06 ns** against several nanoseconds in Java.
+
+Part of that is the clock: `mach_absolute_time()` costs 4.8 ns against `System.nanoTime()`'s 8.0, and
+inside real work the marginal cost of both is lower. The rest is the same platform difference visible on
+the dispatch path, applied to a hotter loop.
 
 !!! note "An earlier version of this page claimed parity with C++"
     It reported 1.57 ns for a generated processor against 1.57 ns for hand-optimised C++. That
