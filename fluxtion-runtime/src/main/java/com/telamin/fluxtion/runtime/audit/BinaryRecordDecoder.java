@@ -25,6 +25,12 @@ public final class BinaryRecordDecoder {
     /** Tags, mirroring {@link BinaryLogRecord}. */
     public static final int TAG_DOUBLE = 1, TAG_LONG = 2, TAG_INT = 3, TAG_CHAR = 4,
             TAG_CHARSEQ = 5, TAG_OBJECT = 6, TAG_BOOL = 7;
+    /**
+     * A node was invoked. The entry carries a node id and no key or value — {@code keyId} is 0 and the
+     * value slot is 0 — but it is still exactly two slots, because "every entry is two slots" is the
+     * property that lets a reader skip an entry without decoding it.
+     */
+    public static final int TAG_TRACE = 8;
 
     /** Receives each decoded entry. Primitives only — nothing is allocated to report an entry. */
     public interface Visitor {
@@ -48,7 +54,7 @@ public final class BinaryRecordDecoder {
 
     /** {@code true} if the tag is one this decoder understands. */
     public static boolean knownTag(int tag) {
-        return tag >= TAG_DOUBLE && tag <= TAG_BOOL;
+        return tag >= TAG_DOUBLE && tag <= TAG_TRACE;
     }
 
     /**
@@ -87,6 +93,7 @@ public final class BinaryRecordDecoder {
             case TAG_INT:     return Integer.toString((int) rawBits);
             case TAG_CHAR:    return String.valueOf((char) rawBits);
             case TAG_BOOL:    return rawBits != 0 ? "true" : "false";
+            case TAG_TRACE:   return "";
             default:          return "#tag" + tag + ":" + rawBits;
         }
     }

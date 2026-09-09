@@ -227,8 +227,12 @@ public final class BinaryLogReader {
                         long bits = i64(data, base + e * 16 + 8);
                         int nodeId = BinaryRecordDecoder.nodeId(header);
                         int keyId = BinaryRecordDecoder.keyId(header);
+                        // keyId 0 is "no key", which is what a TAG_TRACE entry carries. It is not an
+                        // id that failed to resolve, so it must not be counted in unresolvedIds — that
+                        // counter is how a reader tells a rolled file from a corrupt one, and every
+                        // trace would otherwise look like corruption.
                         visitor.onEntry(nodeId, name(names, nodeId, result),
-                                keyId, name(names, keyId, result),
+                                keyId, keyId == 0 ? null : name(names, keyId, result),
                                 BinaryRecordDecoder.tag(header), bits);
                     }
                 }

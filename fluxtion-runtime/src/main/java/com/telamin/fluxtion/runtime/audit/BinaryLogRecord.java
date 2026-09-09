@@ -34,7 +34,7 @@ import java.util.IdentityHashMap;
 public final class BinaryLogRecord extends LogRecord {
 
     private static final byte TAG_DOUBLE = 1, TAG_LONG = 2, TAG_INT = 3, TAG_CHAR = 4,
-            TAG_CHARSEQ = 5, TAG_OBJECT = 6, TAG_BOOL = 7;
+            TAG_CHARSEQ = 5, TAG_OBJECT = 6, TAG_BOOL = 7, TAG_TRACE = 8;
 
     /** {@code live} = stock behaviour, {@code process} = reuse the clock read Clock already did,
      *  {@code none} = no wall-clock read at all. Z-arm switch for round 63 §7.4. */
@@ -313,10 +313,21 @@ public final class BinaryLogRecord extends LogRecord {
         firstProp = false;
     }
 
+    /**
+     * A node invocation, written as a normal two-slot entry with {@link #TAG_TRACE}: node id, no key,
+     * no value.
+     *
+     * <p>It previously went to the byte buffer via {@code head()}, which {@link #length()} does not
+     * describe — {@code length()} sizes the slot region — so a trace produced no visible bytes and,
+     * because nothing marked the record as having content, a trace-only record was never published at
+     * all. Tracing is off under {@code LOW_LATENCY_AUDIT}, which is why it went unnoticed.
+     *
+     * <p>{@code tableId} rather than {@code intern}: the caller passes its own {@code logSourceId},
+     * a stable reference, so the identity table resolves it in one probe.
+     */
     @Override
     public void addTrace(String sourceId) {
-        head(sourceId, null);
-        u8(0);
+        writeSlots(tableId(sourceId), 0, TAG_TRACE, 0L);
     }
 
     @Override

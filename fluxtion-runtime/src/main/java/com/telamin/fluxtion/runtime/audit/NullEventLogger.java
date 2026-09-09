@@ -19,27 +19,6 @@ public final class NullEventLogger extends EventLogger {
         super(null, null);
     }
 
-    /**
-     * The ordinal API, swallowed like every other write. This logger is a shared singleton handed to
-     * every node before the manager installs a real one, so a node that declares its keys from the
-     * wrong lifecycle hook lands here — and must neither record, nor throw, nor mutate the singleton
-     * that every other node in the JVM is holding.
-     */
-    @Override
-    public EventLogger declareKeys(String... keys) {
-        return this;
-    }
-
-    @Override
-    public EventLogger log(int keyOrdinal, double value, LogLevel logLevel) {
-        return this;
-    }
-
-    @Override
-    public EventLogger log(int keyOrdinal, long value, LogLevel logLevel) {
-        return this;
-    }
-
     @Override
     public EventLogger log(String key, boolean value, LogLevel logLevel) {
         return null;

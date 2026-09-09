@@ -50,6 +50,38 @@ public class BinaryRecordHotPathTest {
                 idInFirst, idInSecond);
     }
 
+    /**
+     * {@code canLog} reads a cached int rather than dereferencing the level enum on every entry. The
+     * cache is written only by {@code setLevel}, so the property to hold is that it never disagrees with
+     * the reference it mirrors — including before any level is set, where the reference form relied on a
+     * null check.
+     */
+    @Test
+    public void aLoggerWithNoLevelSetLogsNothing() {
+        BinaryLogRecord r = record();
+        EventLogger logger = new BinaryEventLogger(r, "nodeA");
+        r.triggerObject(new E1());
+        logger.info("v", 1.0);
+        logger.info();
+        assertEquals("no level was ever set, so nothing may be recorded", 0, r.length());
+    }
+
+    @Test
+    public void everyLevelGateAgreesWithTheEnumItMirrors() {
+        for (LogLevel set : LogLevel.values()) {
+            for (LogLevel at : LogLevel.values()) {
+                BinaryLogRecord r = record();
+                EventLogger logger = new BinaryEventLogger(r, "nodeA");
+                logger.setLevel(set);
+                r.triggerObject(new E1());
+                logger.log("v", 1.0, at);
+                boolean expected = set.level >= at.level;
+                assertEquals("level " + set + " logging at " + at,
+                        expected ? 16 : 0, r.length());
+            }
+        }
+    }
+
     static class E1 implements com.telamin.fluxtion.runtime.event.Event { }
 
     static class E2 implements com.telamin.fluxtion.runtime.event.Event { }
@@ -90,26 +122,82 @@ public class BinaryRecordHotPathTest {
         assertTrue("the String path sets firstProp and must still publish", r.terminateRecord());
     }
 
-    /**
-     * <b>A known gap, asserted so it cannot be lost.</b> {@code addTrace} writes into the byte buffer,
-     * which {@link BinaryLogRecord#length()} does not describe — {@code length()} sizes the slot region
-     * — and it never marks the record as having content. So a trace-only record neither publishes nor
-     * carries visible bytes, on this code and on the code before it.
-     *
-     * <p>It is not fixed here because the fix is a new entry tag, and the record layout is normatively
-     * specified with its own conformance suite: changing it is a format change, not a hot-path change.
-     * {@code LOW_LATENCY_AUDIT} disables tracing, which is why nothing has noticed.
-     *
-     * <p><b>If this test starts failing, tracing began working — delete the test and update the format
-     * specification.</b>
-     */
     @Test
-    public void traceEntriesAreInvisibleInABinaryRecord() {
+    public void aRecordWithOnlyATraceEntryStillReportsItselfAsLogged() {
         BinaryLogRecord r = record();
         r.triggerObject(new E1());
         r.addTrace("nodeA");
-        assertEquals("the trace went to the byte buffer, which length() does not describe", 0, r.length());
-        assertFalse("and the record does not report itself as logged", r.terminateRecord());
+        assertTrue("a trace entry is an entry", r.terminateRecord());
+    }
+
+    /**
+     * A trace is a normal two-slot entry: node id, no key, no value, {@code TAG_TRACE}. The fixed entry
+     * size is the property a reader depends on to skip an entry without decoding it, so a trace must not
+     * be a special case in the layout even though it is one in meaning.
+     */
+    @Test
+    public void aTraceIsATwoSlotEntryNamingTheNodeAndNothingElse() {
+        BinaryLogRecord r = record();
+        r.triggerObject(new E1());
+        r.addTrace("nodeA");
+
+        assertEquals("exactly one entry, two slots, sixteen bytes", 16, r.length());
+        long header = r.slots()[0];
+        assertEquals("the node is named", "nodeA",
+                r.dictionary()[(int) ((header >>> 48) & 0xFFFF)]);
+        assertEquals("a trace has no key", 0, (int) ((header >>> 32) & 0xFFFF));
+        assertEquals("and carries the trace tag", BinaryRecordDecoder.TAG_TRACE,
+                BinaryRecordDecoder.tag(header));
+        assertEquals("and no value", 0L, r.slots()[1]);
+    }
+
+    @Test
+    public void theDecoderRecognisesATraceEntry() {
+        assertTrue("an unknown tag makes a reader guess; this one is known",
+                BinaryRecordDecoder.knownTag(BinaryRecordDecoder.TAG_TRACE));
+        assertEquals("a trace has no value to render", "",
+                BinaryRecordDecoder.renderValue(BinaryRecordDecoder.TAG_TRACE, 0L));
+    }
+
+    /** Traces and values interleave in one record, in the order they were written. */
+    @Test
+    public void tracesAndValuesShareOneRecordInOrder() {
+        BinaryLogRecord r = record();
+        r.triggerObject(new E1());
+        r.addTrace("nodeA");
+        r.addRecord(r.internName("nodeA"), r.internName("v"), 1.5);
+        r.addTrace("nodeB");
+
+        assertEquals("three entries", 3 * 16, r.length());
+        long[] slots = r.slots();
+        assertEquals(BinaryRecordDecoder.TAG_TRACE, BinaryRecordDecoder.tag(slots[0]));
+        assertEquals(BinaryRecordDecoder.TAG_DOUBLE, BinaryRecordDecoder.tag(slots[2]));
+        assertEquals(1.5, Double.longBitsToDouble(slots[3]), 0.0);
+        assertEquals(BinaryRecordDecoder.TAG_TRACE, BinaryRecordDecoder.tag(slots[4]));
+        assertEquals("nodeB", r.dictionary()[(int) ((slots[4] >>> 48) & 0xFFFF)]);
+    }
+
+    /** The logger's own tracing entry point, which is how a traced processor actually reaches this. */
+    @Test
+    public void theLoggerTracesThroughToTheRecord() {
+        BinaryLogRecord r = record();
+        EventLogger logger = new BinaryEventLogger(r, "nodeA");
+        logger.setLevel(LogLevel.INFO);
+        r.triggerObject(new E1());
+        logger.info();
+        assertEquals("logger.info() with no key is a node-invocation trace", 16, r.length());
+        assertEquals(BinaryRecordDecoder.TAG_TRACE, BinaryRecordDecoder.tag(r.slots()[0]));
+        assertEquals("nodeA", r.dictionary()[(int) ((r.slots()[0] >>> 48) & 0xFFFF)]);
+    }
+
+    @Test
+    public void aTraceBelowTheLogLevelIsNotWritten() {
+        BinaryLogRecord r = record();
+        EventLogger logger = new BinaryEventLogger(r, "nodeA");
+        logger.setLevel(LogLevel.WARN);
+        r.triggerObject(new E1());
+        logger.info();
+        assertEquals("an INFO trace under a WARN level records nothing", 0, r.length());
     }
 
     /** terminateRecord resets the flag, so a reused record must not claim the previous event's entries. */

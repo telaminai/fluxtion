@@ -102,6 +102,7 @@ nav:
       - "FAQ: Common questions and tradeoffs": reference/faq.md
       - Alternative comparisons: reference/alternative-comparisons.md
       - Performance results: reference/performance.md
+      - Audit latency harness: reference/audit-latency-harness.md
 
   - Reference guide:
       - Quick reference: reference/reference-documentation.md
@@ -153,6 +154,8 @@ nav:
           - Embedding ML models: how-to/ml-inference-how-to.md
           - Monitoring and metrics: how-to/monitoring-dataflow-runtime.md
           - Audit logging in DataFlow: how-to/audit-logging-dataflow.md
+          - Binary audit logging: how-to/binary-audit-logging.md
+          - Reading a binary audit log: how-to/read-a-binary-audit-log.md
           - Log4j2 setup: how-to/logging-setup.md
       - Integrations:
         - DataFlow connector: integration/dataflow-connector.md

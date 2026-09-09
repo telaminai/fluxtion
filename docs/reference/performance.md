@@ -356,6 +356,68 @@ by platform jitter rather than application logic.
 - Blue: total latency with application work
 - Red: baseline machine jitter (“no processing”)
 
+## The audit log — what keeping a full audit trail costs
+
+The figures above are dispatch. The deployed question is usually different: **what does it cost to keep
+the audit trail?**
+
+Measured on a 30-node graph, five event types, one shared tail, where **every node on the path logs** —
+11.75 recorded values per event, no-op sink, zero allocation, excluding the disk or network write.
+Native figures are the mean of three independent PGO builds.
+
+| record | JIT | native AOT | bytes/record |
+|---|---:|---:|---:|
+| text | 403 ns · 2.5 M/s | 699 ns · 1.4 M/s | 548 |
+| **binary** | **42.6 ns · 23.5 M/s** | **41.1 ns · 24.3 M/s** | **188** |
+
+Against the *same graph with auditing off*, the audit machinery costs **29.2 ns/event on JIT and 39.0 on
+native**. See [Binary audit logging](../how-to/binary-audit-logging.md) for how to enable it.
+
+**AOT and JIT are level here.** They were not until the record's hot path was profiled: native ran
+1.5–1.9× behind, and that gap was never a property of the toolchain.
+
+### How this number was found, and why it is worth reading
+
+The audited path was 56.3 ns on JIT and audit cost 43.4. Two rounds of benchmark discipline —
+interleaved arms, three builds per configuration, runtime digests, refusing unrepeatable results — had
+not moved it, and had produced a confident conclusion that the remaining cost was inherent to the call
+sites, with a design proposal attached.
+
+One JFR profile put **56% of the audited path in code that resolves names which never change**:
+
+| leaf frame | share |
+|---|---:|
+| `EventLogger.keyRef(String)` | 37% |
+| `java.util.IdentityHashMap.get(Object)` | 19% |
+| the actual dispatch | 33% |
+
+Three faults, each a few lines:
+
+1. **The event type was interned through a fallback `IdentityHashMap` on every event**, while the
+   256-entry identity table built for exactly that sat unused by its hottest caller.
+2. **Every node has its own `EventLogger`, and each held its own key-cache arrays** — three cache lines
+   touched per entry, ~35 per event, to answer a question fixed after warm-up. The first two key ids are
+   now fields on the logger, which had to be loaded anyway.
+3. **`useIds()` re-checked a resolved-once decision on every entry.** The logger receives the record and
+   the node name in its constructor; there was never anything to wait for.
+
+That is **24% off the JIT audited path** and a third off audit cost.
+
+### The part worth generalising
+
+The same profile also showed `EventLogger.info` as the leaf frame in **71% of samples** on the no-audit
+control. Building an arm with the audit call sites physically deleted put its real cost at **1.40 ns
+across 11.75 call sites** — 0.12 ns each. HotSpot had inlined the node's arithmetic *into* `info`, and
+the sampler reported the inlined frame as the leaf.
+
+A sampling profiler gives **proportions, never magnitudes**, and its attribution is only as honest as the
+inlining beneath it. **Profile to generate hypotheses; measure differentially to size them.**
+
+The proposal the old numbers supported — a code model rewriting audit call sites into indexed calls —
+was measured at a 10.3 ns prize, built, and then withdrawn: with the data structure fixed, the indexed
+path is *slower* than the plain one. It would have been a permanent complication optimising around a bug.
+See [the audit latency harness](audit-latency-harness.md).
+
 ## Performance as business value
 
 In event-driven systems, performance is not just a technical metric — it is a primary driver of operational efficiency and cost reduction:

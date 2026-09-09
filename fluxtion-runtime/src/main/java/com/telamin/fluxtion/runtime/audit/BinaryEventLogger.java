@@ -37,30 +37,6 @@ public final class BinaryEventLogger extends EventLogger {
         this.record = record;
     }
 
-    /**
-     * The ordinal-key writes, overridden for the same reason as the {@code String} ones: the base class
-     * holds the record as {@link LogRecord}, so its {@code addRecord} is a virtual call. That costs
-     * roughly what resolving a {@code String} key saves, which is why the first ordinal experiment
-     * measured no gain under AOT while JIT — which profiles the call monomorphic and inlines it — saw
-     * 4.19 ns. Overriding here makes the ordinal path a direct call on both toolchains, so the ordinal
-     * key and the concrete record are two independent wins rather than one cancelling the other.
-     */
-    @Override
-    public EventLogger log(int keyOrdinal, double value, LogLevel logLevel) {
-        if (canLog(logLevel) && useIds()) {
-            record.addRecord(sourceRef, ordinalRef(keyOrdinal), value);
-        }
-        return this;
-    }
-
-    @Override
-    public EventLogger log(int keyOrdinal, long value, LogLevel logLevel) {
-        if (canLog(logLevel) && useIds()) {
-            record.addRecord(sourceRef, ordinalRef(keyOrdinal), value);
-        }
-        return this;
-    }
-
     @Override
     public EventLogger log(String key, double value, LogLevel logLevel) {
         if (canLog(logLevel) && useIds()) {

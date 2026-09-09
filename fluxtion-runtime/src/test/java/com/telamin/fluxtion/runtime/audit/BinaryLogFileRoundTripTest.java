@@ -93,6 +93,46 @@ public class BinaryLogFileRoundTripTest {
         }
     }
 
+    /**
+     * Traces survive the file, end to end: written by a logger, encoded as a two-slot entry, framed by
+     * the writer, and named by the reader through the dictionary.
+     *
+     * <p>Until this was fixed a trace went to the byte buffer that {@code length()} does not describe,
+     * so it produced no bytes and a trace-only record never published. Every layer here was correct in
+     * isolation, which is why only an end-to-end test catches it.
+     */
+    @Test
+    public void tracesSurviveTheRoundTrip() throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        EventLogManager manager = new EventLogManager();
+        Clock clock = clockAt(1_000L);
+        manager.clock = clock;
+        try (BinaryLogWriter writer = new BinaryLogWriter(bytes)) {
+            manager.setLogSink(writer);
+            manager.init();
+            manager.calculationLogConfig(
+                    new EventLogControlEvent(new BinaryLogRecord(clock, 4096)));
+            Book a = new Book();
+            manager.nodeRegistered(a, "bookA");
+            Object event = new Object();
+            clock.eventReceived(event);
+            manager.eventReceived(event);
+            a.auditLog.info();                 // the node was invoked: a trace, no key, no value
+            a.publish(1.5, 10, true);
+            manager.processingComplete();
+        }
+        Collector c = new Collector();
+        BinaryLogReader.Result r = BinaryLogReader.read(bytes.toByteArray(), c);
+
+        assertEquals("one record was published", 1, r.records);
+        assertTrue("the trace names its node and carries no key or value: " + c.entries,
+                c.entries.contains("bookA.null="));
+        assertTrue("and the value entries are still there: " + c.entries,
+                c.entries.stream().anyMatch(e -> e.startsWith("bookA.") && e.endsWith("=1.5")));
+        assertEquals("a trace's absent key is not an id that failed to resolve — that counter is how a "
+                + "reader tells a rolled file from a corrupt one", 0, r.unresolvedIds);
+    }
+
     @Test
     public void aWrittenLogReadsBackCompletely() throws IOException {
         byte[] file = writeLog(3);
