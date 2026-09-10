@@ -61,6 +61,18 @@ public class EventLogger {
      *
      * <p>Two, because a node logging more than two distinct keys is rare and the overflow array below
      * keeps it correct rather than fast.
+     *
+     * <p><b>"Rare" is wrong for DSL graphs, and widening to four was measured and REJECTED anyway.</b>
+     * Every DSL flow node logs three keys — {@code mapFunction}, {@code invokeMapFunction},
+     * {@code fireNotification} — so the third always takes {@link #keyRefSlow}. The C++ target had the
+     * identical two-slot design and widening it there was worth <b>7.70 ns/event</b>. Here the same
+     * change measured 29.83 ns against 29.17 on an audited three-node graph, six reps each: no gain,
+     * possibly a small loss, against ~1 ns of run-to-run noise.
+     *
+     * <p>The reason the same fix differs by an order of magnitude is the FALLBACK, not the slot count.
+     * C++'s third key fell into a hash-map probe on every event; this one falls into a four-element
+     * array scan on the logger object that was already loaded. The array below is why widening buys
+     * nothing here — it is already doing the job the extra fields would do.
      */
     private String key0, key1;
     private int key0Ref, key1Ref;
