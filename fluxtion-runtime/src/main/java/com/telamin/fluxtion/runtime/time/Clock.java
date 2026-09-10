@@ -28,17 +28,45 @@ public class Clock implements Auditor, Auditor.FirstAfterEvent {
     private transient long eventTime;
     private transient long processTime;
     private ClockStrategy wallClock;
+    private transient boolean shareReading = false;
     public static final Clock DEFAULT_CLOCK = new Clock();
+
+    /**
+     * While set, {@code eventReceived} REUSES the current reading instead of taking a new one.
+     *
+     * <p>For re-entrant cycles. Every element a flatMap emits is dispatched as its own graph cycle
+     * through the normal event path, so a three-element flatMap read the clock FOUR times for one
+     * arrival — one for the event and one per element. The elements did not arrive at different times;
+     * they are consequences of one arrival in one wave, so sharing its instant is more faithful as well
+     * as cheaper. The generated processor sets this around the queued-callback drain and restores it.
+     *
+     * <p>Measured in the C++ target, which does the same around its callback cycle: a reading costs
+     * 6.7 ns there, so a three-element flatMap was spending about 27 ns of clock per source event.
+     *
+     * <p><b>Restore it.</b> Left set, every later event carries this one's timestamp — worse than the
+     * cost it saves.
+     *
+     * @return the previous setting, so a caller can restore it
+     */
+    public boolean shareReading(boolean share) {
+        boolean previous = shareReading;
+        shareReading = share;
+        return previous;
+    }
 
     @Override
     public void eventReceived(Event event) {
-        processTime = getWallClockTime();
+        if (!shareReading) {
+            processTime = getWallClockTime();
+        }
         eventTime = event.getEventTime();
     }
 
     @Override
     public void eventReceived(Object event) {
-        processTime = getWallClockTime();
+        if (!shareReading) {
+            processTime = getWallClockTime();
+        }
         eventTime = processTime;
     }
 
