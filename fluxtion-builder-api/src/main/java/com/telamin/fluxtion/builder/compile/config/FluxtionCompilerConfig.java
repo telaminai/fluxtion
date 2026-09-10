@@ -96,6 +96,23 @@ public class FluxtionCompilerConfig implements Serializable {
      * <p>
      * not required, default = true.
      */
+    /**
+     * Which {@code SourceGenerator} to use for THIS compile — {@code "cpp"}, {@code "local"},
+     * {@code "remote-http"}. Null or empty falls back to the process-wide setting.
+     *
+     * <p>M59.1. The selector already existed, but only process-wide: `FluxtionConfig.sourceGeneratorId()`
+     * reads a system property or a config file, so every caller in a JVM got the same answer. That is
+     * fine for a build and wrong for a SERVICE — two concurrent requests asking for different targets
+     * would race on a global, which is what blocked offering C++ generation over HTTP.
+     *
+     * <p>Precedence is per-call, then the process-wide setting, then the default. Setting it here
+     * changes nothing for anyone who does not.
+     *
+     * <p>not required, default = unset.
+     */
+    @Setter
+    private String sourceGeneratorId;
+
     @Setter
     private boolean generateDescription;
 
