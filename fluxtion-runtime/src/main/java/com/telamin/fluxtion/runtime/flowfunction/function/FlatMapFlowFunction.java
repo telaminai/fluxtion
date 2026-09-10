@@ -16,6 +16,7 @@ import com.telamin.fluxtion.runtime.flowfunction.FlowFunction;
 import com.telamin.fluxtion.runtime.flowfunction.TriggeredFlowFunction;
 import com.telamin.fluxtion.runtime.node.BaseNode;
 import com.telamin.fluxtion.runtime.partition.LambdaReflection.SerializableFunction;
+import com.telamin.fluxtion.runtime.partition.MethodReferenceInfo;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -32,6 +33,8 @@ public class FlatMapFlowFunction<T, R, S extends FlowFunction<T>> extends BaseNo
     private final S inputEventStream;
     @NoTriggerReference
     private final transient Object streamFunctionInstance;
+    /** Set only on the closed-world path; kept so the node can report how it was built. */
+    private transient MethodReferenceInfo methodReferenceInfo;
     private final SerializableFunction<T, Iterable<R>> iterableFunction;
     private transient R value;
     @Inject
@@ -50,6 +53,36 @@ public class FlatMapFlowFunction<T, R, S extends FlowFunction<T>> extends BaseNo
         } else {
             streamFunctionInstance = null;
         }
+    }
+
+    /**
+     * The closed-world constructor: the generator resolved the method reference, so nothing here needs
+     * to look it up.
+     *
+     * <p><b>This is what makes a flatMap graph work as a native image.</b> The constructor above calls
+     * {@code captured()}, which calls {@code serialized()}, which does
+     * {@code getDeclaredMethod("writeReplace")} — and GraalVM does not emit {@code writeReplace} for
+     * lambda classes unless serialization is registered, so a generated processor containing a flatMap
+     * could not be CONSTRUCTED under native-image. It failed at startup; the event path never ran. A
+     * method reference does not avoid it: that is a lambda class too.
+     *
+     * <p>Every other flow node already had this treatment — {@code MapRef2ToIntFlowFunction} is emitted
+     * with a {@code MethodReferenceInfo} and never reflects. flatMap did not participate, for two
+     * reasons that both had to be fixed: it had no such constructor, and it {@code extends BaseNode}
+     * rather than {@code AbstractFlowFunction}, so the extractor's gate rejected it before looking.
+     *
+     * <p>{@code streamFunctionInstance} is deliberately left null. The field is WRITE-ONLY — nothing
+     * reads it — and its assignment above exists for the side effect of registering the captured
+     * instance as a node. That is builder work, done while the graph is BUILT through the constructor
+     * above; by the time generated source runs, the node is already registered and wired. Re-running it
+     * is exactly what the closed-world path exists to avoid.
+     */
+    public FlatMapFlowFunction(S inputEventStream, SerializableFunction<T, Iterable<R>> iterableFunction,
+                               MethodReferenceInfo methodReferenceInfo) {
+        this.inputEventStream = inputEventStream;
+        this.iterableFunction = iterableFunction;
+        this.streamFunctionInstance = null;
+        this.methodReferenceInfo = methodReferenceInfo;
     }
 
     @OnParentUpdate("inputEventStream")
