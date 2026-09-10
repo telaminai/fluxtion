@@ -13,4 +13,20 @@ package com.telamin.fluxtion.runtime.audit;
 public interface LogRecordListener {
 
     void processLogRecord(LogRecord logRecord);
+
+    /**
+     * The byte-facing path: take the record's encoded form without downcasting to reach it.
+     *
+     * <p>M52.3, spec-binary-audit-encoding §6.1(2). A sink that ships records onward — to a queue, a
+     * socket, a file — cares about bytes and not about whether the graph was configured with a text or
+     * a binary log. Before this it had to downcast to a vendor record class, which is exactly what the
+     * spec said a vendor sink should not have to do.
+     *
+     * <p>The default delegates to {@link LogRecord#encodeTo}, whose own default is the text form, so
+     * every existing listener and every existing record keeps working untouched.
+     */
+    default void processLogRecord(LogRecord logRecord, java.io.OutputStream out)
+            throws java.io.IOException {
+        logRecord.encodeTo(out);
+    }
 }

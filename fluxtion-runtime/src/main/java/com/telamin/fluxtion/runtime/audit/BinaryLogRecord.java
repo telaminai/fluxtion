@@ -386,6 +386,39 @@ public final class BinaryLogRecord extends LogRecord {
     /** Time processing began — {@code Clock.getProcessTime()}, see {@link LogRecord#logTime()}. */
     public long logTime() { return logTime; }
 
+    /**
+     * This record's own RECORD frame, so a sink can take the bytes without downcasting (M52.3).
+     *
+     * <p>Deliberately NOT the dictionary or the file header. Which names a stream has already
+     * described is the WRITER's state - two sinks reading the same records need their own answers - so
+     * {@link BinaryLogWriter} still owns that framing. This is the record.
+     */
+    @Override
+    public void encodeTo(java.io.OutputStream out) throws java.io.IOException {
+        final int entries = length() / 16;
+        out.write(BinaryLogFile.FRAME_RECORD);
+        writeShort(out, entries);
+        writeShort(out, eventTypeId());
+        writeLong(out, eventTime());
+        writeLong(out, logTime());
+        writeLong(out, endTime());
+        long[] slotArray = slots();
+        for (int i = 0; i < entries * 2; i++) {
+            writeLong(out, slotArray[i]);
+        }
+    }
+
+    private static void writeShort(java.io.OutputStream out, int value) throws java.io.IOException {
+        out.write((value >>> 8) & 0xFF);
+        out.write(value & 0xFF);
+    }
+
+    private static void writeLong(java.io.OutputStream out, long value) throws java.io.IOException {
+        for (int shift = 56; shift >= 0; shift -= 8) {
+            out.write((int) ((value >>> shift) & 0xFF));
+        }
+    }
+
     /** Time processing completed; 0 until {@link #terminateRecord()} has run. */
     public long endTime() { return endTime; }
 

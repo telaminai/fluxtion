@@ -77,6 +77,30 @@ public class LogRecord {
     @Setter
     protected ObjLongConsumer<StringBuilder> timeFormatter = StringBuilder::append;
 
+    /**
+     * Writes this record's ENCODED form, so a sink can persist it without knowing its class.
+     *
+     * <p>M52.3, spec-binary-audit-encoding §6.1(2). Before this, {@code asCharSequence()} was the only
+     * expression channel: a binary record had to throw from it, and every sink that wanted the bytes
+     * had to downcast to a vendor class to reach them. A sink shipping records to a queue or a socket
+     * has no business knowing whether the graph was built with a text or a binary log.
+     *
+     * <p>The default is the text answer the spec names — the characters, as UTF-8 — so every existing
+     * {@code LogRecord} subclass satisfies the contract without changing. A binary record overrides it
+     * with its own framing.
+     *
+     * <p><b>Stream-level framing is NOT a record's business.</b> A binary log file also carries a
+     * header and dictionary frames, and which names a stream has already described is state belonging
+     * to the writer, not to any one record. {@link BinaryLogWriter} still owns that;
+     * this is the record's own bytes.
+     */
+    public void encodeTo(java.io.OutputStream out) throws java.io.IOException {
+        CharSequence text = asCharSequence();
+        if (text != null) {
+            out.write(text.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+    }
+
     public LogRecord(Clock clock) {
         this(clock, EventLogControlEvent.LogLevel.INFO);
     }
