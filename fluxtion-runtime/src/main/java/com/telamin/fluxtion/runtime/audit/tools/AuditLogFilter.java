@@ -187,12 +187,15 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
      * any dictionary name anywhere does. The dictionary is one untyped id space, so the weaker question
      * answered "yes" for an {@code --event} pattern that only ever matched a node name.
      *
-     * <p><b>The scope is the selection, not the file, and the caller must say so.</b> Entries are only
-     * offered for records the event and time filters admitted — that early skip is the cheap path those
-     * filters exist for — so a node appearing only under another event is not observed here. Claiming
-     * whole-file absence from this would be false: the name exists, the combination does not match.
-     * Answering the stronger question would mean reading every record of every file, which is a
-     * different feature with a different cost.
+     * <p><b>The three roles have different scopes, and the caller must claim the narrower one.</b>
+     * The EVENT role is observed for every record the reader offers, before any filter — so an
+     * {@code --event} pattern reported here genuinely matched no event type in the file. The NODE and
+     * KEY roles are observed only in records the event and time filters admitted, because entries are
+     * offered only for those; that early skip is the cheap path the filters exist for. So a
+     * {@code --node} or {@code --key} pattern reported here matched nothing <em>within the selection</em>,
+     * and a node appearing only under another event is not observed. Claiming whole-file absence for
+     * those two would be false: the name exists, the combination does not match. Answering the
+     * whole-file question for them would mean reading every record, which is a different feature.
      */
     public String unmatchableWithinSelection() {
         if (eventGlob != null && noneSeenMatching(eventIds, eventIdsSeen)) { return "--event " + eventGlob; }

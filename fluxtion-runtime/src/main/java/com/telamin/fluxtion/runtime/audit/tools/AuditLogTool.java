@@ -98,6 +98,21 @@ public final class AuditLogTool {
         }
     }
 
+    /**
+     * The header's time unit, by name. Every timestamp this tool prints is a bare number; without
+     * this line a nanosecond file and a millisecond one are indistinguishable in its output, which is
+     * the confusion the header field was added to end.
+     */
+    static String timeUnitName(int code) {
+        switch (code) {
+            case com.telamin.fluxtion.runtime.audit.BinaryLogFile.TIME_UNIT_EPOCH_MILLIS: return "epoch milliseconds";
+            case com.telamin.fluxtion.runtime.audit.BinaryLogFile.TIME_UNIT_EPOCH_NANOS:  return "epoch nanoseconds";
+            case com.telamin.fluxtion.runtime.audit.BinaryLogFile.TIME_UNIT_UNSPECIFIED:
+                return "unspecified (file predates the unit field; historically milliseconds)";
+            default: return "unknown code " + code;
+        }
+    }
+
     /** Counts and discards — for measuring read cost without output in the way. */
     static final class NullSink implements AuditLogFilter.Sink {
         @Override public void record(String e, long a, long b, long c) { }
@@ -181,6 +196,7 @@ public final class AuditLogTool {
             err.println("records matched   : " + filter.matchedRecords());
             err.println("entries read      : " + result.entries);
             err.println("entries matched   : " + filter.matchedEntries());
+            err.println("time unit         : " + timeUnitName(result.timeUnit));
             err.println("dictionary names  : " + result.dictionary.size());
             err.println("unresolved ids    : " + result.unresolvedIds
                     + (result.unresolvedIds > 0 ? "   <- names the log never described" : ""));
