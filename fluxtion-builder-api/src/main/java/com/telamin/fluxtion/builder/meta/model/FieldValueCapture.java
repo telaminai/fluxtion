@@ -92,6 +92,17 @@ public final class FieldValueCapture {
                 }
                 final FieldValue.Kind kind = kindOf(f.getType());
                 if (kind == null) {
+                    // Before refusing, offer it to any user serialiser registered for a NON-JAVA
+                    // target. Rendering happens HERE because a serialiser needs the instance, and the
+                    // instance does not survive the DTO — so the text travels instead, exactly as
+                    // Java's own constructor source does.
+                    final java.util.Map<String, String> rendered = renderCustom(f.getType(), v);
+                    if (!rendered.isEmpty()) {
+                        out.add(new FieldValue(f.getName(), f.getType().getCanonicalName(),
+                                FieldValue.Kind.CUSTOM, f.getType().getCanonicalName(),
+                                null, Collections.emptyList(), rendered));
+                        continue;
+                    }
                     // NOT skipped. Java would serialise this; a target that cannot carry it must be
                     // able to say so by name rather than emit a processor that quietly differs.
                     out.add(new FieldValue(f.getName(), f.getType().getCanonicalName(),
@@ -185,6 +196,57 @@ public final class FieldValueCapture {
     /** Boxed and primitive forms of one width are the same element type to a target. */
     private static boolean bothNumericSameWidth(FieldValue.Kind a, FieldValue.Kind b) {
         return a == b;
+    }
+
+    /**
+     * Asks every registered {@code FieldToSourceSerializer} for a NON-JAVA language whether it can
+     * render this type, and collects what they produce, keyed by language.
+     *
+     * <p>Java is excluded because the Java generator already has its own path through
+     * {@code FieldSerializer} and re-rendering here would produce a second, competing answer.
+     *
+     * <p>Highest {@code priority()} wins per language, so a user serialiser can override a shipped
+     * one — the same ordering Java's registry uses.
+     */
+    private static java.util.Map<String, String> renderCustom(Class<?> type, Object value) {
+        java.util.Map<String, String> best = null;
+        java.util.Map<String, Integer> bestPriority = null;
+        try {
+            for (com.telamin.fluxtion.builder.generation.serialiser.FieldToSourceSerializer<?> s
+                    : java.util.ServiceLoader.load(
+                            com.telamin.fluxtion.builder.generation.serialiser.FieldToSourceSerializer.class)) {
+                final String lang = s.language();
+                if (lang == null || "java".equals(lang) || !s.typeSupported(type)) {
+                    continue;
+                }
+                if (best == null) {
+                    best = new java.util.LinkedHashMap<>();
+                    bestPriority = new java.util.HashMap<>();
+                }
+                final Integer held = bestPriority.get(lang);
+                if (held != null && held >= s.priority()) {
+                    continue;
+                }
+                try {
+                    @SuppressWarnings({"unchecked", "rawtypes"})
+                    final String text = ((com.telamin.fluxtion.builder.generation.serialiser.FieldToSourceSerializer)
+                            s).mapToSource(
+                            new com.telamin.fluxtion.builder.generation.serialiser.FieldContext<>(
+                                    value, Collections.emptyList(), new java.util.HashSet<>(), null));
+                    if (text != null && !text.isEmpty()) {
+                        best.put(lang, text);
+                        bestPriority.put(lang, s.priority());
+                    }
+                } catch (RuntimeException serialiserFailed) {
+                    // A serialiser that throws has not rendered anything. Falling through to the
+                    // refusal is right: the alternative is emitting whatever it managed first.
+                }
+            }
+        } catch (java.util.ServiceConfigurationError badProvider) {
+            // A broken provider must not take the build down on every graph; the field is refused by
+            // name instead, which says something actionable.
+        }
+        return best == null ? Collections.emptyMap() : best;
     }
 
     private static FieldValue.Kind kindOf(Class<?> t) {

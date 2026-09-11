@@ -65,7 +65,15 @@ public final class FieldValue implements Serializable {
          * emits the values and hands them over, and the author's {@code @Initialise} builds whatever
          * it wants from them.
          */
-        SEQUENCE
+        SEQUENCE,
+        /**
+         * A type no tier carries natively, rendered by a user-supplied serialiser.
+         *
+         * <p>{@link #rendered(String)} gives the target's source text. The rendering happens where the
+         * node instance lives and travels as text, the same way Java's own constructor source does —
+         * a serialiser cannot run in a target that never sees the object.
+         */
+        CUSTOM
     }
 
     private final String name;
@@ -74,6 +82,7 @@ public final class FieldValue implements Serializable {
     private final String literal;
     private final Kind elementKind;
     private final java.util.List<String> elements;
+    private final java.util.Map<String, String> renderedByLanguage;
 
     public FieldValue(String name, String declaredType, Kind kind, String literal) {
         this(name, declaredType, kind, literal, null, java.util.Collections.emptyList());
@@ -81,6 +90,16 @@ public final class FieldValue implements Serializable {
 
     public FieldValue(String name, String declaredType, Kind kind, String literal,
                       Kind elementKind, java.util.List<String> elements) {
+        this(name, declaredType, kind, literal, elementKind, elements, java.util.Collections.emptyMap());
+    }
+
+    public FieldValue(String name, String declaredType, Kind kind, String literal,
+                      Kind elementKind, java.util.List<String> elements,
+                      java.util.Map<String, String> renderedByLanguage) {
+        this.renderedByLanguage = renderedByLanguage == null
+                ? java.util.Collections.emptyMap()
+                : java.util.Collections.unmodifiableMap(
+                        new java.util.LinkedHashMap<>(renderedByLanguage));
         this.name = name;
         this.declaredType = declaredType;
         this.kind = kind;
@@ -90,6 +109,16 @@ public final class FieldValue implements Serializable {
                 ? java.util.Collections.emptyList()
                 : java.util.Collections.unmodifiableList(new java.util.ArrayList<>(elements));
     }
+
+    /**
+     * Source text a user serialiser produced for one target language, or null if none did.
+     *
+     * @param language the {@code FieldToSourceSerializer.language()} value, e.g. {@code "cpp"}
+     */
+    public String rendered(String language) { return renderedByLanguage.get(language); }
+
+    /** Languages a user serialiser rendered this field for. */
+    public java.util.Set<String> renderedLanguages() { return renderedByLanguage.keySet(); }
 
     /** For {@link Kind#SEQUENCE}: the scalar kind every element shares. Null otherwise. */
     public Kind elementKind() { return elementKind; }
