@@ -4,6 +4,7 @@
  */
 package com.telamin.fluxtion.runtime.audit.tools;
 
+import com.telamin.fluxtion.runtime.audit.BinaryLogFile;
 import com.telamin.fluxtion.runtime.audit.BinaryLogReader;
 import com.telamin.fluxtion.runtime.audit.BinaryRecordDecoder;
 
@@ -38,8 +39,13 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
     private final String eventGlob;
     private final String nodeGlob;
     private final String keyGlob;
-    private final long from;
-    private final long to;
+    /** The bounds AS GIVEN, in epoch milliseconds - the unit the CLI documents. */
+    private final long fromMillis;
+    private final long toMillis;
+    /** The bounds in the FILE's unit, set at the header. Until then, everything passes. */
+    private long from = Long.MIN_VALUE;
+    private long to = Long.MAX_VALUE;
+    private int timeUnit = BinaryLogFile.TIME_UNIT_UNSPECIFIED;
     private final long limit;
     private final Sink sink;
 
@@ -84,10 +90,69 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
         this.eventGlob = eventGlob;
         this.nodeGlob = nodeGlob;
         this.keyGlob = keyGlob;
-        this.from = from;
-        this.to = to;
+        this.fromMillis = from;
+        this.toMillis = to;
         this.limit = limit;
         this.sink = sink;
+    }
+
+    /** True when the caller asked for a time range at all. */
+    private boolean boundsGiven() {
+        return fromMillis != Long.MIN_VALUE || toMillis != Long.MAX_VALUE;
+    }
+
+    /**
+     * The bounds are documented as milliseconds and the file's timestamps are in whatever unit its
+     * header states, so the comparison is only meaningful once the header has been read. A review ran
+     * {@code --from 1000000000000 --to 2000000000000} - a range holding 2026 in milliseconds - over a
+     * file declaring nanoseconds and got "records matched: 0", exit 0, no warning: the millisecond
+     * bounds were compared to nanosecond readings as they stood.
+     *
+     * <ul>
+     *   <li>milliseconds: the bounds apply as given</li>
+     *   <li>nanoseconds: the bounds are scaled by a million, saturating at the extremes</li>
+     *   <li>unspecified or undefined: a time query cannot mean anything, so it is refused. Raw
+     *       inspection without bounds still works, and {@code --stats} still labels the code.</li>
+     * </ul>
+     *
+     * @throws IllegalArgumentException when bounds were given and the unit cannot honour them
+     */
+    @Override
+    public void onHeader(int formatVersion, int unit) {
+        this.timeUnit = unit;
+        if (!boundsGiven()) {
+            return;
+        }
+        switch (unit) {
+            case BinaryLogFile.TIME_UNIT_EPOCH_MILLIS:
+                from = fromMillis;
+                to = toMillis;
+                return;
+            case BinaryLogFile.TIME_UNIT_EPOCH_NANOS:
+                from = fromMillis == Long.MIN_VALUE ? Long.MIN_VALUE : saturatedMillisToNanos(fromMillis);
+                to = toMillis == Long.MAX_VALUE ? Long.MAX_VALUE : saturatedMillisToNanos(toMillis);
+                return;
+            case BinaryLogFile.TIME_UNIT_UNSPECIFIED:
+                throw new IllegalArgumentException("--from/--to are milliseconds, and this file's header "
+                        + "does not state its unit (code 0: written before the unit field existed). A "
+                        + "time query cannot be honoured. Declare the unit into a copy with "
+                        + "--declare-unit millis|nanos --out <copy>, or query without bounds.");
+            default:
+                throw new IllegalArgumentException("--from/--to are milliseconds, and this file's header "
+                        + "carries time unit code " + unit + ", which the format does not define. A time "
+                        + "query cannot be honoured; query without bounds to inspect the raw records.");
+        }
+    }
+
+    private static long saturatedMillisToNanos(long millis) {
+        if (millis > Long.MAX_VALUE / 1_000_000L) return Long.MAX_VALUE;
+        if (millis < Long.MIN_VALUE / 1_000_000L) return Long.MIN_VALUE;
+        return millis * 1_000_000L;
+    }
+
+    /** The header's unit code, as read; {@code TIME_UNIT_UNSPECIFIED} before the header. */
+    public int timeUnit() {
+        return timeUnit;
     }
 
     @Override

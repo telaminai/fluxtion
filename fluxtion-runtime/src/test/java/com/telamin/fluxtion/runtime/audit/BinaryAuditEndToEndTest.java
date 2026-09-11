@@ -355,8 +355,19 @@ public class BinaryAuditEndToEndTest {
         };
         assertEquals(BinaryLogFile.TIME_UNIT_EPOCH_MILLIS, BinaryLogReader.read(millis, ignore).timeUnit);
         assertEquals(BinaryLogFile.TIME_UNIT_EPOCH_NANOS, BinaryLogReader.read(nanos, ignore).timeUnit);
+        // The DEFAULT constructor, not the explicit one re-read: the claim is about what a user who
+        // states nothing gets, and the file above was written with the unit spelled out.
+        Path byDefault = Files.createTempFile("audit-unit-default", ".flxa");
+        BinaryLogRecord r = record();
+        r.addRecord("n", "k", 1);
+        r.terminateRecord();
+        try (BinaryLogWriter w = new BinaryLogWriter(Files.newOutputStream(byDefault))) {
+            w.processLogRecord(r);
+        }
         assertEquals("the default writer declares milliseconds",
-                BinaryLogFile.TIME_UNIT_EPOCH_MILLIS, BinaryLogReader.read(millis, ignore).timeUnit);
+                BinaryLogFile.TIME_UNIT_EPOCH_MILLIS, BinaryLogReader.read(byDefault, ignore).timeUnit);
+        assertEquals("and it is the header byte, not a reader default",
+                BinaryLogFile.TIME_UNIT_EPOCH_MILLIS, Files.readAllBytes(byDefault)[7]);
     }
 
     /**
@@ -451,7 +462,8 @@ public class BinaryAuditEndToEndTest {
      */
     @Test
     public void anUndefinedTimeUnitIsRefusedBeforeAnyHeaderByte() {
-        for (int code : new int[]{3, 0xFFFF + 2, -1, 0x10001}) {
+        // 65,536 would wrap to 0 ("unspecified") and 65,537 to 1 ("milliseconds") on the wire.
+        for (int code : new int[]{3, 0x10000, 0x10001, 0x10002, -1}) {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             try {
                 new BinaryLogWriter(out, code);

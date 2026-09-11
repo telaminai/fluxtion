@@ -58,7 +58,10 @@ public final class BinaryLogFile {
     // logTime and endTime, because nothing else did: Java's default clock is epoch milliseconds, the
     // C++ runtime's was epoch nanoseconds, the analyser declared every file milliseconds, and the same
     // field held both. A consumer cannot infer a unit from magnitude safely. 0 keeps its old meaning -
-    // a file written before the unit was recorded - so every existing file still parses.
+    // a file written before the unit was recorded. Such a file PARSES, but its unit is unknown: a
+    // pre-release Java runtime with nanoEpochClock() installed wrote nanoseconds under it, and so did
+    // the C++ runtime of that era. A consumer that needs the unit must have it declared
+    // (AuditLogTool --declare-unit), not assume it; no released runtime writes 0.
     // WHICH FIELDS THE UNIT GOVERNS. The unit is the unit of the processor's ClockStrategy, which
     // stamps logTime and endTime on every record and eventTime on every record whose event is a plain
     // object. An event implementing com.telamin.fluxtion.runtime.event.Event supplies its OWN

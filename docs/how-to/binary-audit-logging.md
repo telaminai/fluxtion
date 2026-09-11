@@ -67,6 +67,20 @@ construction, and the runtime records it as given: under a nanosecond strategy s
 nanosecond `logTime` and millisecond `eventTime`. The analyser reads millisecond files only and refuses a
 file whose header says otherwise, before it delivers a record.
 
+**A file whose header states no unit is refused by the analyser, and by any `--from`/`--to` query.**
+Only pre-release runtimes wrote such a header, and some of them wrote nanoseconds under it, so
+nothing assumes. State the unit yourself, into the evidence:
+
+```bash
+java -cp fluxtion-runtime.jar com.telamin.fluxtion.runtime.audit.tools.AuditLogTool \
+     old.flxa --declare-unit millis --out old-declared.flxa
+```
+
+The copy is byte-identical past the header, the tool fills in only a header that states none, and
+every reader then trusts it. The tool's own `--from`/`--to` are milliseconds whatever the file's unit:
+it reads the header first, scales the bounds for a nanosecond file, and refuses a time query over a
+file whose unit it cannot honour rather than report zero matches.
+
 **Node code is identical either way.** `auditLog.info("v", v)` is unchanged. There is no binary-specific
 logging API, and there was briefly an indexed one that was removed for being slower — see
 [Performance results](../reference/performance.md).

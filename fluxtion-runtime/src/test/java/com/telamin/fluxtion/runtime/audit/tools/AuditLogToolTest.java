@@ -216,4 +216,132 @@ public class AuditLogToolTest {
         assertFalse(AuditLogFilter.matches("bond*", "equityBook"));
         assertFalse(AuditLogFilter.matches("equityBoo?", "equityBooks"));
     }
+
+    // ---- round 5: the bounds are milliseconds, the file's unit is whatever its header says ----
+
+    /** A copy of the fixture with its header unit set to {@code code}; nothing past the header changes. */
+    private Path withUnit(int code) throws IOException {
+        byte[] bytes = java.nio.file.Files.readAllBytes(log);
+        bytes[6] = (byte) (code >>> 8);
+        bytes[7] = (byte) code;
+        Path copy = folder.newFile("unit-" + code + ".flxa").toPath();
+        java.nio.file.Files.write(copy, bytes);
+        return copy;
+    }
+
+    private Run runOn(Path file, String... args) throws IOException {
+        Path saved = log;
+        log = file;
+        try {
+            return run(args);
+        } finally {
+            log = saved;
+        }
+    }
+
+    /**
+     * REVIEWER PROBE (round 5). A millisecond range holding 2026 over a file DECLARING nanoseconds
+     * matched nothing, exit 0, no warning: the bounds were compared to the readings as they stood.
+     * The fixture's logTimes are 100, 200, 300 in the file's unit; under a nanosecond header those are
+     * fractions of a millisecond, so a bound of one millisecond admits all three and a bound starting
+     * at one millisecond admits none. The same file under a millisecond header keeps its old answer.
+     */
+    @Test
+    public void millisecondBoundsAreScaledToTheFilesDeclaredUnit() throws IOException {
+        Path nanos = withUnit(com.telamin.fluxtion.runtime.audit.BinaryLogFile.TIME_UNIT_EPOCH_NANOS);
+        Run all = runOn(nanos, "--from", "0", "--to", "1");
+        assertEquals(0, all.code);
+        assertEquals("100, 200 and 300 ns all lie inside [0 ms, 1 ms]", 3, count(all.out, "eventLogRecord:"));
+        Run none = runOn(nanos, "--from", "1", "--to", "2");
+        assertEquals(0, none.code);
+        assertEquals("nothing lies inside [1 ms, 2 ms]", 0, count(none.out, "eventLogRecord:"));
+        Run middle = runOn(withUnit(com.telamin.fluxtion.runtime.audit.BinaryLogFile.TIME_UNIT_EPOCH_MILLIS),
+                "--from", "200", "--to", "200");
+        assertEquals("a millisecond file is unchanged", 1, count(middle.out, "eventLogRecord:"));
+
+        // And the reviewer's own shape: a real 2026 nanosecond reading, a real 2026 millisecond range.
+        Path real = folder.newFile("real-nanos.flxa").toPath();
+        long reading = 1_789_151_371_851_762_250L;
+        Clock clock = new Clock();
+        clock.init();
+        clock.setClockStrategy(new ClockStrategy.ClockStrategyEvent(() -> reading));
+        try (OutputStream os = java.nio.file.Files.newOutputStream(real);
+             BinaryLogWriter writer = new BinaryLogWriter(os,
+                     com.telamin.fluxtion.runtime.audit.BinaryLogFile.TIME_UNIT_EPOCH_NANOS)) {
+            BinaryLogRecord r = new BinaryLogRecord(clock, 4096);
+            r.updateLogLevel(EventLogControlEvent.LogLevel.INFO);
+            clock.eventReceived(new Object());
+            r.triggerObject(new Object());
+            r.addRecord("n", "k", 1);
+            r.terminateRecord();
+            writer.processLogRecord(r);
+        }
+        Run hit = runOn(real, "--from", "1000000000000", "--to", "2000000000000", "--stats");
+        assertEquals(0, hit.code);
+        assertTrue(hit.err, hit.err.contains("records matched   : 1"));
+        assertTrue(hit.err, hit.err.contains("time unit         : epoch nanoseconds"));
+        Run miss = runOn(real, "--from", "2000000000001", "--to", "3000000000000", "--stats");
+        assertTrue(miss.err, miss.err.contains("records matched   : 0"));
+    }
+
+    /**
+     * A file whose header states no unit cannot honour a millisecond query, so the query is refused
+     * with the exit code a script can see - not answered with zero matches. Inspection without bounds
+     * still works, and the stats line says what to do.
+     */
+    @Test
+    public void aTimeQueryOnAFileWithNoDeclaredUnitIsRefused() throws IOException {
+        Path undeclared = withUnit(com.telamin.fluxtion.runtime.audit.BinaryLogFile.TIME_UNIT_UNSPECIFIED);
+        Run refused = runOn(undeclared, "--from", "200", "--to", "200");
+        assertEquals(2, refused.code);
+        assertEquals("nothing printed for a refused query", "", refused.out);
+        assertTrue(refused.err, refused.err.contains("--declare-unit"));
+
+        Run raw = runOn(undeclared, "--stats");
+        assertEquals("no bounds, no unit needed", 0, raw.code);
+        assertEquals(3, count(raw.out, "eventLogRecord:"));
+        assertTrue(raw.err, raw.err.contains("unspecified"));
+        assertTrue(raw.err, raw.err.contains("--declare-unit"));
+
+        Path undefined = withUnit(9);
+        Run undefinedQuery = runOn(undefined, "--from", "200", "--to", "200");
+        assertEquals(2, undefinedQuery.code);
+        assertTrue(undefinedQuery.err, undefinedQuery.err.contains("code 9"));
+    }
+
+    /**
+     * The unit is established by the USER, into the evidence: a copy whose header states it. Only a
+     * header that states none is filled in; a stated unit is the producer's claim and is not rewritten.
+     */
+    @Test
+    public void declareUnitWritesACopyThatEveryReaderThenTrusts() throws IOException {
+        Path undeclared = withUnit(com.telamin.fluxtion.runtime.audit.BinaryLogFile.TIME_UNIT_UNSPECIFIED);
+        Path copy = folder.getRoot().toPath().resolve("declared.flxa");
+        Run declared = runOn(undeclared, "--declare-unit", "nanos", "--out", copy.toString());
+        assertEquals(declared.err, 0, declared.code);
+        assertTrue(declared.out, declared.out.contains("epoch nanoseconds"));
+
+        byte[] original = java.nio.file.Files.readAllBytes(undeclared);
+        byte[] written = java.nio.file.Files.readAllBytes(copy);
+        assertEquals("the original is untouched", 0, original[7]);
+        assertEquals(com.telamin.fluxtion.runtime.audit.BinaryLogFile.TIME_UNIT_EPOCH_NANOS, written[7]);
+        assertEquals(original.length, written.length);
+        for (int i = 8; i < original.length; i++) {
+            assertEquals("byte " + i + " past the header is unchanged", original[i], written[i]);
+        }
+        Run stats = runOn(copy, "--stats", "--from", "0", "--to", "1");
+        assertEquals(0, stats.code);
+        assertTrue(stats.err, stats.err.contains("time unit         : epoch nanoseconds"));
+        assertTrue(stats.err, stats.err.contains("records matched   : 3"));
+
+        Run again = runOn(copy, "--declare-unit", "millis", "--out", copy.toString() + ".2");
+        assertEquals("a stated unit is not rewritten", 2, again.code);
+        assertTrue(again.err, again.err.contains("already states"));
+        Run clobber = runOn(undeclared, "--declare-unit", "millis", "--out", copy.toString());
+        assertEquals("an existing file is not overwritten", 2, clobber.code);
+        Run badUnit = runOn(undeclared, "--declare-unit", "seconds", "--out", copy.toString() + ".3");
+        assertEquals(2, badUnit.code);
+        Run noOut = runOn(undeclared, "--declare-unit", "millis");
+        assertEquals(2, noOut.code);
+    }
 }
