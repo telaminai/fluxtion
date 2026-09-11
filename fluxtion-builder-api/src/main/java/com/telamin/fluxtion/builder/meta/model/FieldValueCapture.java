@@ -96,7 +96,7 @@ public final class FieldValueCapture {
                     // target. Rendering happens HERE because a serialiser needs the instance, and the
                     // instance does not survive the DTO — so the text travels instead, exactly as
                     // Java's own constructor source does.
-                    final java.util.Map<String, String> rendered = renderCustom(f.getType(), v);
+                    final java.util.Map<String, String> rendered = renderCustom(f.getType(), v, f.getName());
                     if (!rendered.isEmpty()) {
                         out.add(new FieldValue(f.getName(), f.getType().getCanonicalName(),
                                 FieldValue.Kind.CUSTOM, f.getType().getCanonicalName(),
@@ -208,9 +208,50 @@ public final class FieldValueCapture {
      * <p>Highest {@code priority()} wins per language, so a user serialiser can override a shipped
      * one — the same ordering Java's registry uses.
      */
-    private static java.util.Map<String, String> renderCustom(Class<?> type, Object value) {
+    private static java.util.Map<String, String> renderCustom(Class<?> type, Object value,
+                                                             String fieldName) {
         java.util.Map<String, String> best = null;
         java.util.Map<String, Integer> bestPriority = null;
+        // The per-LANGUAGE registries first. ClassSerializerRegistry has carried targetLanguage()
+        // since before this work; the Java one has always returned "java" and nothing had walked
+        // through the door for another target. A registry is where a mapping with one obvious answer
+        // belongs; the per-type SPI below is the escape hatch for everything else.
+        try {
+            for (com.telamin.fluxtion.builder.generation.config.ClassSerializerRegistry reg
+                    : java.util.ServiceLoader.load(
+                            com.telamin.fluxtion.builder.generation.config.ClassSerializerRegistry.class)) {
+                final String lang = reg.targetLanguage();
+                if (lang == null || lang.isEmpty() || "java".equals(lang)) {
+                    continue;
+                }
+                final java.util.function.Function<
+                        com.telamin.fluxtion.builder.generation.serialiser.FieldContext, String> fn =
+                        reg.classSerializerMap().get(type);
+                if (fn == null) {
+                    continue;
+                }
+                try {
+                    final String text = fn.apply(
+                            new com.telamin.fluxtion.builder.generation.serialiser.FieldContext<Object>(
+                                    value, Collections.emptyList(), new java.util.HashSet<>(), null,
+                                    fieldName));
+                    if (text != null && !text.isEmpty()) {
+                        if (best == null) {
+                            best = new java.util.LinkedHashMap<>();
+                            bestPriority = new java.util.HashMap<>();
+                        }
+                        best.put(lang, text);
+                        // A registry mapping is the SHIPPED answer and sits below any user serialiser,
+                        // so a user can override it for their own project.
+                        bestPriority.put(lang, Integer.MIN_VALUE);
+                    }
+                } catch (RuntimeException registryFailed) {
+                    // fall through to the SPI, then to the refusal
+                }
+            }
+        } catch (java.util.ServiceConfigurationError badProvider) {
+            // a broken registry must not take every build down
+        }
         try {
             for (com.telamin.fluxtion.builder.generation.serialiser.FieldToSourceSerializer<?> s
                     : java.util.ServiceLoader.load(
@@ -231,8 +272,9 @@ public final class FieldValueCapture {
                     @SuppressWarnings({"unchecked", "rawtypes"})
                     final String text = ((com.telamin.fluxtion.builder.generation.serialiser.FieldToSourceSerializer)
                             s).mapToSource(
-                            new com.telamin.fluxtion.builder.generation.serialiser.FieldContext<>(
-                                    value, Collections.emptyList(), new java.util.HashSet<>(), null));
+                            new com.telamin.fluxtion.builder.generation.serialiser.FieldContext<Object>(
+                                    value, Collections.emptyList(), new java.util.HashSet<>(), null,
+                                    fieldName));
                     if (text != null && !text.isEmpty()) {
                         best.put(lang, text);
                         bestPriority.put(lang, s.priority());
