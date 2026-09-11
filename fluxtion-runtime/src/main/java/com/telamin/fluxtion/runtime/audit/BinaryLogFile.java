@@ -59,12 +59,45 @@ public final class BinaryLogFile {
     // C++ runtime's was epoch nanoseconds, the analyser declared every file milliseconds, and the same
     // field held both. A consumer cannot infer a unit from magnitude safely. 0 keeps its old meaning -
     // a file written before the unit was recorded - so every existing file still parses.
+    // WHICH FIELDS THE UNIT GOVERNS. The unit is the unit of the processor's ClockStrategy, which
+    // stamps logTime and endTime on every record and eventTime on every record whose event is a plain
+    // object. An event implementing com.telamin.fluxtion.runtime.event.Event supplies its OWN
+    // eventTime - Event.getEventTime() is defined as epoch milliseconds at construction, or -1 - and the
+    // runtime records it as given, because it is the producer's statement of when the event happened
+    // and not a clock reading the runtime made. So under a nanosecond strategy a file carries
+    // nanosecond logTime/endTime and, for Event-typed events, millisecond eventTime. That is the
+    // documented meaning, not a defect to normalise away: converting would invent precision or lose
+    // the producer's value. A reader that needs eventTime in the header unit must know its events.
     /** Written by files predating the unit field. A reader may not assume a unit. */
     public static final int TIME_UNIT_UNSPECIFIED = 0;
-    /** Epoch milliseconds — Java's default clock, and what the analyser assumes. */
+    /**
+     * Epoch milliseconds — Java's default clock, and what the analyser assumes. Governs {@code logTime},
+     * {@code endTime}, and {@code eventTime} for events that do not implement {@code Event}; see the
+     * note above on {@code Event.getEventTime()}.
+     */
     public static final int TIME_UNIT_EPOCH_MILLIS = 1;
     /** Epoch nanoseconds — {@code ClockStrategy.nanoEpochClock()} and the C++ {@code SystemNanoClock}. */
     public static final int TIME_UNIT_EPOCH_NANOS = 2;
+
+    /** True for a code this format defines. A reader must refuse any other rather than guess. */
+    public static boolean isKnownTimeUnit(int code) {
+        return code == TIME_UNIT_UNSPECIFIED || code == TIME_UNIT_EPOCH_MILLIS || code == TIME_UNIT_EPOCH_NANOS;
+    }
+
+    /**
+     * Refuses a code the format does not define. The header field is a u16, so an undefined code would
+     * either wrap to a defined one (65,537 became 1, "milliseconds") or reach a reader as a number it
+     * has to guess about. Run before any header byte is written.
+     *
+     * @throws IllegalArgumentException for an undefined code
+     */
+    public static void checkTimeUnit(int code) {
+        if (!isKnownTimeUnit(code)) {
+            throw new IllegalArgumentException("audit time unit code " + code + " is not defined by the "
+                    + "format; use BinaryLogFile.TIME_UNIT_EPOCH_MILLIS (1), TIME_UNIT_EPOCH_NANOS (2) or "
+                    + "TIME_UNIT_UNSPECIFIED (0)");
+        }
+    }
 
     /** Fixed part of a RECORD frame: tag, entryCount, eventTypeId, and three timestamps. */
     public static final int RECORD_FIXED_BYTES = 1 + 2 + 2 + 8 + 8 + 8;

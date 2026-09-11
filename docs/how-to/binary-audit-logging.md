@@ -56,6 +56,17 @@ processor.init();                                   // now events can flow
 through `EventLogControlEvent` still works and is still how you change format at runtime; this is how
 you start in the right one.
 
+**The writer states the file's time unit, once.** `new BinaryLogWriter(out)` declares epoch
+milliseconds, which is what the default clock writes. If you install `ClockStrategy.nanoEpochClock()`,
+construct the writer with `BinaryLogFile.TIME_UNIT_EPOCH_NANOS` so the header tells every reader; an
+undefined code is refused before a header byte is written. The unit is fixed for the life of the writer,
+so change the strategy before the writer exists, or start a new file. The unit describes the **clock
+strategy's readings** — `logTime`, `endTime`, and `eventTime` for a plain event object. An event that
+implements `Event` supplies its own `eventTime`, which its contract defines as epoch milliseconds at
+construction, and the runtime records it as given: under a nanosecond strategy such a record carries
+nanosecond `logTime` and millisecond `eventTime`. The analyser reads millisecond files only and refuses a
+file whose header says otherwise, before it delivers a record.
+
 **Node code is identical either way.** `auditLog.info("v", v)` is unchanged. There is no binary-specific
 logging API, and there was briefly an indexed one that was removed for being slower — see
 [Performance results](../reference/performance.md).

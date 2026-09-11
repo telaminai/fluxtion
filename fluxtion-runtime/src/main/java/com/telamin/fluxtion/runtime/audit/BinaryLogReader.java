@@ -39,6 +39,19 @@ public final class BinaryLogReader {
      */
     public interface Visitor {
         /**
+         * The file header, delivered BEFORE any dictionary entry or record. A reader that presents
+         * timestamps in a fixed unit decides here whether it can read the file at all; deciding from
+         * {@link Result#timeUnit} after {@code read} returns means every record has already been
+         * delivered in the wrong unit. Throw from here and nothing is delivered.
+         *
+         * @param formatVersion the header's version, already checked against {@link BinaryLogFile#FORMAT_VERSION}
+         * @param timeUnit      one of the {@code BinaryLogFile.TIME_UNIT_*} codes as written; not validated,
+         *                      because which codes a reader accepts is the reader's policy
+         */
+        default void onHeader(int formatVersion, int timeUnit) {
+        }
+
+        /**
          * @return {@code true} to receive this record's entries, {@code false} to skip them —
          * the cheap path a time-range or event-type filter takes
          */
@@ -201,6 +214,7 @@ public final class BinaryLogReader {
                         + ", this reader understands " + BinaryLogFile.FORMAT_VERSION);
             }
             result.timeUnit = u16(data, 6);
+            visitor.onHeader(version, result.timeUnit);
             p = BinaryLogFile.HEADER_BYTES;
             cursor.consumed = p;
         }

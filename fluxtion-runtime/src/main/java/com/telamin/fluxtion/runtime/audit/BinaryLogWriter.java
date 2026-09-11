@@ -43,8 +43,19 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
      *                 so whoever installs a non-default strategy states the unit here, and the file
      *                 carries it to every reader. Before this field existed the analyser labelled every
      *                 file milliseconds while the C++ runtime wrote nanoseconds into the same fields.
+     *                 The unit is stated ONCE, here, for the whole file: the clock strategy is a
+     *                 process-wide singleton chosen before the processor is built, and changing it
+     *                 while a writer is open produces a file whose header is wrong for every record
+     *                 after the change. Start a new writer with the new unit instead.
+     *                 See {@link BinaryLogFile#TIME_UNIT_EPOCH_MILLIS} for which fields the unit
+     *                 governs - an {@link com.telamin.fluxtion.runtime.event.Event}'s own time is
+     *                 not one of them.
+     * @throws IllegalArgumentException for a code the format does not define; nothing is written
      */
     public BinaryLogWriter(OutputStream out, int timeUnit) {
+        // Before the header. The field is a u16: 65,537 wrapped to 1 and the file claimed
+        // milliseconds; 3 was written as 3 and a reader took it for whatever it liked.
+        BinaryLogFile.checkTimeUnit(timeUnit);
         this.timeUnit = timeUnit;
         this.out = out;
         try {
@@ -89,29 +100,14 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
                     + " — build with addLowLatencyEventLog(level, AuditRecordFormat.BINARY)");
         }
         BinaryLogRecord record = (BinaryLogRecord) logRecord;
-        // A RECORD THAT OVERFLOWED IS NOT A RECORD. writeSlots sets the flag and drops the entries it
-        // could not fit; writing the prefix anyway produced a well-formed file whose records were
-        // silently short, so a reader could not tell a complete log from lost audit evidence. Audit
-        // output exists to be trusted about what happened, so losing part of it has to be loud.
-        if (record.overflowed()) {
-            throw new IllegalStateException(
-                    "audit record overflowed its buffer - " + (record.length() / 16)
-                            + " entries fit and the rest were dropped. Writing it would produce a file "
-                            + "that looks complete and is not. Reduce entries logged per event, or raise "
-                            + "the record buffer, and re-run.");
-        }
+        // ONE representability rule, owned by the record and shared with encodeTo(). An overflowed
+        // record is not a record (its tail was dropped), and more entries than the u16 count field
+        // holds would wrap the count and corrupt the file. Both are refused before any RECORD byte -
+        // and before any DICTIONARY byte, so a refused record leaves the file exactly as it was.
+        record.checkEncodable();
         try {
             int[] translate = translationFor(record);
             int entries = record.length() / 16;
-            // The entry count is a u16 on the wire. A record capacity can hold more; writing 65,536
-            // wrapped the count to 0 with every entry byte following, and the reader failed thousands
-            // of bytes later with "unknown frame type". Refuse before the first frame byte is written.
-            if (entries > BinaryLogFile.MAX_ENTRIES_PER_RECORD) {
-                throw new IllegalStateException(
-                        "audit record holds " + entries + " entries; the record format's count field "
-                                + "holds at most " + BinaryLogFile.MAX_ENTRIES_PER_RECORD
-                                + ". Writing it would corrupt the file. Log fewer entries per event.");
-            }
             out.write(BinaryLogFile.FRAME_RECORD);
             writeShort(entries);
             // TRANSLATED. eventTypeId is allocated by the record's own tableId(), so it is exactly as

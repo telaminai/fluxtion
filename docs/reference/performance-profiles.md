@@ -202,6 +202,9 @@ with anything outside the JVM, take the saving.
     `FixedRateTrigger.atMillis()` means milliseconds by construction. Installing it on a graph with a
     tumbling or sliding window stops the window rolling — silently, with the arithmetic out by a factor
     of a million. Use it when sub-millisecond timestamps matter and the graph has no time-windowed nodes.
+    A binary audit file then needs its writer constructed with `BinaryLogFile.TIME_UNIT_EPOCH_NANOS`, and
+    an `Event`'s own `eventTime` stays in the producer's milliseconds — see
+    [Binary audit logging](../how-to/binary-audit-logging.md).
 
 **`endTime` is on by default**, as it has been in every release. It is the *second* clock read on an
 audited event path and exists only for `endTime - logTime`, so suppress it if you do not consume the

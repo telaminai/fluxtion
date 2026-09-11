@@ -54,6 +54,14 @@ public class Clock implements Auditor, Auditor.FirstAfterEvent {
         return previous;
     }
 
+    /**
+     * An {@link Event} supplies its OWN event time. {@link Event#getEventTime()} is the producer's
+     * statement of when the event happened - by contract epoch milliseconds at construction, or -1
+     * for none - so it is recorded as given, in the producer's unit, while {@code processTime} is a
+     * reading of the installed {@link ClockStrategy}. Under a non-millisecond strategy the two differ
+     * in unit; the audit file's header unit describes the strategy's readings, not this value. See
+     * {@code BinaryLogFile.TIME_UNIT_EPOCH_MILLIS}.
+     */
     @Override
     public void eventReceived(Event event) {
         if (!shareReading) {

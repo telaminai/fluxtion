@@ -455,6 +455,10 @@ public final class BinaryLogRecord extends LogRecord {
      */
     @Override
     public void encodeTo(java.io.OutputStream out) throws java.io.IOException {
+        // The SAME check the writer runs. This path skipped it: an overflowed record wrote a
+        // well-formed but silently short frame, and 65,536 entries wrote a count of 0 followed by a
+        // megabyte of slots. Two emission paths, one representability rule, before any RECORD byte.
+        checkEncodable();
         final int entries = length() / 16;
         out.write(BinaryLogFile.FRAME_RECORD);
         writeShort(out, entries);
@@ -476,6 +480,34 @@ public final class BinaryLogRecord extends LogRecord {
     private static void writeLong(java.io.OutputStream out, long value) throws java.io.IOException {
         for (int shift = 56; shift >= 0; shift -= 8) {
             out.write((int) ((value >>> shift) & 0xFF));
+        }
+    }
+
+    /**
+     * Refuses a record the wire format cannot carry faithfully. Every emission path — {@link
+     * BinaryLogWriter} and {@link #encodeTo} — runs this before writing a RECORD byte, so there is
+     * one rule and no path around it.
+     *
+     * <p>A record that overflowed is not a record: {@code writeSlots} drops the entries it cannot fit,
+     * and writing the prefix produces a file that looks complete and is not. A record whose entry
+     * count exceeds the u16 count field would wrap the count and corrupt every frame after it.
+     *
+     * @throws IllegalStateException when the record cannot be written faithfully
+     */
+    public void checkEncodable() {
+        if (overflow) {
+            throw new IllegalStateException(
+                    "audit record overflowed its buffer - " + (length() / 16)
+                            + " entries fit and the rest were dropped. Writing it would produce a file "
+                            + "that looks complete and is not. Reduce entries logged per event, or raise "
+                            + "the record buffer, and re-run.");
+        }
+        int entries = length() / 16;
+        if (entries > BinaryLogFile.MAX_ENTRIES_PER_RECORD) {
+            throw new IllegalStateException(
+                    "audit record holds " + entries + " entries; the record format's count field "
+                            + "holds at most " + BinaryLogFile.MAX_ENTRIES_PER_RECORD
+                            + ". Writing it would corrupt the file. Log fewer entries per event.");
         }
     }
 

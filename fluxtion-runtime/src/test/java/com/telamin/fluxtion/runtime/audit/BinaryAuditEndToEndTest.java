@@ -358,4 +358,211 @@ public class BinaryAuditEndToEndTest {
         assertEquals("the default writer declares milliseconds",
                 BinaryLogFile.TIME_UNIT_EPOCH_MILLIS, BinaryLogReader.read(millis, ignore).timeUnit);
     }
+
+    /**
+     * A record has TWO emission paths - the writer and its own {@code encodeTo} - and a review found
+     * the second ran none of the first's checks: an overflowed record wrote a short frame, and 65,536
+     * entries wrote a count of 0. Now one rule, {@code checkEncodable}, guards both, before any byte.
+     */
+    @Test
+    public void everyEmissionPathRunsTheSameRepresentabilityCheck() throws Exception {
+        // 1. Overflowed: refused by both, and neither wrote a byte.
+        BinaryLogRecord overflowed = record();
+        EventLogger overflowLogger = loggerOn(overflowed);
+        for (int i = 0; i < 600; i++) {                       // a 4096-byte record holds 512 slots
+            overflowLogger.info("k", i);
+        }
+        overflowed.terminateRecord();
+        assertTrue("fixture must overflow", overflowed.overflowed());
+        assertBothPathsRefuse(overflowed, "overflowed");
+
+        // 2. Exactly the count field's capacity: written by both, count reads back as 65,535.
+        BinaryLogRecord atCapacity = hugeRecord(0xFFFF);
+        ByteArrayOutputStream viaWriter = new ByteArrayOutputStream();
+        try (BinaryLogWriter w = new BinaryLogWriter(viaWriter)) {
+            w.processLogRecord(atCapacity);
+        }
+        assertEquals(0xFFFF, countOfFirstRecord(viaWriter.toByteArray()));
+        ByteArrayOutputStream viaEncodeTo = new ByteArrayOutputStream();
+        atCapacity.encodeTo(viaEncodeTo);
+        byte[] frame = viaEncodeTo.toByteArray();
+        assertEquals(BinaryLogFile.FRAME_RECORD, frame[0]);
+        assertEquals(0xFFFF, ((frame[1] & 0xFF) << 8) | (frame[2] & 0xFF));
+        assertEquals("every slot byte follows the count",
+                BinaryLogFile.RECORD_FIXED_BYTES + 0xFFFF * 16, frame.length);
+
+        // 3. One more: refused by both. Before the fix encodeTo wrote count 0 and a megabyte of slots.
+        assertBothPathsRefuse(hugeRecord(0xFFFF + 1), "65535");
+    }
+
+    private static void assertBothPathsRefuse(BinaryLogRecord r, String expectedInMessage) throws Exception {
+        ByteArrayOutputStream viaWriter = new ByteArrayOutputStream();
+        BinaryLogWriter w = new BinaryLogWriter(viaWriter);
+        int headerOnly = viaWriter.size();
+        try {
+            w.processLogRecord(r);
+            fail("writer must refuse");
+        } catch (IllegalStateException refused) {
+            assertTrue(refused.getMessage(), refused.getMessage().contains(expectedInMessage));
+        }
+        assertEquals("a refused record leaves the file as it was - no dictionary, no frame",
+                headerOnly, viaWriter.size());
+        ByteArrayOutputStream viaEncodeTo = new ByteArrayOutputStream();
+        try {
+            r.encodeTo(viaEncodeTo);
+            fail("encodeTo must refuse with the same rule");
+        } catch (IllegalStateException refused) {
+            assertTrue(refused.getMessage(), refused.getMessage().contains(expectedInMessage));
+        }
+        assertEquals("nothing written by a refused encodeTo", 0, viaEncodeTo.size());
+    }
+
+    /** A record holding exactly {@code entries} entries, none dropped. */
+    private BinaryLogRecord hugeRecord(int entries) {
+        Clock clock = new Clock();
+        clock.init();
+        BinaryLogRecord r = new BinaryLogRecord(clock, entries * 16 + 64);
+        r.updateLogLevel(LogLevel.INFO);
+        r.triggerObject(new Object());
+        EventLogger logger = loggerOn(r);
+        for (int i = 0; i < entries; i++) {
+            logger.info("k", i);
+        }
+        org.junit.Assume.assumeFalse("fixture must not overflow the slot buffer", r.overflowed());
+        r.terminateRecord();
+        return r;
+    }
+
+    /** Skips the header and any dictionary frames; returns the first RECORD frame's count field. */
+    private static int countOfFirstRecord(byte[] file) {
+        int p = BinaryLogFile.HEADER_BYTES;
+        while (file[p] == BinaryLogFile.FRAME_DICT) {
+            int len = ((file[p + 3] & 0xFF) << 8) | (file[p + 4] & 0xFF);
+            p += 5 + len;
+        }
+        assertEquals(BinaryLogFile.FRAME_RECORD, file[p]);
+        return ((file[p + 1] & 0xFF) << 8) | (file[p + 2] & 0xFF);
+    }
+
+    /**
+     * The unit field is a u16. 65,537 wrapped to 1 and the file claimed milliseconds; 3 reached the
+     * reader as 3. Now an undefined code is refused before the header, so a bad argument leaves no
+     * file that looks valid.
+     */
+    @Test
+    public void anUndefinedTimeUnitIsRefusedBeforeAnyHeaderByte() {
+        for (int code : new int[]{3, 0xFFFF + 2, -1, 0x10001}) {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            try {
+                new BinaryLogWriter(out, code);
+                fail("code " + code + " must be refused");
+            } catch (IllegalArgumentException refused) {
+                assertTrue(refused.getMessage(), refused.getMessage().contains(String.valueOf(code)));
+            }
+            assertEquals("no header byte for code " + code, 0, out.size());
+        }
+        for (int code : new int[]{BinaryLogFile.TIME_UNIT_UNSPECIFIED, BinaryLogFile.TIME_UNIT_EPOCH_MILLIS,
+                                  BinaryLogFile.TIME_UNIT_EPOCH_NANOS}) {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            new BinaryLogWriter(out, code);
+            assertEquals("defined code " + code + " writes the header", BinaryLogFile.HEADER_BYTES, out.size());
+        }
+    }
+
+    /**
+     * A reader that presents timestamps in a fixed unit has to decide BEFORE records arrive. The
+     * result's {@code timeUnit} is only known after {@code read} returns, by which time every record
+     * was delivered; the analyser did exactly that and rejected a nanosecond file after consuming it.
+     */
+    @Test
+    public void theHeaderReachesTheVisitorBeforeAnyRecord() throws Exception {
+        Path nanos = Files.createTempFile("audit-header-first", ".flxa");
+        BinaryLogRecord r = record();
+        r.addRecord("n", "k", 1);
+        r.terminateRecord();
+        try (BinaryLogWriter w = new BinaryLogWriter(Files.newOutputStream(nanos), BinaryLogFile.TIME_UNIT_EPOCH_NANOS)) {
+            w.processLogRecord(r);
+            w.processLogRecord(r);
+        }
+        List<String> order = new ArrayList<>();
+        BinaryLogReader.Visitor recording = new BinaryLogReader.Visitor() {
+            public void onHeader(int version, int unit) { order.add("header:" + version + "/" + unit); }
+            public void onDictionaryEntry(int id, String name) { order.add("dict"); }
+            public boolean onRecord(int a, String b, long c, long d, long e, int f) { order.add("record"); return true; }
+            public void onEntry(int a, String b, int c, String d, int e, long f) { order.add("entry"); }
+        };
+        BinaryLogReader.read(nanos, recording);
+        assertEquals("header:" + BinaryLogFile.FORMAT_VERSION + "/" + BinaryLogFile.TIME_UNIT_EPOCH_NANOS, order.get(0));
+        assertEquals(2, order.stream().filter("record"::equals).count());
+
+        // A visitor that refuses at the header sees nothing else - on both read paths.
+        class Refuses extends RuntimeException { }
+        int[] delivered = new int[1];
+        BinaryLogReader.Visitor refusing = new BinaryLogReader.Visitor() {
+            public void onHeader(int version, int unit) {
+                if (unit == BinaryLogFile.TIME_UNIT_EPOCH_NANOS) throw new Refuses();
+            }
+            public boolean onRecord(int a, String b, long c, long d, long e, int f) { delivered[0]++; return true; }
+            public void onEntry(int a, String b, int c, String d, int e, long f) { delivered[0]++; }
+            public void onDictionaryEntry(int id, String name) { delivered[0]++; }
+        };
+        try {
+            BinaryLogReader.read(nanos, refusing);
+            fail("must propagate the refusal");
+        } catch (Refuses expected) { /* the point */ }
+        try (java.io.InputStream in = Files.newInputStream(nanos)) {
+            BinaryLogReader.readStreamed(in, 16, refusing);
+            fail("must propagate the refusal on the streamed path too");
+        } catch (Refuses expected) { /* the point */ }
+        assertEquals("a refusal at the header delivers zero dictionary entries, records or entries",
+                0, delivered[0]);
+    }
+
+    /**
+     * The header unit describes the CLOCK STRATEGY's readings. An {@link com.telamin.fluxtion.runtime.event.Event}
+     * supplies its own {@code eventTime} - by contract epoch milliseconds at construction - and the
+     * runtime records it as given. This pins the documented split rather than hiding it: under a
+     * nanosecond strategy a file carries nanosecond logTime/endTime and millisecond eventTime for
+     * Event-typed events, and strategy-unit eventTime for anything else.
+     */
+    @Test
+    public void anEventKeepsItsOwnMillisecondEventTimeUnderANanosecondStrategy() throws Exception {
+        Clock clock = new Clock();
+        clock.init();
+        clock.setClockStrategy(new com.telamin.fluxtion.runtime.time.ClockStrategy.ClockStrategyEvent(
+                com.telamin.fluxtion.runtime.time.ClockStrategy.nanoEpochClock()));
+        BinaryLogRecord r = new BinaryLogRecord(clock, 4096);
+        r.updateLogLevel(LogLevel.INFO);
+
+        com.telamin.fluxtion.runtime.event.DefaultEvent typed = new com.telamin.fluxtion.runtime.event.DefaultEvent() { };
+        clock.eventReceived(typed);              // what the generated processor does before the record starts
+        r.triggerObject(typed);
+        r.terminateRecord();
+        Object plain = new Object();
+        clock.eventReceived(plain);
+        BinaryLogRecord r2 = new BinaryLogRecord(clock, 4096);
+        r2.updateLogLevel(LogLevel.INFO);
+        r2.triggerObject(plain);
+        r2.terminateRecord();
+
+        Path file = Files.createTempFile("audit-event-unit", ".flxa");
+        try (BinaryLogWriter w = new BinaryLogWriter(Files.newOutputStream(file), BinaryLogFile.TIME_UNIT_EPOCH_NANOS)) {
+            w.processLogRecord(r);
+            w.processLogRecord(r2);
+        }
+        long millisFloor = 1_000_000_000_000L;        // 2001 in millis
+        long nanosFloor = 1_000_000_000_000_000_000L; // 2001 in nanos
+        List<long[]> times = new ArrayList<>();
+        BinaryLogReader.read(file, new BinaryLogReader.Visitor() {
+            public boolean onRecord(int a, String b, long ev, long log, long end, int f) { times.add(new long[]{ev, log, end}); return true; }
+            public void onEntry(int a, String b, int c, String d, int e, long f) { }
+        });
+        long[] typedTimes = times.get(0);
+        assertTrue("logTime is the strategy's reading, nanoseconds: " + typedTimes[1], typedTimes[1] > nanosFloor);
+        assertTrue("endTime is the strategy's reading, nanoseconds: " + typedTimes[2], typedTimes[2] > nanosFloor);
+        assertTrue("an Event's eventTime is the producer's milliseconds: " + typedTimes[0],
+                typedTimes[0] > millisFloor && typedTimes[0] < 100_000_000_000_000L);
+        long[] plainTimes = times.get(1);
+        assertTrue("a plain object's eventTime is the strategy's reading: " + plainTimes[0], plainTimes[0] > nanosFloor);
+    }
 }
