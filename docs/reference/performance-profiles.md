@@ -59,7 +59,7 @@ config.performanceProfile(EventProcessorConfig.PerformanceProfile.LOWEST_LATENCY
 | Event `toString()` in each record | ✅ | ❌ | ❌ | — |
 | Thread name in each record | ✅ | ❌ | ❌ | — |
 | **`Clock`** — a system clock read per event | ✅ | ✅ | ✅ | ❌ |
-| Which clock STRATEGY that read uses | ✋ | ✋ | ✋ | — |
+| Which clock the AUDIT RECORD reads | ✋ | ✋ | ✋ | — |
 | **Node registration** — supplies each node its `EventLogger` | ✅ | ✅ | ✅ | ❌ |
 | Runtime node-name map (`getNodeById`) | ✅ | ✅ | ✅ | ❌ |
 | **Dirty filtering** — conditional propagation | ✅ | ✅ | ❌ | ❌ |
@@ -150,11 +150,29 @@ recording nothing.
 Every profile except `LOWEST_LATENCY` reads a system clock per event, and an audited record reads one
 again for `endTime`.
 
-**No profile selects a clock strategy — that row is ✋, your call.** A profile is a build-time decision
-and `Clock` is a process-wide singleton whose strategy is installed at runtime, so the two cannot meet:
-choosing `LOW_LATENCY_AUDIT` gets you the audit-path savings but still reads the default clock unless you
-say otherwise. On a profile that reads the clock every event, that is the single largest per-event cost
-left, so it is worth saying otherwise.
+**The graph's clock is not a profile's to change.** It is a process-wide singleton the generator injects
+into every processor, and time-based nodes read it — `FixedRateTrigger.atMillis`, tumbling and sliding
+windows. Swapping its strategy to save a clock read per audited event would also change what every window
+believes the time is.
+
+**So the audit record can have its own clock instead**, chosen at build time and leaving the graph's
+alone:
+
+```java
+config.addLowLatencyEventLog(LogLevel.INFO, AuditRecordFormat.BINARY,
+                             EventLogManager.AuditClock.FAST_PROJECTED);
+```
+
+`SHARED` is the default — one clock in the system, so an audit timestamp and a window's idea of now
+cannot disagree. `FAST_PROJECTED` gives the record a private
+`ClockStrategy.fastEpochMillisClock()`, worth ~4.9 ns per audited event.
+
+!!! warning "What FAST_PROJECTED costs, and why it is not the default"
+    A projected clock anchors once and never sees a later NTP or manual wall-clock correction. Every
+    `logTime` written after a correction is on the old timeline and the drift accumulates for the life
+    of the process — **the graph's clock stays right while the log goes wrong**, which is the wrong way
+    round for a record whose job is saying when things happened. Choose it when nothing correlates these
+    timestamps with anything outside the JVM.
 
 **The default is `System::currentTimeMillis`** — epoch milliseconds, read fresh every time. Two cheaper
 strategies exist and both are **opt-in**, because both trade away something the default promises:
