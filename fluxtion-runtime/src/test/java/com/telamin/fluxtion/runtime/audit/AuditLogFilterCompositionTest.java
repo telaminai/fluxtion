@@ -84,7 +84,7 @@ public class AuditLogFilterCompositionTest {
 
         assertEquals("no record has that EVENT type", 0, out.records.size());
         assertEquals("the diagnostic must name the unmatchable pattern rather than staying silent",
-                "--event target", filter.unmatchablePattern());
+                "--event target", filter.unmatchableWithinSelection());
     }
 
     /** A pattern that does match in its own role must NOT be reported unmatchable. */
@@ -96,6 +96,6 @@ public class AuditLogFilterCompositionTest {
         BinaryLogReader.read(twoRecordsTargetInSecond(), filter);
 
         assertEquals("the node filter matched", 1, out.entries.size());
-        assertNull("nothing is unmatchable here", filter.unmatchablePattern());
+        assertNull("nothing is unmatchable here", filter.unmatchableWithinSelection());
     }
 }

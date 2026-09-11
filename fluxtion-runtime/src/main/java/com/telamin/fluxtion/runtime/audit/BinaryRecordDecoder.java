@@ -98,6 +98,13 @@ public final class BinaryRecordDecoder {
         switch (tag) {
             case TAG_CHARSEQ:
             case TAG_OBJECT: {
+                // Id 0 is "no dictionary entry", which for these tags is how a null value is encoded.
+                // It used to fall through to "#0" - the spelling that means an UNRESOLVED id
+                // everywhere else - so a logged null was indistinguishable from a corrupt reference,
+                // and differed from the text record's "null" despite this method promising parity.
+                if (rawBits == 0) {
+                    return "null";
+                }
                 String name = nameById == null ? null : nameById.apply((int) rawBits);
                 // An unresolved id keeps the diagnostic form rather than inventing a value: the reader
                 // already renders an unknown id as #id and counts it, and a renderer that guessed would

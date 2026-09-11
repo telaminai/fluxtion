@@ -315,32 +315,53 @@ public final class BinaryLogRecord extends LogRecord {
         u16(propertyKey == null ? 0 : keyId(propertyKey));
     }
 
+    /**
+     * The STRING-KEY overloads, routed to slots like their indexed twins.
+     *
+     * <p>These wrote node id, key id, tag and value into {@code buf} — the byte buffer this record
+     * does not publish. {@code length()} reports {@code slots * 8} and the writer reads only slots, so
+     * {@code addRecord("node", "price", 1.25)} produced a record that called itself publishable and a
+     * file declaring zero entries. Every primitive on this family was affected, not just char: the
+     * indexed path was fixed for char and this one was left behind.
+     *
+     * <p>Interning the names here costs a map lookup that the indexed path avoids by caching ids in
+     * the logger. That is the correct trade: this overload exists for callers who have names rather
+     * than ids, and a slower entry is worth more than a silently discarded one.
+     */
     @Override
     public void addRecord(String sourceId, String propertyKey, double value) {
-        head(sourceId, propertyKey);
-        u8(TAG_DOUBLE);
-        i64(Double.doubleToRawLongBits(value));
+        writeSlots(nodeId(sourceId), keyRefOf(propertyKey), TAG_DOUBLE,
+                Double.doubleToRawLongBits(value));
         firstProp = false;
     }
 
     @Override
     public void addRecord(String sourceId, String propertyKey, long value) {
-        head(sourceId, propertyKey); u8(TAG_LONG); i64(value); firstProp = false;
+        writeSlots(nodeId(sourceId), keyRefOf(propertyKey), TAG_LONG, value);
+        firstProp = false;
     }
 
     @Override
     public void addRecord(String sourceId, String propertyKey, int value) {
-        head(sourceId, propertyKey); u8(TAG_INT); i32(value); firstProp = false;
+        writeSlots(nodeId(sourceId), keyRefOf(propertyKey), TAG_INT, value);
+        firstProp = false;
     }
 
     @Override
     public void addRecord(String sourceId, String propertyKey, char value) {
-        head(sourceId, propertyKey); u8(TAG_CHAR); u16(value); firstProp = false;
+        writeSlots(nodeId(sourceId), keyRefOf(propertyKey), TAG_CHAR, value);
+        firstProp = false;
     }
 
     @Override
     public void addRecord(String sourceId, String propertyKey, boolean value) {
-        head(sourceId, propertyKey); u8(TAG_BOOL); u8(value ? 1 : 0); firstProp = false;
+        writeSlots(nodeId(sourceId), keyRefOf(propertyKey), TAG_BOOL, value ? 1L : 0L);
+        firstProp = false;
+    }
+
+    /** A null key keeps id 0, as {@link #head} did, rather than interning the string "null". */
+    private int keyRefOf(String propertyKey) {
+        return propertyKey == null ? 0 : keyId(propertyKey);
     }
 
     /**
@@ -376,7 +397,10 @@ public final class BinaryLogRecord extends LogRecord {
     @Override
     public void addRecord(String sourceId, String propertyKey, Object value) {
         writeSlots(tableId(sourceId), propertyKey == null ? 0 : keyId(propertyKey),
-                TAG_OBJECT, tableId(value == null ? "NULL" : value.toString()));
+                // Id 0 for null, as the CharSequence path does - rather than interning the literal
+                // "NULL", which both burned a dictionary id and rendered with different casing from
+                // the text record's "null".
+                TAG_OBJECT, value == null ? 0 : tableId(value.toString()));
     }
 
     /**

@@ -185,15 +185,16 @@ public class LowLatencyAuditProfileTest {
     }
 
     /**
-     * Selecting BINARY and installing no sink must refuse at init, not at the first published record.
+     * Selecting BINARY and installing no sink must let the build FINISH, then refuse at publish.
      *
-     * <p>The default sink prints records as text and a binary record has no text form, so publishing
-     * one threw {@code UnsupportedOperationException} from inside the event cycle - after a build and a
-     * start that both looked fine. This test previously stopped at {@code init()} and so never reached
-     * it; that is why review found the defect and the suite did not.
+     * <p>This asserted an init-time refusal until round-2 review: generated processors call
+     * {@code EventLogManager.init()} from their own CONSTRUCTOR, so refusing there fired before any
+     * caller could retrieve the auditor and install a sink — 22 errors in the compiler suite, every one
+     * from a generated constructor. The documented sequence is construct, retrieve the auditor, install
+     * the writer, then {@code processor.init()}; the refusal has to leave that window open.
      */
     @Test
-    public void binaryWithNoSinkRefusesAtInitNamingTheFix() {
+    public void binaryWithNoSinkBuildsThenRefusesAtPublish() {
         EventProcessorConfig config = new EventProcessorConfig();
         config.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
         config.addLowLatencyEventLog(com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel.INFO,
@@ -201,9 +202,13 @@ public class LowLatencyAuditProfileTest {
         EventLogManager manager = (EventLogManager) config.getAuditorMap().get(EventLogManager.NODE_NAME);
         manager.clock = new com.telamin.fluxtion.runtime.time.Clock();
         manager.clock.init();
+
+        manager.init();     // MUST NOT throw - this is what a generated constructor does
+        manager.nodeRegistered(new Object(), "node");
+        manager.eventReceived(new Object());
         try {
-            manager.init();
-            fail("binary records with no sink installed must be refused at init");
+            manager.publishLastRecord();
+            fail("a binary record reaching the default text sink must be refused");
         } catch (IllegalStateException refused) {
             assertTrue("the refusal must name what to install, got: " + refused.getMessage(),
                     refused.getMessage().contains("BinaryLogWriter"));

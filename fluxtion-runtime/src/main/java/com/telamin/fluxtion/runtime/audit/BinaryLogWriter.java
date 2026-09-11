@@ -44,8 +44,31 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
     /** The dictionary frame declares a name's byte length in a u16, so this is the hard maximum. */
     private static final int MAX_DICTIONARY_NAME_BYTES = 0xFFFF;
 
-    /** id -> name as actually written to this file, so a conflicting reuse can be refused. */
-    private final java.util.Map<Integer, String> namesWritten = new java.util.HashMap<>();
+    /** The file's dictionary: name -> the id this FILE uses for it. Authoritative over any record. */
+    private final java.util.Map<String, Integer> fileIdByName = new java.util.HashMap<>();
+    private int nextFileId = 1;
+
+    /** Cache so the common case - one record instance, reused - does no per-record work. */
+    private BinaryLogRecord lastRecord;
+    private int lastDictionaryLength = -1;
+    private int[] translation = new int[0];
+
+    /** Dictionary ids are written as a u16. */
+    private static final int MAX_DICTIONARY_ID = 0xFFFF;
+
+    /** Slot 0 packs nodeId in bits 48-63 and keyId in 32-47; both are record-scoped ids. */
+    private static long translateEntry(long slot0, int[] translate) {
+        long node = mapped(slot0 >>> 48, translate);
+        long key = mapped((slot0 >>> 32) & 0xFFFFL, translate);
+        return (node << 48) | ((key & 0xFFFFL) << 32) | (slot0 & 0xFFFFFFFFL);
+    }
+
+    /** Id 0 is "none" and stays 0; an id the record never described passes through unchanged. */
+    private static long mapped(long id, int[] translate) {
+        return id > 0 && id < translate.length && translate[(int) id] != 0 ? translate[(int) id] : id;
+    }
+
+    private static final long TAG_CHARSEQ = 5, TAG_OBJECT = 6;
 
     @Override
     public void processLogRecord(LogRecord logRecord) {
@@ -67,7 +90,7 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
                             + "the record buffer, and re-run.");
         }
         try {
-            emitNewDictionaryEntries(record.dictionary());
+            int[] translate = translationFor(record);
             int entries = record.length() / 16;
             out.write(BinaryLogFile.FRAME_RECORD);
             writeShort(entries);
@@ -76,8 +99,13 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
             writeLong(record.logTime());
             writeLong(record.endTime());
             long[] slots = record.slots();
-            for (int i = 0; i < entries * 2; i++) {
-                writeLong(slots[i]);
+            for (int i = 0; i < entries * 2; i += 2) {
+                writeLong(translateEntry(slots[i], translate));
+                // A CharSequence/Object VALUE is a dictionary id too, so it needs the same mapping.
+                long tag = slots[i] & 0xFFL;
+                writeLong(tag == TAG_CHARSEQ || tag == TAG_OBJECT
+                        ? mapped(slots[i + 1], translate)
+                        : slots[i + 1]);
             }
             recordsWritten++;
         } catch (IOException e) {
@@ -86,56 +114,73 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
     }
 
     /**
-     * Only ids not yet described are written, so the cost is paid once per name, not per record.
+     * Maps this record's ids onto the FILE's ids, emitting any name the file has not described yet.
      *
-     * <p><b>This assumes one record instance per writer</b>, whose dictionary only ever grows —
-     * which is what the runtime does: {@code EventLogManager} holds a single record and clears it
-     * between events, so an id means the same name for the life of the file.
+     * <p><b>Why a translation and not a high-water mark.</b> A dictionary id is scoped to the RECORD
+     * that allocated it; the file's dictionary is scoped to the writer. Those coincide only while one
+     * record instance is reused, which is what the runtime normally does — but not what the API
+     * promises: {@code EventLogControlEvent} can replace the {@code LogRecord} at runtime without
+     * replacing the sink, and {@code EventLogManager} documents that swap as supported. On replacement
+     * the new record re-interns names by iterating a {@code HashMap}, so the same graph can allocate
+     * the same ids to different names.
      *
-     * <p>Hand a SECOND record instance to the same writer and that assumption breaks silently. The new
-     * record's ids restart at 1, every one of them below the high-water mark, so nothing is emitted and
-     * the reader goes on resolving those ids to the FIRST record's names — every entry after the first
-     * record is attributed to the wrong node, in a file that parses cleanly. Found by a test fixture
-     * that built a record per iteration; the check below turns it into a refusal.
+     * <p>Assuming the mark was enough produced a cleanly-parsed file with every entry after the swap
+     * attributed to the wrong node. Refusing the swap instead, as an earlier fix did, was honest but
+     * rejected a published contract. Translating honours it: names are the identity, ids are an
+     * encoding detail of whoever allocated them.
+     *
+     * <p>The common case costs nothing — same record instance, unchanged dictionary, cached map.
      */
-    private void emitNewDictionaryEntries(String[] dictionary) throws IOException {
-        for (int id = 1; id < Math.min(dictionaryWritten, dictionary.length); id++) {
-            String name = dictionary[id];
-            if (name != null && !name.equals(namesWritten.get(id))) {
-                throw new IllegalStateException(
-                        "audit dictionary id " + id + " was written as '" + namesWritten.get(id)
-                                + "' and this record calls it '" + name + "'. Ids are file-scoped, so "
-                                + "reusing one for a second name would silently re-label every earlier "
-                                + "entry. A writer takes ONE record instance, reused across events - "
-                                + "the runtime clears and reuses a single record rather than making a "
-                                + "new one per event.");
-            }
+    private int[] translationFor(BinaryLogRecord record) throws IOException {
+        String[] dictionary = record.dictionary();
+        if (record == lastRecord && dictionary.length == lastDictionaryLength) {
+            return translation;
         }
-        for (int id = dictionaryWritten; id < dictionary.length; id++) {
+        int[] map = new int[dictionary.length];
+        for (int id = 1; id < dictionary.length; id++) {
             String name = dictionary[id];
             if (name == null) {
                 continue;
             }
-            byte[] utf8 = name.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            // The length field is u16. Without this check a longer name wrote a TRUNCATED length
-            // followed by every byte, so the reader resumed mid-string and read payload as frame tags -
-            // "unknown frame type 0x78" some thousands of bytes later, with nothing pointing at the
-            // cause. Reachable from a public API: audit VALUES are interned as dictionary names.
-            if (utf8.length > MAX_DICTIONARY_NAME_BYTES) {
-                throw new IllegalStateException(
-                        "audit dictionary name is " + utf8.length + " UTF-8 bytes; the record format's "
-                                + "length field holds at most " + MAX_DICTIONARY_NAME_BYTES
-                                + ". Writing it would corrupt the file rather than truncate the name. "
-                                + "This is almost always a long String VALUE being logged as an audit "
-                                + "entry; log an identifier instead.");
+            Integer fileId = fileIdByName.get(name);
+            if (fileId == null) {
+                if (nextFileId > MAX_DICTIONARY_ID) {
+                    throw new IllegalStateException(
+                            "audit file dictionary is full: " + MAX_DICTIONARY_ID + " distinct names. "
+                                    + "Ids are a u16 in the record format, so there is no id left for '"
+                                    + name + "'. Start a new file, or log unbounded values as an "
+                                    + "identifier rather than as a distinct string each time.");
+                }
+                fileId = nextFileId++;
+                emitDictionaryEntry(fileId, name);
             }
-            out.write(BinaryLogFile.FRAME_DICT);
-            writeShort(id);
-            writeShort(utf8.length);
-            out.write(utf8);
-            namesWritten.put(id, name);
+            map[id] = fileId;
         }
-        dictionaryWritten = Math.max(dictionaryWritten, dictionary.length);
+        lastRecord = record;
+        lastDictionaryLength = dictionary.length;
+        translation = map;
+        return map;
+    }
+
+    private void emitDictionaryEntry(int id, String name) throws IOException {
+        byte[] utf8 = name.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        // The length field is u16. Without this check a longer name wrote a TRUNCATED length followed
+        // by every byte, so the reader resumed mid-string and read payload as frame tags - "unknown
+        // frame type 0x78" some thousands of bytes later, with nothing pointing at the cause.
+        // Reachable from a public API: audit VALUES are interned as dictionary names.
+        if (utf8.length > MAX_DICTIONARY_NAME_BYTES) {
+            throw new IllegalStateException(
+                    "audit dictionary name is " + utf8.length + " UTF-8 bytes; the record format's "
+                            + "length field holds at most " + MAX_DICTIONARY_NAME_BYTES
+                            + ". Writing it would corrupt the file rather than truncate the name. "
+                            + "This is almost always a long String VALUE being logged as an audit "
+                            + "entry; log an identifier instead.");
+        }
+        out.write(BinaryLogFile.FRAME_DICT);
+        writeShort(id);
+        writeShort(utf8.length);
+        out.write(utf8);
+        fileIdByName.put(name, id);
     }
 
     public long recordsWritten() {

@@ -60,19 +60,38 @@ public class EventLogManager implements Auditor {
     private LogLevel logLevel = LogLevel.INFO;
 
 
-    /**
-     * TRUE while the sink is the implicit {@code System.out::println} nobody asked for.
-     *
-     * <p>Needed because a println sink and a binary record are incompatible in a way that used to
-     * surface as an {@code UnsupportedOperationException} from {@code toString()} on the first
-     * published record — deep in the runtime, long after the build that chose BINARY. See {@link #init()}.
-     */
-    private boolean sinkIsImplicitDefault = false;
-
     public EventLogManager() {
-        this(System.out::println);
-        this.sinkIsImplicitDefault = true;
+        this(DEFAULT_SINK);
     }
+
+    /**
+     * The implicit sink: prints text records, and REFUSES a binary one by name.
+     *
+     * <p>Printing a {@link BinaryLogRecord} used to call {@code toString()} ->
+     * {@code asCharSequence()}, which throws {@code UnsupportedOperationException} by design because a
+     * binary record has no character form. That named neither the sink nor the format that chose it.
+     *
+     * <p><b>The check lives here rather than in {@link #init()}.</b> An earlier fix refused at init and
+     * broke every generated processor: generated code calls {@code EventLogManager.init()} from the
+     * PROCESSOR'S CONSTRUCTOR, so the guard fired while the processor was still being built — before
+     * any caller could retrieve the auditor and install a sink. The documented sequence is construct,
+     * retrieve the auditor, install the writer, then {@code processor.init()}; refusing at auditor init
+     * closed that window. Refusing at first publish keeps it open and still names the fix.
+     */
+    private static final LogRecordListener DEFAULT_SINK = logRecord -> {
+        if (logRecord instanceof BinaryLogRecord) {
+            throw new IllegalStateException(
+                    "binary audit records were selected but no sink was installed to receive them.\n"
+                            + "The default sink prints records as text, and a binary record has no text "
+                            + "form.\n"
+                            + "Install a sink that takes bytes, after the processor is constructed and "
+                            + "before it processes events, for example:\n"
+                            + "    EventLogManager m = processor.getAuditorById(EventLogManager.NODE_NAME);\n"
+                            + "    m.setLogSink(new BinaryLogWriter(Files.newOutputStream(path)));\n"
+                            + "Use AuditRecordFormat.TEXT if you want records on the default sink.");
+        }
+        System.out.println(logRecord);
+    };
 
     public EventLogManager(LogRecordListener sink) {
         if (sink == null) {
@@ -222,7 +241,6 @@ public class EventLogManager implements Auditor {
 
     public void setLogSink(LogRecordListener sink) {
         this.sink = sink;
-        this.sinkIsImplicitDefault = false;
     }
 
     public void setLogGroupId(String groupId) {
@@ -274,27 +292,6 @@ public class EventLogManager implements Auditor {
 
     @Override
     public void init() {
-        // REFUSE AT INIT, not at the first published record. A binary record cannot go to the implicit
-        // System.out::println sink: publishing calls toString(), which calls asCharSequence(), which
-        // throws by design because a binary record has no character form. That surfaced as an
-        // UnsupportedOperationException several frames inside the runtime, naming neither the sink nor
-        // the format that chose it - and only once an event had been processed, so a build and a start
-        // both looked fine.
-        //
-        // Choosing BINARY is a build input; installing somewhere for the bytes to go is not optional,
-        // and there is no safe default: binary framing written to a terminal as text is not a usable
-        // log. So the requirement is stated here, where it can name the fix.
-        if (binaryRecord && sinkIsImplicitDefault) {
-            throw new IllegalStateException(
-                    "binary audit records were selected but no sink was installed to receive them.\n"
-                            + "The default sink prints records as text, and a binary record has no text "
-                            + "form - publishing one would throw inside the event cycle.\n"
-                            + "Install a sink that takes bytes before init(), for example:\n"
-                            + "    manager.setLogSink(new BinaryLogWriter(Files.newOutputStream(path)));\n"
-                            + "where manager is the EventLogManager auditor - "
-                            + "processor.getAuditorById(EventLogManager.NODE_NAME).\n"
-                            + "Use AuditRecordFormat.TEXT if you want records on the default sink.");
-        }
         logRecord = binaryRecord ? new BinaryLogRecord(clock) : new LogRecord(clock);
         logRecord.printEventToString(printEventToString);
         logRecord.setPrintThreadName(printThreadName);

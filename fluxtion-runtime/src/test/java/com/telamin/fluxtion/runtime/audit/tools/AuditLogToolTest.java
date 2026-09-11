@@ -149,13 +149,23 @@ public class AuditLogToolTest {
         assertEquals(2, count(r.out, "eventLogRecord:"));
     }
 
-    /** A pattern nothing can match must say so, rather than presenting an empty log as a result. */
+    /**
+     * A pattern nothing can match must say so, rather than presenting an empty log as a result — and
+     * must state the SCOPE of that claim.
+     *
+     * <p>It used to say "no name in this log matches", which is false whenever the name exists under
+     * another {@code --event} or outside the time range: entries are only observed for records those
+     * filters admitted, so the diagnostic can only speak for the current selection.
+     */
     @Test
-    public void anUnmatchablePatternIsReportedRatherThanReturningSilence() throws IOException {
+    public void anUnmatchablePatternIsReportedWithItsScope() throws IOException {
         Run r = run("--node", "noSuchBook*");
         assertEquals("nothing matched", 0, count(r.out, "eventLogRecord:"));
-        assertTrue(r.err, r.err.contains("no name in this log matches"));
         assertTrue(r.err, r.err.contains("noSuchBook*"));
+        assertTrue("the diagnostic must scope its claim to the selection:\n" + r.err,
+                r.err.contains("records this query selected"));
+        assertFalse("and must not claim whole-file absence:\n" + r.err,
+                r.err.contains("no name in this log matches"));
     }
 
     @Test

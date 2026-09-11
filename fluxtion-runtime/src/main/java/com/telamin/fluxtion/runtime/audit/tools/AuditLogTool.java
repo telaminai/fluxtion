@@ -148,11 +148,16 @@ public final class AuditLogTool {
         }
         sink.close();
 
-        String unmatchable = filter.unmatchablePattern();
+        String unmatchable = filter.unmatchableWithinSelection();
         if (unmatchable != null) {
-            err.println("no name in this log matches " + unmatchable
-                    + " — the pattern cannot match anything here, so the empty result is the pattern, "
-                    + "not the log");
+            // SCOPED TO THE SELECTION, and says so. Entries are only seen for records the event and
+            // time filters admitted, so a node present only under another event is not observed - and
+            // the old wording, "no name in this log matches", then stated something false.
+            err.println("nothing matching " + unmatchable
+                    + " appears in the records this query selected — so the empty result is the "
+                    + "pattern, not the data. Note the scope: a name used only under another --event, "
+                    + "or outside the time range, is not counted here. Widen the other filters to ask "
+                    + "whether it exists in the file at all.");
         }
         if (stats) {
             err.println("records read      : " + result.records);

@@ -151,19 +151,114 @@ public class BinaryAuditEndToEndTest {
     }
 
     /**
-     * Selecting BINARY with no sink installed used to build, start, and then throw from inside the
-     * first event cycle. It refuses at init now, naming the fix.
+     * No sink installed: the refusal comes from the DEFAULT SINK at publish, naming the fix.
+     *
+     * <p>It was briefly refused at {@code init()} instead, which broke every generated processor:
+     * generated code calls {@code EventLogManager.init()} from the PROCESSOR'S CONSTRUCTOR, so the
+     * guard fired before any caller could retrieve the auditor and install a sink — 22 errors in the
+     * compiler suite. The documented sequence is construct, retrieve the auditor, install the writer,
+     * then {@code processor.init()}. Refusing at publish keeps that window open.
      */
     @Test
-    public void binaryWithTheDefaultSinkRefusesAtInitNamingTheFix() {
+    public void binaryWithTheDefaultSinkRefusesAtPublishNamingTheFix() {
         EventLogManager manager = new EventLogManager().tracingOff().binaryRecord(true);
+        manager.clock = new Clock();
+        manager.clock.init();
+        manager.init();     // MUST NOT throw - this is the generated processor's constructor
+        manager.nodeRegistered(new Object(), "node");
+        manager.eventReceived(new Object());
         try {
-            manager.init();
-            fail("binary records with the implicit println sink must be refused at init");
+            manager.publishLastRecord();
+            fail("a binary record reaching the default text sink must be refused");
         } catch (IllegalStateException refused) {
             String m = refused.getMessage();
             assertTrue("must name the sink type to install, got: " + m, m.contains("BinaryLogWriter"));
             assertTrue("must offer the text alternative, got: " + m, m.contains("TEXT"));
+        }
+    }
+
+    /**
+     * The STRING-KEY primitive overloads must reach the file.
+     *
+     * <p>They wrote to the byte buffer this record does not publish, so every one of them produced a
+     * record that called itself publishable and a file declaring zero entries. char was fixed on the
+     * INDEXED path and this family was left behind.
+     */
+    @Test
+    public void stringKeyPrimitivesReachTheFile() throws Exception {
+        Path file = Files.createTempFile("audit-stringkey", ".flxa");
+        BinaryLogRecord r = record();
+        r.addRecord("node", "d", 1.25d);
+        r.addRecord("node", "l", 7L);
+        r.addRecord("node", "i", 3);
+        r.addRecord("node", "c", 'z');
+        r.addRecord("node", "b", true);
+        assertTrue("the record must report itself publishable", r.terminateRecord());
+        try (BinaryLogWriter w = new BinaryLogWriter(Files.newOutputStream(file))) {
+            w.processLogRecord(r);
+        }
+        List<String> values = new ArrayList<>();
+        BinaryLogReader.Result result = BinaryLogReader.read(file, new BinaryLogReader.Visitor() {
+            public boolean onRecord(int a, String b, long c, long d, long e, int f) { return true; }
+            public void onEntry(int nodeId, String node, int keyId, String key, int tag, long bits) {
+                values.add(BinaryRecordDecoder.renderValue(tag, bits));
+            }
+        });
+        assertEquals("all five string-key primitives must reach the file", 5, result.entries);
+        assertEquals("[1.25, 7, 3, z, true]", values.toString());
+    }
+
+    /**
+     * A record REPLACED at runtime keeps writing a correct file.
+     *
+     * <p>{@code EventLogControlEvent} can swap the {@code LogRecord} without swapping the sink, and
+     * the runtime documents that as supported. The new record re-interns names, so the same graph can
+     * allocate the same ids to different names — which silently relabelled every later entry, then
+     * (briefly) was refused outright. The writer translates instead: names are the identity.
+     */
+    @Test
+    public void aReplacementRecordStillWritesCorrectNames() throws Exception {
+        Path file = Files.createTempFile("audit-swap", ".flxa");
+        Clock clock = new Clock();
+        clock.init();
+        try (BinaryLogWriter w = new BinaryLogWriter(Files.newOutputStream(file))) {
+            BinaryLogRecord first = new BinaryLogRecord(clock, 4096);
+            first.updateLogLevel(LogLevel.INFO);
+            first.triggerObject(new Object());
+            first.addRecord("z", "k", 1);
+            first.terminateRecord();
+            w.processLogRecord(first);
+
+            // A DIFFERENT record instance, interning a different name into the same id.
+            BinaryLogRecord second = new BinaryLogRecord(clock, 4096);
+            second.updateLogLevel(LogLevel.INFO);
+            second.triggerObject(new Object());
+            second.addRecord("a", "k", 2);
+            second.terminateRecord();
+            w.processLogRecord(second);
+        }
+        List<String> nodes = new ArrayList<>();
+        BinaryLogReader.read(file, new BinaryLogReader.Visitor() {
+            public boolean onRecord(int a, String b, long c, long d, long e, int f) { return true; }
+            public void onEntry(int nodeId, String node, int keyId, String key, int tag, long bits) {
+                nodes.add(node);
+            }
+        });
+        assertEquals("each entry must carry the name its own record used", "[z, a]", nodes.toString());
+    }
+
+    /** The dictionary-exhaustion refusal, pinned. */
+    @Test
+    public void anExhaustedDictionaryIsRefusedNamingTheIdentityTrap() {
+        BinaryLogRecord r = record();
+        try {
+            for (int i = 0; i < Short.MAX_VALUE + 10; i++) {
+                r.addRecord("node", "k", new String("v" + i));   // a fresh instance every call
+            }
+            fail("exhausting the dictionary must be refused, not wrapped to a negative id");
+        } catch (IllegalStateException refused) {
+            assertTrue("must explain identity interning, got: " + refused.getMessage(),
+                    refused.getMessage().contains("IDENTITY"));
         }
     }
 }

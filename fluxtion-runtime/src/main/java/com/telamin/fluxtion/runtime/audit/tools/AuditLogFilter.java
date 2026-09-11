@@ -60,7 +60,7 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
      *
      * <p>The dictionary is untyped: one id space for event types, node names, keys and string values.
      * Matching a glob against every name therefore said "--event matched" when the pattern only ever
-     * matched a NODE name, so {@link #unmatchablePattern()} stayed silent and the CLI reported an empty
+     * matched a NODE name, so {@link #unmatchableWithinSelection()} stayed silent and the CLI reported an empty
      * result instead of "nothing in this log is called that". Role is only knowable where an id is
      * consumed, so it is recorded there.
      */
@@ -104,6 +104,12 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
     @Override
     public boolean onRecord(int eventTypeId, String eventType,
                             long eventTime, long logTime, long endTime, int entryCount) {
+        // ROLE DISCOVERY FIRST, before any filter can decline the record. It answers "does this name
+        // exist in this role ANYWHERE in the file", which is what the unmatchable diagnostic claims -
+        // and recording it after the time, limit and event filters made the answer a property of the
+        // query it was meant to explain. A node present only under another event was then reported as
+        // absent from the file, which is false: the name exists, the combination does not match.
+        eventIdsSeen.set(eventTypeId);
         recordOpen = false;
         if (matchedRecords >= limit) {
             return false;
@@ -111,7 +117,6 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
         if (logTime < from || logTime > to) {
             return false;
         }
-        eventIdsSeen.set(eventTypeId);
         if (eventGlob != null && !eventIds.get(eventTypeId)) {
             return false;
         }
@@ -136,11 +141,12 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
 
     @Override
     public void onEntry(int nodeId, String node, int keyId, String key, int tag, long rawBits) {
+        // As in onRecord: observe the role before any filter declines the entry.
+        nodeIdsSeen.set(nodeId);
+        keyIdsSeen.set(keyId);
         if (!recordOpen) {
             return;
         }
-        nodeIdsSeen.set(nodeId);
-        keyIdsSeen.set(keyId);
         if (nodeGlob != null && !nodeIds.get(nodeId)) {
             return;
         }
@@ -174,13 +180,21 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
      * rather than reporting an empty result as though the log simply had nothing of interest.
      */
     /**
-     * The pattern that matched no name IN ITS OWN ROLE, or null.
+     * The pattern that matched no name in its own role <b>within the records this query reached</b>,
+     * or null.
      *
      * <p>Asks whether any id used as an event type / node / key matches the glob, rather than whether
      * any dictionary name anywhere does. The dictionary is one untyped id space, so the weaker question
      * answered "yes" for an {@code --event} pattern that only ever matched a node name.
+     *
+     * <p><b>The scope is the selection, not the file, and the caller must say so.</b> Entries are only
+     * offered for records the event and time filters admitted — that early skip is the cheap path those
+     * filters exist for — so a node appearing only under another event is not observed here. Claiming
+     * whole-file absence from this would be false: the name exists, the combination does not match.
+     * Answering the stronger question would mean reading every record of every file, which is a
+     * different feature with a different cost.
      */
-    public String unmatchablePattern() {
+    public String unmatchableWithinSelection() {
         if (eventGlob != null && noneSeenMatching(eventIds, eventIdsSeen)) { return "--event " + eventGlob; }
         if (nodeGlob != null && noneSeenMatching(nodeIds, nodeIdsSeen)) { return "--node " + nodeGlob; }
         if (keyGlob != null && noneSeenMatching(keyIds, keyIdsSeen)) { return "--key " + keyGlob; }
