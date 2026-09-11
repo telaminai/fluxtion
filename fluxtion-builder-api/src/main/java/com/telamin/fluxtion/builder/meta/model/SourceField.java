@@ -51,6 +51,23 @@ public interface SourceField {
      *
      * @return true if field is an auditor, false otherwise
      */
+    /**
+     * The node's captured scalar field state, for targets that cannot reflect.
+     *
+     * <p>Empty by default, so every existing implementation and every existing target is unaffected:
+     * the Java generator keeps reflecting over the live instance as it always has, and a target that
+     * ignores this list behaves exactly as before.
+     *
+     * <p>It exists because {@link Field#getInstance()} is transient and this interface carries no
+     * values, which together meant a non-Java target received none of a node's state and could not
+     * know it was missing. See {@link FieldValue}.
+     *
+     * @return captured scalar fields, never null
+     */
+    default java.util.List<FieldValue> getFieldValues() {
+        return java.util.Collections.emptyList();
+    }
+
     boolean isAuditor();
 
     /**

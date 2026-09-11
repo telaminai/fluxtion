@@ -26,6 +26,14 @@ public class Field implements SourceField, Serializable {
     private boolean auditInvocations;
     private boolean auditEventReceipt = true;
     private final boolean generic;
+    /**
+     * Captured at construction, because {@link #instance} is transient and will not survive the wire.
+     *
+     * <p>Not final and defaulted: the constructors delegate to one another, so a final field assigned
+     * in each would be assigned twice on some paths and not at all on others. One assignment point,
+     * in the only constructor that is handed an instance.
+     */
+    private java.util.List<FieldValue> fieldValues = java.util.Collections.emptyList();
 
     public Field(String fqn, String name, Object instance, boolean publicAccess) {
         this.fqn = fqn;
@@ -44,6 +52,7 @@ public class Field implements SourceField, Serializable {
             auditEventReceipt = true;
         }
         this.generic = instance != null && instance.getClass().getTypeParameters().length > 0;
+        this.fieldValues = FieldValueCapture.capture(instance);
     }
 
     /**
@@ -124,7 +133,16 @@ public class Field implements SourceField, Serializable {
         return fieldClassName;
     }
 
+    /** Attached by the model when the values were captured before the instance was dropped. */
+    public void setFieldValues(java.util.List<FieldValue> fieldValues) {
+        this.fieldValues = fieldValues == null ? java.util.Collections.emptyList() : fieldValues;
+    }
+
     @Override
+    public java.util.List<FieldValue> getFieldValues() {
+        return fieldValues == null ? java.util.Collections.emptyList() : fieldValues;
+    }
+
     public boolean isAuditor() {
         return auditor;
     }

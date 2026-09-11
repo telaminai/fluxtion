@@ -113,6 +113,23 @@ public class FluxtionCompilerConfig implements Serializable {
     @Setter
     private String sourceGeneratorId;
 
+    /**
+     * Which LANGUAGE to emit for this compile — {@code "cpp"}, or null for Java (M59.3).
+     *
+     * <p>Separate from {@link #sourceGeneratorId} because that field answers a different question and
+     * cannot answer both. {@code sourceGeneratorId} selects the ROUTE: the generator resolves
+     * {@code useRemote = "remote-http".equals(id)}, so setting it to {@code "cpp"} means <i>generate
+     * C++ locally</i> and there is no value that means <i>generate C++ on the remote server</i>.
+     *
+     * <p>So: route with {@code sourceGeneratorId}, language with this. Setting only this one still
+     * works and means "emit that language, wherever generation happens to run" — which is what a
+     * caller usually means.
+     *
+     * <p>not required, default = unset (Java).
+     */
+    @Setter
+    private String targetId;
+
     @Setter
     private boolean generateDescription;
 
