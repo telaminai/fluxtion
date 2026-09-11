@@ -59,7 +59,7 @@ config.performanceProfile(EventProcessorConfig.PerformanceProfile.LOWEST_LATENCY
 | Event `toString()` in each record | ✅ | ❌ | ❌ | — |
 | Thread name in each record | ✅ | ❌ | ❌ | — |
 | **`Clock`** — a system clock read per event | ✅ | ✅ | ✅ | ❌ |
-| Which clock the AUDIT RECORD reads | ✋ | ✋ | ✋ | — |
+| Which clock STRATEGY that read uses | ✋ | ✋ | ✋ | — |
 | **Node registration** — supplies each node its `EventLogger` | ✅ | ✅ | ✅ | ❌ |
 | Runtime node-name map (`getNodeById`) | ✅ | ✅ | ✅ | ❌ |
 | **Dirty filtering** — conditional propagation | ✅ | ✅ | ❌ | ❌ |
@@ -150,29 +150,20 @@ recording nothing.
 Every profile except `LOWEST_LATENCY` reads a system clock per event, and an audited record reads one
 again for `endTime`.
 
-**The graph's clock is not a profile's to change.** It is a process-wide singleton the generator injects
-into every processor, and time-based nodes read it — `FixedRateTrigger.atMillis`, tumbling and sliding
-windows. Swapping its strategy to save a clock read per audited event would also change what every window
-believes the time is.
+**No profile selects a clock strategy — that row is ✋, your call.** A profile is a build-time decision
+and `Clock` is a process-wide singleton whose strategy is installed at runtime, so the two cannot meet:
+choosing `LOW_LATENCY_AUDIT` still reads the default clock unless you say otherwise.
 
-**So the audit record can have its own clock instead**, chosen at build time and leaving the graph's
-alone:
+!!! note "Giving the audit record its own clock does not help, and was tried"
+    The obvious shortcut — a private fast clock for the record, leaving the graph's alone — makes the
+    path **slower**. `ClockFactory` registers the graph `Clock` as an auditor unconditionally and
+    `Clock.eventReceived` reads the wall clock on every event, so a private clock is a *second* read,
+    not a cheaper one. It also misses `shareReading`, which the generated processor calls on the graph
+    clock so a re-entrant wave reuses one timestamp, and it never receives `ClockStrategyEvent`, so a
+    replay that makes graph time deterministic would leave audit timestamps on machine time.
 
-```java
-config.addLowLatencyEventLog(LogLevel.INFO, AuditRecordFormat.BINARY,
-                             EventLogManager.AuditClock.FAST_PROJECTED);
-```
-
-`SHARED` is the default — one clock in the system, so an audit timestamp and a window's idea of now
-cannot disagree. `FAST_PROJECTED` gives the record a private
-`ClockStrategy.fastEpochMillisClock()`, worth ~4.9 ns per audited event.
-
-!!! warning "What FAST_PROJECTED costs, and why it is not the default"
-    A projected clock anchors once and never sees a later NTP or manual wall-clock correction. Every
-    `logTime` written after a correction is on the old timeline and the drift accumulates for the life
-    of the process — **the graph's clock stays right while the log goes wrong**, which is the wrong way
-    round for a record whose job is saying when things happened. Choose it when nothing correlates these
-    timestamps with anything outside the JVM.
+    Avoiding the graph clock read entirely — when no node actually uses time — needs the compiler to
+    know that, and is a generator change rather than a runtime one.
 
 **The default is `System::currentTimeMillis`** — epoch milliseconds, read fresh every time. Two cheaper
 strategies exist and both are **opt-in**, because both trade away something the default promises:

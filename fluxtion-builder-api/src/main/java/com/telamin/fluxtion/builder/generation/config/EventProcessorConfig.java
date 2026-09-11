@@ -544,22 +544,6 @@ public class EventProcessorConfig {
      * @param entryLevel threshold for the entries nodes themselves write
      * @param format     {@link AuditRecordFormat#TEXT} unless you have a reader for the binary form
      */
-    /**
-     * As {@link #addLowLatencyEventLog(LogLevel, AuditRecordFormat)}, choosing where the record's
-     * timestamps come from.
-     *
-     * <p>{@link EventLogManager.AuditClock#FAST_PROJECTED} gives the audit record its own cheaper clock
-     * and leaves the graph's alone — a profile cannot swap the graph's clock, because time-based nodes
-     * read it. Read that enum before choosing it: the saving is per audited event, and the cost is that
-     * {@code logTime} stops tracking wall-clock corrections.
-     */
-    public EventProcessorConfig addLowLatencyEventLog(LogLevel entryLevel, AuditRecordFormat format,
-                                                     EventLogManager.AuditClock auditClock) {
-        addLowLatencyEventLog(entryLevel, format);
-        ((EventLogManager) getAuditorMap().get(EventLogManager.NODE_NAME)).auditClock(auditClock);
-        return this;
-    }
-
     public EventProcessorConfig addLowLatencyEventLog(LogLevel entryLevel, AuditRecordFormat format) {
         EventLogManager manager = new EventLogManager()
                 .tracingOff()

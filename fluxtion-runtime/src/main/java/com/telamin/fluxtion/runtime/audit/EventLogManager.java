@@ -48,19 +48,6 @@ public class EventLogManager implements Auditor {
     public LogLevel traceLevel;
     @Inject
     public Clock clock;
-
-    /**
-     * Which clock the AUDIT RECORD's timestamps come from. Build input; {@code SHARED} by default.
-     *
-     * @see #auditClock(AuditClock)
-     */
-    public AuditClock auditClock = AuditClock.SHARED;
-
-    /**
-     * The private clock, built at {@link #init()} when {@link #auditClock} is not {@code SHARED}.
-     * Driven by this manager's own auditor callbacks, so it never touches the graph's clock.
-     */
-    private transient Clock privateAuditClock;
     private boolean canTrace = false;
     /**
      * Build the binary record at {@link #init()} rather than swapping one in at runtime.
@@ -201,9 +188,7 @@ public class EventLogManager implements Auditor {
             newLogRecord.updateLogLevel(logRecord.getLogLevel());
             newLogRecord.replaceBuffer(logRecord.sb);
             this.logRecord = newLogRecord;
-            // recordClock(), not clock: a record swapped in at runtime must read the same clock the
-            // build chose, or the timestamps change source halfway through a log.
-            this.logRecord.setClock(recordClock());
+            this.logRecord.setClock(clock);
             updateLogRecord();
         }
 
@@ -282,51 +267,6 @@ public class EventLogManager implements Auditor {
      * Build a {@link BinaryLogRecord} at {@link #init()} instead of the text record. Set by
      * {@code EventProcessorConfig.addLowLatencyEventLog(level, BINARY)} so the format is a build input.
      */
-    /**
-     * Where the audit record's {@code logTime} and {@code endTime} come from.
-     *
-     * <p>The graph's {@link Clock} is a process-wide singleton the generator injects into every
-     * processor, and time-based nodes read it — {@code FixedRateTrigger.atMillis}, tumbling and sliding
-     * windows. Its strategy is therefore not the audit path's to change: swapping it for a cheaper one
-     * to save a clock read per audited event also changes what every window in the graph believes the
-     * time is. That is why a PROFILE could not select a fast clock, and why this is a separate clock
-     * rather than a strategy on the shared one.
-     */
-    public enum AuditClock {
-        /**
-         * The graph's clock. <b>Default.</b> One clock in the system, so an audit timestamp and a
-         * window's idea of now cannot disagree.
-         */
-        SHARED,
-        /**
-         * A private {@link com.telamin.fluxtion.runtime.time.ClockStrategy#fastEpochMillisClock()}
-         * for the audit record only, leaving the graph's clock alone.
-         *
-         * <p>Saves the difference between a {@code currentTimeMillis} call and a {@code nanoTime} one
-         * on every audited event — ~4.9 ns measured on an Apple M4 — and the graph's time-based nodes
-         * are unaffected.
-         *
-         * <p><b>The cost is in the log, and it is the reason this is not the default.</b> A projected
-         * clock anchors once and never sees a later NTP or manual wall-clock correction, so every
-         * {@code logTime} written after a correction is on the old timeline, and the drift accumulates
-         * for the life of the process. The graph's clock stays right while the LOG goes wrong, which is
-         * the wrong way round for a record whose job is saying when things happened. Choose it when
-         * nothing correlates these timestamps with anything outside the JVM.
-         */
-        FAST_PROJECTED
-    }
-
-    /** @see AuditClock */
-    public EventLogManager auditClock(AuditClock auditClock) {
-        this.auditClock = auditClock == null ? AuditClock.SHARED : auditClock;
-        return this;
-    }
-
-    /** The clock the record reads: the private one when configured, the graph's otherwise. */
-    private Clock recordClock() {
-        return privateAuditClock == null ? clock : privateAuditClock;
-    }
-
     public EventLogManager binaryRecord(boolean binaryRecord) {
         this.binaryRecord = binaryRecord;
         return this;
@@ -355,17 +295,7 @@ public class EventLogManager implements Auditor {
                             + "processor.getAuditorById(EventLogManager.NODE_NAME).\n"
                             + "Use AuditRecordFormat.TEXT if you want records on the default sink.");
         }
-        if (auditClock == AuditClock.FAST_PROJECTED) {
-            privateAuditClock = new Clock();
-            privateAuditClock.init();
-            privateAuditClock.setClockStrategy(
-                    new com.telamin.fluxtion.runtime.time.ClockStrategy.ClockStrategyEvent(
-                            com.telamin.fluxtion.runtime.time.ClockStrategy.fastEpochMillisClock()));
-        } else {
-            privateAuditClock = null;
-        }
-        Clock recordClock = recordClock();
-        logRecord = binaryRecord ? new BinaryLogRecord(recordClock) : new LogRecord(recordClock);
+        logRecord = binaryRecord ? new BinaryLogRecord(clock) : new LogRecord(clock);
         logRecord.printEventToString(printEventToString);
         logRecord.setPrintThreadName(printThreadName);
         node2Logger = new HashMap<>();
@@ -375,17 +305,11 @@ public class EventLogManager implements Auditor {
 
     @Override
     public void eventReceived(Event triggerEvent) {
-        if (privateAuditClock != null) {
-            privateAuditClock.eventReceived(triggerEvent);
-        }
         logRecord.triggerEvent(triggerEvent);
     }
 
     @Override
     public void eventReceived(Object triggerEvent) {
-        if (privateAuditClock != null) {
-            privateAuditClock.eventReceived(triggerEvent);
-        }
         logRecord.triggerObject(triggerEvent);
     }
 
