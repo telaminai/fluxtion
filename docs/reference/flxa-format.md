@@ -261,7 +261,10 @@ writing typed values into a grammar that types by inspection. These rules keep t
 5. Keys and node names outside `[A-Za-z0-9_$.-]` are quoted.
 6. `event:` carries the simple class name and `eventType:` the full one; neither may contain a line
    break, so one in the dictionary is made visible rather than allowed to start a scalar.
-7. Consecutive entries of one node are one `- node: { … }` item; a TRACE entry is `invoked: true`.
+7. Consecutive entries of one node are one `- node: { … }` item; a TRACE entry is `invoked: true`,
+   and a consumer deciding whether a record traces every invocation MUST accept that marker under
+   the same every-node rule it applies to the text runtime's `method` key — a binary TRACE carries no
+   method name, only "this node ran".
 
 Fixtures f13 and f14 are the test: every value MUST parse back to exactly the string logged, with
 no entry manufactured and none lost.
@@ -366,3 +369,26 @@ tested:
   delivering the first file's records (f26). Rolling is the writer's job — a new writer, a new file,
   a new dictionary — and a rolled file's dictionary is not carried into the next one; ids used in a
   later file whose names were defined in an earlier one are unresolved there (§4, f11).
+
+## 16. Use cases the format supports, and what the product does with them today
+
+The sections above specify a file: written whole, read whole, by one processor. Production uses
+a log in more ways than that, and this section says, for each, what the format supports and
+what is implemented, so that a consumer does not infer the second from the first.
+
+| use case | the format | the runtime | the analyser |
+|---|---|---|---|
+| **Tailing a file being written** | supported: frames are self-delimiting, a partial trailing frame is the normal state of an open file (§9.3), and a reader that re-reads from the last whole frame delivers nothing twice. Nothing distinguishes "still being written" from "cut" except that the tail later completes. | the reader reads whole files; no tail mode | **unimplemented.** The binary reader declares `follow=false`; opening a live file shows what was whole at open. |
+| **Rolling** | a new file is a new writer: new header, new dictionary; ids are never carried across files (§4, §15). | **no rolling writer.** Rolling is the installer's job today: close the writer, open a new one. | roll sets are text only; a binary member is refused by name. Opening a day of binary files is unimplemented. |
+| **Large files** | no limit; a reader MAY map or stream (§9). | maps up to 2 GB, streams above it. | the SPI store holds every record's constructed text in memory; a large binary log costs more heap than the same log as text. No mapped store for binary. |
+| **Exported service calls and timers** | **not representable.** The record has no `eventToString` and no *not event-driven* sentinel; an exported call is a record whose event type is the service's class. | as the format | the exported-call dimension (text C13) cannot be derived; every binary record is an event. |
+| **Pairing with a graph** | out of scope: the file carries no processor identity (§10). | — | the binary reader supplies no graph; coverage and readiness need one from elsewhere. A sidecar convention is not defined. |
+| **Several processors in one process** | one file per processor is implied and MUST be the rule: the format cannot interleave. | — | no naming convention for which file is which processor. |
+| **Tamper evidence** | **none.** No checksum, no signature (§15). A file can be edited without detection; f09–f12 are byte edits. A version-two trailer with a running hash is the natural addition and version one's layout does not preclude it. | — | — |
+| **Redaction and retention** | a String value lives once, in the dictionary: redacting it is one DICT frame, and every record that referenced it then reads the redacted text. Nothing marks a file as redacted. | — | — |
+| **Replay** | **not a journal.** Values are `toString()` text, not event payloads; a log cannot re-drive a processor. | — | — |
+| **Non-JVM readers** | this page is sufficient to write one; the C++ writer is held to the Java writer by parity tests, not by byte-equality against the corpus (§13). | the corpus ships in the runtime jar, not as a download. | — |
+| **Clock domains** | the unit is stated (§7); a projected strategy's readings do not track wall-clock corrections and the file does not say which strategy wrote it. | documented on the clock strategies | presents milliseconds UTC; refuses other units. |
+
+Where a cell says unimplemented, that is the statement: the format does not promise it, and a
+consumer must not present it as if it did.
