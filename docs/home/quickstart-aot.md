@@ -111,6 +111,12 @@ Received event: Hello, World!
 
 ### What happens during AOT compilation?
 
+!!! tip "Tuning the generated processor"
+    The `compileAot(node1, node2)` form above takes node instances. To change how the processor is
+    *generated* — dropping dirty flags, auditors or the node-name map for lower latency — use the
+    config-builder overload instead: see
+    [Setting a profile in your build](../reference/performance-profiles.md#setting-a-profile-in-your-build).
+
 When you call `Fluxtion.compileAot`, the following steps occur:
 
 1.  **Analysis**: Fluxtion analyzes the relationship between your nodes (`StringHandler` in this case).

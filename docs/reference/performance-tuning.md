@@ -273,6 +273,11 @@ so the only way to know you have them all is to check.
 
 ### The whole configuration
 
+Every `config.` line below is set on the `EventProcessorConfig` you get from the config-builder form of
+`Fluxtion.compileAot` — see
+[Setting a profile in your build](performance-profiles.md#setting-a-profile-in-your-build) if you are
+coming from the quickstart's `compileAot(node1, node2)` form, which has nowhere to put one.
+
 ```java
 // ---- build ------------------------------------------------------------------
 @OnTrigger(failBuildIfMissingBooleanReturn = false)         // void trigger: no dirty flag, no guard

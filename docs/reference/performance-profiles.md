@@ -6,6 +6,45 @@ what you give up — so the trade is visible before you pick one.
 Every figure is from the [performance benchmark](performance.md): a four-node market-data graph, one
 thread, Apple M4, ns/event.
 
+## Setting a profile in your build
+
+A profile is a **generation-time** decision: it changes the source the compiler emits, so it is set where
+you define the graph, not on the running processor. If you arrived from the
+[AOT quickstart](../home/quickstart-aot.md), that quickstart's `Fluxtion.compileAot(node1, node2)` form
+takes node instances and gives you nowhere to put one. Use the **config-builder** overload instead — the
+lambda receives the `EventProcessorConfig` every snippet on this page calls `config`:
+
+```java
+var dataFlow = Fluxtion.compileAot(c -> {
+    c.performanceProfile(PerformanceProfile.LOWEST_LATENCY);   // the profile
+    c.addNode(new MyNode(...), "myNode");                      // then the graph, as usual
+});
+```
+
+For a real build you normally want to name the output rather than have it derived from the enclosing
+class and method:
+
+```java
+Fluxtion.compileAot(c -> {
+    c.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT)
+     .addLowLatencyEventLog(LogLevel.INFO, AuditRecordFormat.BINARY);
+    c.addNode(new MyNode(...), "myNode");
+}, "com.example.trading", "PricingProcessor");
+```
+
+**Order matters when you override.** The profile sets a bundle; a per-setting call after it wins. So
+`c.performanceProfile(LOWEST_LATENCY); c.setSupportReentrancy(true);` keeps everything the profile did
+except re-entrancy. Reverse those two lines and the profile overwrites your override.
+
+!!! warning "Not every profile suits every graph, and the build says so"
+    `LOWEST_LATENCY` turns off node-name lookup, which the functional DSL requires. Applying it to a DSL
+    graph is **refused at build time**, naming the flag (`setSupportNodeNameLookup(false)`) and a node it
+    affects — rather than failing later as a `NullPointerException` inside the runtime. If you get that
+    refusal, either build the graph imperatively or use `LOW_LATENCY_AUDIT`, which keeps the lookup.
+
+Because the profile is baked into the emitted source, **a committed generated processor carries the
+profile it was generated under**. Changing profile means regenerating; there is no runtime switch.
+
 ## The four profiles
 
 ```java

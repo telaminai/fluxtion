@@ -33,6 +33,9 @@ where every node logs, the ratio measured around 8×.
 
 The record format is a **build input**:
 
+`config` here is the `EventProcessorConfig` from the config-builder form of `Fluxtion.compileAot` — see
+[Setting a profile in your build](../reference/performance-profiles.md#setting-a-profile-in-your-build).
+
 ```java
 config.performanceProfile(EventProcessorConfig.PerformanceProfile.LOW_LATENCY_AUDIT)
       .addLowLatencyEventLog(LogLevel.INFO);                           // TEXT — the default
