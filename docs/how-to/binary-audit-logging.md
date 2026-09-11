@@ -68,8 +68,9 @@ nanosecond `logTime` and millisecond `eventTime`. The analyser reads millisecond
 file whose header says otherwise, before it delivers a record.
 
 **A file whose header states no unit is refused by the analyser, and by any `--from`/`--to` query.**
-Only pre-release runtimes wrote such a header, and some of them wrote nanoseconds under it, so
-nothing assumes. State the unit yourself, into the evidence:
+Code 0 means the writer stated none: older snapshots wrote it as the reserved value, some of them
+under nanosecond readings, and the explicit-unit constructor still accepts it, so nothing assumes.
+State the unit yourself, into the evidence:
 
 ```bash
 java -cp fluxtion-runtime.jar com.telamin.fluxtion.runtime.audit.tools.AuditLogTool \

@@ -34,8 +34,11 @@ import java.nio.file.Paths;
  * header first and scales the bounds to the file's unit; a file whose header states no unit, or an
  * undefined one, refuses a time query rather than compare milliseconds to something else.
  *
- * <p>Output is the same YAML shape the text {@code LogRecord} produces, so it pipes into anything that
- * already reads a Fluxtion audit log.
+ * <p><b>Output is for people and {@code grep}, not for the analyser.</b> It has the YAML shape the text
+ * {@code LogRecord} produces, with every value written bare - which is exactly what the analyser's
+ * text grammar cannot type: a logged String {@code "ok, invented: 42.0"} parses back as a second,
+ * numeric entry. Open the {@code .flxa} file in the analyser instead; its binary reader keeps the
+ * wire's types, identity and units. This tool is raw inspection.
  *
  * <p><b>{@code --stats} reports the two silent data-loss conditions</b> — ids the dictionary never
  * described, and a tail too damaged to parse. A reader that hides those is worse than one that refuses
@@ -115,7 +118,7 @@ public final class AuditLogTool {
             case com.telamin.fluxtion.runtime.audit.BinaryLogFile.TIME_UNIT_EPOCH_MILLIS: return "epoch milliseconds";
             case com.telamin.fluxtion.runtime.audit.BinaryLogFile.TIME_UNIT_EPOCH_NANOS:  return "epoch nanoseconds";
             case com.telamin.fluxtion.runtime.audit.BinaryLogFile.TIME_UNIT_UNSPECIFIED:
-                return "unspecified (file predates the unit field) - declare it with --declare-unit";
+                return "unspecified (the writer stated none) - declare it with --declare-unit";
             default: return "unknown code " + code;
         }
     }
@@ -133,7 +136,8 @@ public final class AuditLogTool {
     static int run(String[] args, PrintStream out, PrintStream err) throws IOException {
         String event = null, node = null, key = null, sinkName = "text", file = null;
         String declareUnit = null, outFile = null;
-        long from = Long.MIN_VALUE, to = Long.MAX_VALUE, limit = Long.MAX_VALUE;
+        Long from = null, to = null;   // presence, not a magic value: an explicit extreme is a real bound
+        long limit = Long.MAX_VALUE;
         boolean stats = false;
 
         for (int i = 0; i < args.length; i++) {
@@ -272,7 +276,7 @@ public final class AuditLogTool {
     }
 
     private static void usage(PrintStream out) {
-        out.println("audit-log [options] <file>");
+        out.println("audit-log [options] <file>          raw inspection: values are printed bare; open the .flxa in the analyser for typed reading");
         out.println("  --from <millis>   --to <millis>     logTime bounds (scaled to the file's declared unit)");
         out.println("  --event <glob>    --node <glob>     --key <glob>");
         out.println("  --limit <n>       --sink text|null  --stats");

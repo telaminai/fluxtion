@@ -72,7 +72,7 @@ public class FlxaConformanceTest {
                     + "treat the diff as a FORMAT change to be specified, not a file to be refreshed",
                     FlxaConformanceCorpus.generate(name), FlxaConformanceCorpus.committed(name));
         }
-        assertEquals("the set is the published artefact; add a fixture here AND a test below", 16,
+        assertEquals("the set is the published artefact; add a fixture here AND a test below", 19,
                 FlxaConformanceCorpus.names().size());
     }
 
@@ -170,12 +170,16 @@ public class FlxaConformanceTest {
     }
 
     @Test
-    public void f09_unitUnspecified_isDeliveredAsCodeZero_andTheWriterCannotProduceIt() throws IOException {
+    public void f09_unitUnspecified_isDeliveredAsCodeZero_whichTheExplicitWriterMayState() throws IOException {
         assertEquals(BinaryLogFile.TIME_UNIT_UNSPECIFIED, read("f09-unit-unspecified").headerUnit);
-        // 0 is a defined code the writer accepts (a writer that knows nothing may say so); what it
-        // must never do is write an UNDEFINED one - f10 exists only by byte edit.
+        // 0 is a DEFINED code: a writer that states no unit may say so through the explicit-unit
+        // constructor, and the default constructor writes 1. What no writer may do is write an
+        // UNDEFINED code - f10 exists only by byte edit.
         assertTrue(BinaryLogFile.isKnownTimeUnit(0));
         assertFalse(BinaryLogFile.isKnownTimeUnit(3));
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        new com.telamin.fluxtion.runtime.audit.BinaryLogWriter(out, 0);
+        assertEquals("the explicit-unit constructor writes 0 when told to", 0, out.toByteArray()[7]);
     }
 
     @Test
@@ -232,6 +236,32 @@ public class FlxaConformanceTest {
         assertTrue(r.records.get(0).startsWith(FlxaConformanceCorpus.Tick.class.getName() + " "));
         assertTrue(r.records.get(1).startsWith(FlxaConformanceCorpus.Other.Tick.class.getName() + " "));
         assertNotEquals(r.records.get(0).split(" ")[0], r.records.get(1).split(" ")[0]);
+    }
+
+    @Test
+    public void f17_unresolvedValueIds_areCountedLikeEveryOtherRole() throws IOException {
+        Recording r = read("f17-unresolved-value-ids");
+        assertEquals(Arrays.asList("node.aString tag=5 #65000", "node.anObject tag=6 #65001", "node.aDouble tag=1 1.25"), r.entries);
+        assertEquals("two occurrences, both values; every structural id resolved", 2,
+                result("f17-unresolved-value-ids").unresolvedIds);
+    }
+
+    @Test
+    public void f18_duplicateDictId_theLatestDefinitionNamesWhatFollows() throws IOException {
+        Recording r = read("f18-duplicate-dict-id");
+        assertEquals("both definitions are delivered, in order",
+                Arrays.asList("1=" + TICK, "2=pricer", "3=price", "2=renamed"), r.dictionary);
+        assertEquals("the record after the redefinition uses it", Arrays.asList("renamed.price tag=1 1.25"), r.entries);
+        assertEquals(0, result("f18-duplicate-dict-id").unresolvedIds);
+    }
+
+    @Test
+    public void f19_malformedUtf8_isReplacedNeverFatal() throws IOException {
+        Recording r = read("f19-malformed-utf8");
+        assertEquals(1, r.entries.size());
+        assertTrue("the bad byte becomes U+FFFD and the rest of the name survives: " + r.entries.get(0),
+                r.entries.get(0).startsWith("\uFFFDricer.price tag=1 1.25"));
+        assertEquals(0, result("f19-malformed-utf8").unresolvedIds);
     }
 
     @Test

@@ -39,12 +39,14 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
     private final String eventGlob;
     private final String nodeGlob;
     private final String keyGlob;
-    /** The bounds AS GIVEN, in epoch milliseconds - the unit the CLI documents. */
-    private final long fromMillis;
-    private final long toMillis;
+    /** The bounds AS GIVEN, in epoch milliseconds - the unit the CLI documents; null when not given. */
+    private final Long fromMillis;
+    private final Long toMillis;
     /** The bounds in the FILE's unit, set at the header. Until then, everything passes. */
     private long from = Long.MIN_VALUE;
     private long to = Long.MAX_VALUE;
+    /** A bound that no representable timestamp can satisfy - the range is empty, not clamped. */
+    private boolean empty;
     private int timeUnit = BinaryLogFile.TIME_UNIT_UNSPECIFIED;
     private final long limit;
     private final Sink sink;
@@ -85,20 +87,36 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
     private long matchedEntries;
     private boolean recordOpen;
 
+    /**
+     * The sentinel form: {@code Long.MIN_VALUE} for {@code from} and {@code Long.MAX_VALUE} for
+     * {@code to} mean "not given". Prefer the boxed constructor, where absence is {@code null} and
+     * an explicitly supplied extreme is a real bound.
+     */
     public AuditLogFilter(String eventGlob, String nodeGlob, String keyGlob,
                           long from, long to, long limit, Sink sink) {
+        this(eventGlob, nodeGlob, keyGlob,
+                from == Long.MIN_VALUE ? null : Long.valueOf(from),
+                to == Long.MAX_VALUE ? null : Long.valueOf(to), limit, sink);
+    }
+
+    /**
+     * @param fromMillis inclusive lower bound on {@code logTime}, in epoch milliseconds; null for none
+     * @param toMillis   inclusive upper bound, likewise
+     */
+    public AuditLogFilter(String eventGlob, String nodeGlob, String keyGlob,
+                          Long fromMillis, Long toMillis, long limit, Sink sink) {
         this.eventGlob = eventGlob;
         this.nodeGlob = nodeGlob;
         this.keyGlob = keyGlob;
-        this.fromMillis = from;
-        this.toMillis = to;
+        this.fromMillis = fromMillis;
+        this.toMillis = toMillis;
         this.limit = limit;
         this.sink = sink;
     }
 
-    /** True when the caller asked for a time range at all. */
+    /** True when the caller asked for a time range at all. Presence, not a magic value. */
     private boolean boundsGiven() {
-        return fromMillis != Long.MIN_VALUE || toMillis != Long.MAX_VALUE;
+        return fromMillis != null || toMillis != null;
     }
 
     /**
@@ -110,7 +128,11 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
      *
      * <ul>
      *   <li>milliseconds: the bounds apply as given</li>
-     *   <li>nanoseconds: the bounds are scaled by a million, saturating at the extremes</li>
+     *   <li>nanoseconds: the bounds are scaled by a million. A bound outside the representable
+     *       nanosecond domain keeps its INEQUALITY rather than being clamped: a lower bound above
+     *       every representable instant admits nothing, and an upper bound below every representable
+     *       instant admits nothing, where clamping to {@code Long.MAX_VALUE} had admitted a record
+     *       stamped exactly there. Bounds are inclusive.</li>
      *   <li>unspecified or undefined: a time query cannot mean anything, so it is refused. Raw
      *       inspection without bounds still works, and {@code --stats} still labels the code.</li>
      * </ul>
@@ -125,12 +147,20 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
         }
         switch (unit) {
             case BinaryLogFile.TIME_UNIT_EPOCH_MILLIS:
-                from = fromMillis;
-                to = toMillis;
+                from = fromMillis == null ? Long.MIN_VALUE : fromMillis;
+                to = toMillis == null ? Long.MAX_VALUE : toMillis;
                 return;
             case BinaryLogFile.TIME_UNIT_EPOCH_NANOS:
-                from = fromMillis == Long.MIN_VALUE ? Long.MIN_VALUE : saturatedMillisToNanos(fromMillis);
-                to = toMillis == Long.MAX_VALUE ? Long.MAX_VALUE : saturatedMillisToNanos(toMillis);
+                if (fromMillis != null) {
+                    if (fromMillis > Long.MAX_VALUE / 1_000_000L) empty = true;          // after every instant
+                    else if (fromMillis < Long.MIN_VALUE / 1_000_000L) from = Long.MIN_VALUE; // before every instant
+                    else from = fromMillis * 1_000_000L;
+                }
+                if (toMillis != null) {
+                    if (toMillis < Long.MIN_VALUE / 1_000_000L) empty = true;             // before every instant
+                    else if (toMillis > Long.MAX_VALUE / 1_000_000L) to = Long.MAX_VALUE;   // after every instant
+                    else to = toMillis * 1_000_000L;
+                }
                 return;
             case BinaryLogFile.TIME_UNIT_UNSPECIFIED:
                 throw new IllegalArgumentException("--from/--to are milliseconds, and this file's header "
@@ -142,12 +172,6 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
                         + "carries time unit code " + unit + ", which the format does not define. A time "
                         + "query cannot be honoured; query without bounds to inspect the raw records.");
         }
-    }
-
-    private static long saturatedMillisToNanos(long millis) {
-        if (millis > Long.MAX_VALUE / 1_000_000L) return Long.MAX_VALUE;
-        if (millis < Long.MIN_VALUE / 1_000_000L) return Long.MIN_VALUE;
-        return millis * 1_000_000L;
     }
 
     /** The header's unit code, as read; {@code TIME_UNIT_UNSPECIFIED} before the header. */
@@ -179,7 +203,7 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
         if (matchedRecords >= limit) {
             return false;
         }
-        if (logTime < from || logTime > to) {
+        if (empty || logTime < from || logTime > to) {
             return false;
         }
         if (eventGlob != null && !eventIds.get(eventTypeId)) {

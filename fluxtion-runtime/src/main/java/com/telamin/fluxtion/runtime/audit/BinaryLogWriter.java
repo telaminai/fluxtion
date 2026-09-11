@@ -22,6 +22,15 @@ import java.io.UncheckedIOException;
  *
  * <p>Dictionary entries are emitted the first time an id appears, so a reader never meets an id it has
  * not been told about, and the file stays self-describing without repeating names per entry.
+ *
+ * <p><b>What a refusal guarantees.</b> Every SEMANTIC refusal - an overflowed record, too many entries
+ * for the count field, a name too long for its length field, more new names than the file has ids
+ * left - is decided before the first byte of the record is written, so the stream and the writer's
+ * dictionary are exactly as they were. That is validation, not transaction: an {@link IOException}
+ * from the stream mid-frame leaves a partial frame, which a reader reports as an unreadable tail.
+ * Two limits are easy to confuse: this writer's FILE dictionary holds 65,535 names; a
+ * {@link BinaryLogRecord}'s own intern table holds 32,767, so one record can never exhaust the file
+ * alone, but several record instances can.
  */
 public final class BinaryLogWriter implements LogRecordListener, Closeable {
 
@@ -157,6 +166,28 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
         if (record == lastRecord && dictionary.length == lastDictionaryLength) {
             return translation;
         }
+        // PREFLIGHT, then emit. A review found the oversize-name refusal firing AFTER earlier names
+        // of the same record had been written as DICT frames: the stream was well-formed but not
+        // unchanged, and the writer's id table had advanced for a record that was never written. So
+        // every semantic refusal - a name too long for its length field, more new names than ids
+        // remain - is decided over the whole record before the first byte of it.
+        int newNames = 0;
+        for (int id = 1; id < dictionary.length; id++) {
+            String name = dictionary[id];
+            if (name == null || fileIdByName.containsKey(name)) {
+                continue;
+            }
+            checkNameLength(name);
+            newNames++;
+        }
+        if (nextFileId - 1 + newNames > BinaryLogFile.MAX_DICTIONARY_ID) {
+            throw new IllegalStateException(
+                    "audit file dictionary would overflow: " + (nextFileId - 1) + " names defined, "
+                            + newNames + " new in this record, and the record format's u16 id holds "
+                            + BinaryLogFile.MAX_DICTIONARY_ID + ". Nothing was written. Start a new "
+                            + "file, or log unbounded values as an identifier rather than as a "
+                            + "distinct string each time.");
+        }
         int[] map = new int[dictionary.length];
         for (int id = 1; id < dictionary.length; id++) {
             String name = dictionary[id];
@@ -165,13 +196,6 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
             }
             Integer fileId = fileIdByName.get(name);
             if (fileId == null) {
-                if (nextFileId > BinaryLogFile.MAX_DICTIONARY_ID) {
-                    throw new IllegalStateException(
-                            "audit file dictionary is full: " + BinaryLogFile.MAX_DICTIONARY_ID + " distinct names. "
-                                    + "Ids are a u16 in the record format, so there is no id left for '"
-                                    + name + "'. Start a new file, or log unbounded values as an "
-                                    + "identifier rather than as a distinct string each time.");
-                }
                 fileId = nextFileId++;
                 emitDictionaryEntry(fileId, name);
             }
@@ -183,20 +207,38 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
         return map;
     }
 
-    private void emitDictionaryEntry(int id, String name) throws IOException {
-        byte[] utf8 = name.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        // The length field is u16. Without this check a longer name wrote a TRUNCATED length followed
-        // by every byte, so the reader resumed mid-string and read payload as frame tags - "unknown
-        // frame type 0x78" some thousands of bytes later, with nothing pointing at the cause.
-        // Reachable from a public API: audit VALUES are interned as dictionary names.
-        if (utf8.length > BinaryLogFile.MAX_DICTIONARY_NAME_BYTES) {
+    /**
+     * The length field is u16. Without this check a longer name wrote a TRUNCATED length followed by
+     * every byte, so the reader resumed mid-string and read payload as frame tags. Reachable from a
+     * public API: audit VALUES are interned as dictionary names. Run in the preflight, before any byte.
+     */
+    private static void checkNameLength(String name) {
+        int utf8Length = utf8Length(name);
+        if (utf8Length > BinaryLogFile.MAX_DICTIONARY_NAME_BYTES) {
             throw new IllegalStateException(
-                    "audit dictionary name is " + utf8.length + " UTF-8 bytes; the record format's "
+                    "audit dictionary name is " + utf8Length + " UTF-8 bytes; the record format's "
                             + "length field holds at most " + BinaryLogFile.MAX_DICTIONARY_NAME_BYTES
                             + ". Writing it would corrupt the file rather than truncate the name. "
-                            + "This is almost always a long String VALUE being logged as an audit "
-                            + "entry; log an identifier instead.");
+                            + "Nothing was written. This is almost always a long String VALUE being "
+                            + "logged as an audit entry; log an identifier instead.");
         }
+    }
+
+    /** UTF-8 length without allocating the bytes - the preflight runs once per NEW name only. */
+    private static int utf8Length(String s) {
+        int n = 0;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c < 0x80) n += 1;
+            else if (c < 0x800) n += 2;
+            else if (Character.isHighSurrogate(c) && i + 1 < s.length() && Character.isLowSurrogate(s.charAt(i + 1))) { n += 4; i++; }
+            else n += 3;
+        }
+        return n;
+    }
+
+    private void emitDictionaryEntry(int id, String name) throws IOException {
+        byte[] utf8 = name.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         out.write(BinaryLogFile.FRAME_DICT);
         writeShort(id);
         writeShort(utf8.length);

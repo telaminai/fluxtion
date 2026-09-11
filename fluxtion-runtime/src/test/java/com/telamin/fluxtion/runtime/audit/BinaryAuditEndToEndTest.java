@@ -577,4 +577,93 @@ public class BinaryAuditEndToEndTest {
         long[] plainTimes = times.get(1);
         assertTrue("a plain object's eventTime is the strategy's reading: " + plainTimes[0], plainTimes[0] > nanosFloor);
     }
+
+    /**
+     * REVIEWER PROBE (round 6). The oversize-name refusal fired AFTER the record's earlier names had
+     * been written as DICT frames: parseable, but not "unchanged", and the writer's id table had moved
+     * on for a record never written. Every semantic refusal is now decided over the whole record
+     * before its first byte - the LATER name is the case that distinguishes preflight from in-line.
+     */
+    @Test
+    public void anOversizeLaterNameLeavesTheStreamAndTheDictionaryUnchanged() throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        BinaryLogWriter w = new BinaryLogWriter(out);
+        int headerOnly = out.size();
+        BinaryLogRecord r = record();
+        r.addRecord("node", "first", (CharSequence) "short");
+        StringBuilder huge = new StringBuilder();
+        for (int i = 0; i <= BinaryLogFile.MAX_DICTIONARY_NAME_BYTES; i++) {
+            huge.append('x');
+        }
+        r.addRecord("node", "second", (CharSequence) huge.toString());
+        r.terminateRecord();
+        try {
+            w.processLogRecord(r);
+            fail("must refuse the oversize name");
+        } catch (IllegalStateException refused) {
+            assertTrue(refused.getMessage(), refused.getMessage().contains("Nothing was written"));
+        }
+        assertEquals("no DICT frame for 'node', 'first' or 'short' either", headerOnly, out.size());
+        assertEquals(0, w.recordsWritten());
+
+        // and the writer is still usable: the next record starts the file's dictionary at id 1
+        BinaryLogRecord ok = record();
+        ok.addRecord("node", "first", (CharSequence) "short");
+        ok.terminateRecord();
+        w.processLogRecord(ok);
+        List<String> names = new ArrayList<>();
+        BinaryLogReader.Result res = BinaryLogReader.read(out.toByteArray(), new BinaryLogReader.Visitor() {
+            public void onDictionaryEntry(int id, String name) { names.add(id + "=" + name); }
+            public boolean onRecord(int a, String b, long c, long d, long e, int f) { return true; }
+            public void onEntry(int a, String b, int c, String d, int e, long f) { }
+        });
+        assertEquals(1, res.records);
+        assertEquals(0, res.unresolvedIds);
+        assertTrue(names.toString(), names.get(0).startsWith("1="));
+    }
+
+    /**
+     * The FILE dictionary holds 65,535 names; a RECORD's intern table holds 32,767, so no single
+     * record can exhaust the file - several instances can. The third record here would push the file
+     * over, and is refused before any of its bytes, with the stream exactly as the second left it.
+     */
+    @Test
+    public void aFullFileDictionaryIsRefusedBeforeAnyByteOfTheRecord() throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        BinaryLogWriter w = new BinaryLogWriter(out);
+        int perRecord = 32_000;
+        for (int batch = 0; batch < 2; batch++) {
+            BinaryLogRecord r = new BinaryLogRecord(clockInit(), perRecord * 16 + 4096);
+            r.updateLogLevel(LogLevel.INFO);
+            r.triggerObject(new Object());
+            for (int i = 0; i < perRecord; i++) {
+                r.addRecord("n", "k" + batch + "_" + i, 1);
+            }
+            r.terminateRecord();
+            w.processLogRecord(r);
+        }
+        assertEquals(2, w.recordsWritten());
+        int afterTwo = out.size();
+        BinaryLogRecord third = new BinaryLogRecord(clockInit(), 4096 * 16);
+        third.updateLogLevel(LogLevel.INFO);
+        third.triggerObject(new Object());
+        for (int i = 0; i < 2_000; i++) {
+            third.addRecord("n", "k2_" + i, 1);   // 64,002 + 2,000 > 65,535
+        }
+        third.terminateRecord();
+        try {
+            w.processLogRecord(third);
+            fail("must refuse: the file has no ids left for this record");
+        } catch (IllegalStateException refused) {
+            assertTrue(refused.getMessage(), refused.getMessage().contains("Nothing was written"));
+        }
+        assertEquals("the stream is exactly as the second record left it", afterTwo, out.size());
+        assertEquals(2, w.recordsWritten());
+    }
+
+    private static Clock clockInit() {
+        Clock c = new Clock();
+        c.init();
+        return c;
+    }
 }

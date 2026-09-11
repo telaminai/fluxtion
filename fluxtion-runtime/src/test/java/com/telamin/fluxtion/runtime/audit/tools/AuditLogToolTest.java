@@ -344,4 +344,52 @@ public class AuditLogToolTest {
         Run noOut = runOn(undeclared, "--declare-unit", "millis");
         assertEquals(2, noOut.code);
     }
+
+    /** Writes one nanosecond-declared record whose logTime is {@code reading}. */
+    private Path nanosFileAt(long reading, String name) throws IOException {
+        Path file = folder.newFile(name).toPath();
+        Clock clock = new Clock();
+        clock.init();
+        clock.setClockStrategy(new ClockStrategy.ClockStrategyEvent(() -> reading));
+        try (OutputStream os = java.nio.file.Files.newOutputStream(file);
+             BinaryLogWriter writer = new BinaryLogWriter(os,
+                     com.telamin.fluxtion.runtime.audit.BinaryLogFile.TIME_UNIT_EPOCH_NANOS)) {
+            BinaryLogRecord r = new BinaryLogRecord(clock, 4096);
+            r.updateLogLevel(EventLogControlEvent.LogLevel.INFO);
+            clock.eventReceived(new Object());
+            r.triggerObject(new Object());
+            r.addRecord("n", "k", 1);
+            r.terminateRecord();
+            writer.processLogRecord(r);
+        }
+        return file;
+    }
+
+    /**
+     * REVIEWER PROBE (round 6). Clamping an out-of-domain bound to Long.MAX_VALUE turned "after every
+     * instant" into "at the last instant", and a record stamped exactly there matched. The inequality
+     * is kept: a lower bound above every representable nanosecond admits nothing, an upper bound
+     * below every one admits nothing, and the neighbouring in-domain bounds still admit the record.
+     */
+    @Test
+    public void anOutOfDomainBoundKeepsItsInequality_neverInventingAMatch() throws IOException {
+        Path atMax = nanosFileAt(Long.MAX_VALUE, "max-nanos.flxa");
+        assertTrue(runOn(atMax, "--from", "9223372036855", "--stats").err.contains("records matched   : 0"));
+        assertTrue(runOn(atMax, "--from", "9223372036854", "--stats").err.contains("records matched   : 1"));
+        assertTrue(runOn(atMax, "--to", "9223372036855", "--stats").err.contains("records matched   : 1"));
+        Path atMin = nanosFileAt(Long.MIN_VALUE, "min-nanos.flxa");
+        assertTrue(runOn(atMin, "--to", "-9223372036855", "--stats").err.contains("records matched   : 0"));
+        assertTrue(runOn(atMin, "--to", "-9223372036854", "--stats").err.contains("records matched   : 1"));
+        assertTrue(runOn(atMin, "--from", "-9223372036855", "--stats").err.contains("records matched   : 1"));
+    }
+
+    /** An explicitly supplied extreme is a bound, not the "no bound" sentinel it used to be. */
+    @Test
+    public void anExplicitExtremeBoundIsABound() throws IOException {
+        Path undeclared = withUnit(com.telamin.fluxtion.runtime.audit.BinaryLogFile.TIME_UNIT_UNSPECIFIED);
+        Run r = runOn(undeclared, "--from", String.valueOf(Long.MIN_VALUE));
+        assertEquals("a bound was given, so a file with no unit refuses the query", 2, r.code);
+        Run none = runOn(undeclared);
+        assertEquals("no bound given: raw inspection still works", 0, none.code);
+    }
 }

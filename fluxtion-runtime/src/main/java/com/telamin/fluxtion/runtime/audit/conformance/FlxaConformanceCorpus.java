@@ -82,6 +82,9 @@ public final class FlxaConformanceCorpus {
         FIXTURES.put("f14-hostile-chars", FlxaConformanceCorpus::hostileChars);
         FIXTURES.put("f15-same-simple-name", FlxaConformanceCorpus::sameSimpleName);
         FIXTURES.put("f16-unknown-frame", FlxaConformanceCorpus::unknownFrame);
+        FIXTURES.put("f17-unresolved-value-ids", FlxaConformanceCorpus::unresolvedValueIds);
+        FIXTURES.put("f18-duplicate-dict-id", FlxaConformanceCorpus::duplicateDictId);
+        FIXTURES.put("f19-malformed-utf8", FlxaConformanceCorpus::malformedUtf8);
     }
 
     private FlxaConformanceCorpus() {
@@ -378,7 +381,72 @@ public final class FlxaConformanceCorpus {
         return out;
     }
 
+    /**
+     * Every STRUCTURAL id resolves; the two VALUE ids (a String and an Object) point at ids the file
+     * never defines. A reader that counts only event/node/key ids reports this file whole.
+     */
+    static byte[] unresolvedValueIds() {
+        Clock clock = countingClock(MILLIS_BASE);
+        byte[] bytes = write(BinaryLogFile.TIME_UNIT_EPOCH_MILLIS, w -> {
+            BinaryLogRecord r = record(clock);
+            arrive(clock, r, new Tick());
+            r.addRecord("node", "aString", (CharSequence) "text");
+            r.addRecord("node", "anObject", new Obj());
+            r.addRecord("node", "aDouble", 1.25d);
+            r.terminateRecord();
+            w.processLogRecord(r);
+        });
+        patchValueId(bytes, 0, 65000);
+        patchValueId(bytes, 1, 65001);
+        return bytes;
+    }
+
+    /** The minimal file with a second DICT frame redefining id 2 ("pricer") before the record uses it. */
+    static byte[] duplicateDictId() {
+        byte[] bytes = minimal();
+        int record = firstRecordOffset(bytes);
+        byte[] name = "renamed".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] frame = new byte[5 + name.length];
+        frame[0] = (byte) BinaryLogFile.FRAME_DICT;
+        frame[1] = 0; frame[2] = 2;                       // id 2
+        frame[3] = 0; frame[4] = (byte) name.length;
+        System.arraycopy(name, 0, frame, 5, name.length);
+        byte[] out = new byte[bytes.length + frame.length];
+        System.arraycopy(bytes, 0, out, 0, record);
+        System.arraycopy(frame, 0, out, record, frame.length);
+        System.arraycopy(bytes, record, out, record + frame.length, bytes.length - record);
+        return out;
+    }
+
+    /** The minimal file with the first byte of the name "pricer" replaced by 0xFF, which is not UTF-8. */
+    static byte[] malformedUtf8() {
+        byte[] bytes = minimal();
+        int at = indexOf(bytes, "pricer".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        bytes[at] = (byte) 0xFF;
+        return bytes;
+    }
+
     // ------------------------------------------------------------------ byte edits
+
+    /** Overwrites slot1 of the given entry of the first RECORD frame with {@code id}. */
+    static void patchValueId(byte[] bytes, int entryIndex, long id) {
+        int at = firstRecordOffset(bytes) + BinaryLogFile.RECORD_FIXED_BYTES + entryIndex * 16 + 8;
+        for (int i = 7; i >= 0; i--) {
+            bytes[at + i] = (byte) id;
+            id >>>= 8;
+        }
+    }
+
+    static int indexOf(byte[] haystack, byte[] needle) {
+        outer:
+        for (int i = 0; i + needle.length <= haystack.length; i++) {
+            for (int j = 0; j < needle.length; j++) {
+                if (haystack[i + j] != needle[j]) continue outer;
+            }
+            return i;
+        }
+        throw new IllegalStateException("needle not found");
+    }
 
     static byte[] withUnit(byte[] bytes, int code) {
         byte[] out = bytes.clone();

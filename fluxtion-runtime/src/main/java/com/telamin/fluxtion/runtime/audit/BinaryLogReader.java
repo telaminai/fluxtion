@@ -72,7 +72,13 @@ public final class BinaryLogReader {
     public static final class Result {
         public long records;
         public long entries;
+        /** Bytes at the end of the input that did not form a whole frame - a cut record, a damaged tail. */
         public int truncatedBytes;
+        /**
+         * OCCURRENCES of an id the file never defined, in any of the four roles - event type, node,
+         * key, String/Object value - over the records the visitor accepted (the entries of a record
+         * {@code onRecord} declined are not examined). Id 0 is null or no-key, never unresolved.
+         */
         public int unresolvedIds;
         /**
          * The unit of every timestamp in the file, as one of the {@code BinaryLogFile.TIME_UNIT_*}
@@ -253,9 +259,18 @@ public final class BinaryLogReader {
                         // id that failed to resolve, so it must not be counted in unresolvedIds — that
                         // counter is how a reader tells a rolled file from a corrupt one, and every
                         // trace would otherwise look like corruption.
+                        int tag = BinaryRecordDecoder.tag(header);
+                        // A CHARSEQ/OBJECT VALUE is a dictionary id too (§4: one id space, four
+                        // roles). It was rendered as #id when missing but never counted, so a file
+                        // with every String value undefined reported unresolvedIds=0 and the CLI
+                        // said the log was whole. Id 0 is null, never unresolved.
+                        if ((tag == BinaryRecordDecoder.TAG_CHARSEQ || tag == BinaryRecordDecoder.TAG_OBJECT)
+                                && bits != 0 && !defined(names, bits)) {
+                            result.unresolvedIds++;
+                        }
                         visitor.onEntry(nodeId, name(names, nodeId, result),
                                 keyId, keyId == 0 ? null : name(names, keyId, result),
-                                BinaryRecordDecoder.tag(header), bits);
+                                tag, bits);
                     }
                 }
                 result.entries += entries;
@@ -267,6 +282,10 @@ public final class BinaryLogReader {
             }
         }
         return cursor;
+    }
+
+    private static boolean defined(List<String> names, long id) {
+        return id >= 0 && id < names.size() && names.get((int) id) != null;
     }
 
     /** An id with no dictionary entry renders as {@code #id} and is counted, never thrown. */

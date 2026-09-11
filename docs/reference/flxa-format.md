@@ -34,7 +34,7 @@ in §9 and §10.
 |---|---|---|
 | `magic` | `46 4C 58 41` | MUST be present. A reader MUST refuse a file without it. |
 | `formatVersion` | `1` | A reader MUST refuse a version it does not implement. This page defines version 1 only. |
-| `timeUnit` | `0`, `1`, `2` | §8. A writer MUST NOT write any other value. |
+| `timeUnit` | `0`, `1`, `2` | §7. A writer MUST NOT write any other value. |
 
 ## 3. Frames
 
@@ -62,7 +62,7 @@ ignored by a reader.
 |---|---|
 | `entryCount` | number of `entry` pairs that follow. `0` is a record that happened and logged nothing (fixture f02). |
 | `eventTypeId` | dictionary id of the event's **fully-qualified** class name (`Class.getName()`), so two events with one simple name stay distinct (f15). |
-| `eventTime` | when the event was created, in the unit §8 assigns to it. |
+| `eventTime` | when the event was created, in the unit §7.2 assigns to it. |
 | `logTime` | the processor clock's reading when the cycle began. The primary timeline. |
 | `endTime` | the clock's reading when the cycle ended, or `0` when the producer does not record it. |
 
@@ -93,9 +93,19 @@ diagnostic (`#tag<n>:<bits>`), and a text constructor treats it as text (§11).
   used.
 - A writer MUST define an id with a DICT frame **before** the first frame that uses it (f01, f05).
   A reader MAY be given an id it was never told about — a rolled or damaged file — and MUST then
-  render it as `#<id>`, count it, and continue (f11). It MUST NOT throw.
-- A name is at most `65535` UTF-8 bytes. A writer MUST refuse a longer name (§9) rather than
+  render it as `#<id>`, count it, and continue (f11, f17). It MUST NOT throw. **Every role counts:**
+  event type, node, key, CHARSEQ value and OBJECT value. The count is of **occurrences** (an
+  undefined id used three times counts three), over the entries of records the visitor accepted —
+  a record `onRecord` declined is not examined, so a filtered read's count is scoped to what it
+  read. Id `0` is never an occurrence.
+- A name is at most `65535` UTF-8 bytes. A writer MUST refuse a longer name (§8) rather than
   truncate the length field.
+- **Redefinition.** A writer MUST NOT define an id twice. A reader MUST accept a second DICT frame
+  for an id and use the most recent definition for the frames that follow it; both definitions are
+  delivered to the visitor in order (f18). This is stated so that a repaired or concatenated file
+  has one defined reading, not so that writers may rely on it.
+- **Malformed UTF-8** in a name MUST NOT fail the file: the reader replaces undecodable bytes with
+  U+FFFD and continues (f19). A writer never produces it; a reader must survive it.
 - The record a processor logs into allocates its own **record-scoped** ids; the file's ids are the
   writer's. They coincide only while one record instance is reused, which the API does not promise.
   A writer MUST therefore map record ids to file ids **by name**, so a replacement record — or two
@@ -109,7 +119,7 @@ diagnostic (`#tag<n>:<bits>`), and a text constructor treats it as text (§11).
   MUST NOT re-sort.
 - Consecutive entries with the same `nodeId` are one node's contribution and a text constructor
   groups them (§11); the same node MAY appear again later in the record.
-- `entryCount` bounds a record at `65535` entries. A writer MUST refuse a record with more (§9).
+- `entryCount` bounds a record at `65535` entries. A writer MUST refuse a record with more (§8).
 
 ## 6. Values
 
@@ -120,6 +130,13 @@ Encodings are in §3.3. Two rules a consumer must not get wrong:
   Any consumer that types values (a chart, a scorer, a diff) MUST take the type from the tag, and any
   text it constructs MUST preserve that (§11, f13, f14).
 - **`null` is id `0`**, not a dictionary entry spelling `null`.
+- **A numeric equality verdict MUST NOT lose distinctions present in the source.** A LONG carries
+  64 bits; a consumer that compares two records MUST compare the values it was given, not a
+  narrower conversion of them — converting to a plotting `double` made `9007199254740992` and
+  `9007199254740993` equal. Plotting conversion is not an equality definition. Whether two
+  *spellings* of one number (`1` and `1.0` in text) are equal is the consumer's stated policy, and
+  a tolerance-based score is a score, not an equality; the analyser's diff compares exactly and
+  treats equal decimals as one figure, and its scorer's tolerance is documented as such.
 
 ## 7. Timestamps and the time unit
 
@@ -127,7 +144,7 @@ Encodings are in §3.3. Two rules a consumer must not get wrong:
 
 | code | meaning |
 |---:|---|
-| `0` | **unspecified.** The file does not state its unit. Written only by producers predating the field: pre-release Java runtimes and the C++ runtime of that era, some of which wrote nanoseconds. No released runtime writes it. |
+| `0` | **unspecified.** The writer stated no unit. Older snapshots wrote it as the reserved value — some of them, Java and C++, under nanosecond readings — and the explicit-unit constructor of the current Java writer still accepts it; the default constructor writes `1`. A consumer needing a unit must obtain an explicit declaration (§7.4). |
 | `1` | epoch milliseconds — the Java runtime's default clock. |
 | `2` | epoch nanoseconds — `ClockStrategy.nanoEpochClock()`, the C++ `SystemNanoClock`. |
 
@@ -161,22 +178,37 @@ while a writer is open is unsupported: start a new writer with the new unit.
   declaration then travels with the evidence.
 - A consumer that interprets a bound in a fixed unit (`--from`/`--to`, milliseconds) MUST scale it to
   the file's unit after reading the header, and MUST refuse the query — not answer it with nothing —
-  when the unit is unstated or undefined.
+  when the unit is unstated or undefined. **Bounds are inclusive epoch-millisecond instants**, and
+  the conversion MUST preserve the requested inequality when a bound lies outside the representable
+  domain of the file's unit: a lower bound after every representable instant admits nothing, an
+  upper bound before every one admits nothing. Clamping a bound to `Long.MAX_VALUE` had admitted a
+  record stamped exactly there. "No bound" is the absence of the option, not a sentinel value: an
+  explicitly supplied extreme is a bound.
 
 ## 8. Writer requirements
 
 1. Write the header first, then frames; nothing else, ever.
 2. Define every id before its first use (§4).
-3. Run **one** representability check before any byte of a RECORD frame, and run it on every
-   emission path. In Java it is `BinaryLogRecord.checkEncodable()`, called by `BinaryLogWriter` and
-   by `encodeTo`. It refuses:
+3. Decide every **semantic** refusal for a record before writing the first byte of it, on every
+   path that emits a record. The refusals are:
     - a record that **overflowed** its buffer — its tail was dropped, and a short frame would look
       complete;
     - more than `65535` entries — the count would wrap;
-4. Refuse a dictionary that is full (`65535` ids) and a name over `65535` bytes.
-5. Refuse an undefined unit code before the header (§7.1).
-6. A refused record leaves the stream **exactly as it was**: no DICT frame, no partial RECORD.
-   Refusal is loud — an exception — never a silently shorter file.
+    - a name over `65535` UTF-8 bytes — the length field would wrap;
+    - more new names than the file has ids left — the file dictionary holds `65535`.
+   (The Java writer implements the first two as one shared method, `BinaryLogRecord.checkEncodable()`,
+   also run by `encodeTo`, and the last two as a preflight over the record's dictionary before any
+   DICT frame. That is this implementation's shape, not the wire contract: an interoperable writer
+   must make the same refusals before the same byte, however it is built.)
+4. Refuse an undefined unit code before the header (§7.1).
+5. **What a refusal guarantees.** A semantically refused record leaves the stream and the writer's
+   dictionary **exactly as they were**: no DICT frame, no partial RECORD, no id consumed. Refusal is
+   loud — an exception — never a silently shorter file. This is validation, not a transaction: an I/O
+   failure from the stream mid-frame is outside it and leaves a partial frame, which a reader
+   reports as an unreadable tail (§9.3).
+6. Two limits that are easy to confuse: the **file** dictionary holds `65535` names (this section);
+   a Java `BinaryLogRecord`'s own intern table holds `32767`, so one record can never exhaust the
+   file alone, but several record instances can.
 
 ## 9. Reader requirements
 
@@ -203,9 +235,13 @@ constructs omits `thread` and `groupingId` rather than writing `null`.
 A consumer that renders a file as the text record format (the analyser's `BinaryAuditReader`) is
 writing typed values into a grammar that types by inspection. These rules keep the wire's types:
 
-1. Every record MUST declare `nodeLogsEncoding: quoted`. The text format's quoted-scalar grammar
-   is selected by that declaration and by nothing else; a record without it is read with the
-   legacy grammar, in which a quote mark is the producer's character.
+1. **Encoding is selected from the reader's declared context; logged content MUST NOT select or
+   change it.** The consumer's reader declares the quoted-scalar grammar at its adapter boundary
+   (the analyser: `AuditLogReader.textEncoding()`), and its parser applies that declaration to every
+   record the reader delivers. Nothing in the text may switch grammar — an earlier draft put a
+   declaration scalar in each record, and a multiline legacy value containing that line was
+   promoted into a control field. Text that carries no such declaration is legacy, in which a quote
+   mark is the producer's character.
 2. DOUBLE, LONG, INT and BOOL are written bare: their renderings cannot be syntax and the text
    grammar types them as the wire did.
 3. **Everything else is text** — CHARSEQ, OBJECT, CHAR, and an unknown tag's diagnostic — and is
@@ -220,14 +256,21 @@ writing typed values into a grammar that types by inspection. These rules keep t
 Fixtures f13 and f14 are the test: every value MUST parse back to exactly the string logged, with
 no entry manufactured and none lost.
 
+8. **Damage travels with the evidence.** What the runtime reader could not read (§9.3, §9.6) MUST
+   reach the consumer beside the records it did read — the analyser carries it through the SPI's
+   diagnostic consumer into the store and shows it as a *source damage* finding — and MUST NOT be
+   delivered as a synthetic node or a fabricated event.
+
 ## 12. The command-line tool
 
 `AuditLogTool` is the reference consumer for §7.4 and §9. Its `--from`/`--to` are milliseconds
 whatever the file says; it reads the header, scales them, and refuses a time query over an
 unstated or undefined unit with exit code 2 and nothing printed. `--stats` labels the unit code.
-`--declare-unit` is §7.4's declaration. Its text output is for people and `grep`: it is the text
-runtime's shape with values bare, and it does **not** declare `nodeLogsEncoding`, so it is not
-analyser input.
+`--declare-unit` is §7.4's declaration. Its text output is **raw inspection**, for people and
+`grep`: it has the text runtime's shape with every value written bare, and the difference from
+analyser input is semantic, not cosmetic — a logged String `"ok, invented: 42.0"` parses back as a
+second, numeric entry. Open the `.flxa` file in the analyser for typed reading; do not pipe the
+tool's output into it. The tool's help says so.
 
 ## 13. Conformance
 
@@ -245,7 +288,7 @@ format change and belongs on this page first.**
 | f04 null values | id 0 is `null`, not unresolved | ✅ | ✅ | — |
 | f05 dictionary growth | names first used later are defined between records | ✅ | ✅ | — |
 | f06 two records, two dictionaries | file ids are by name; a swapped record is attributed correctly | ✅ | ✅ | deferred² |
-| f07 truncated tail | whole frames delivered, tail reported, file not failed | ✅ | ✅ | — |
+| f07 truncated tail | whole frames delivered, tail reported, file not failed; the consumer shows the report beside the records | ✅ | ✅ | — |
 | f08 unit nanos | header says so before any record; a millisecond consumer refuses, delivering nothing | ✅ | ✅ | writer parity¹ |
 | f09 unit unspecified | delivered as code 0; a consumer does not assume; `--declare-unit` | ✅ | ✅ | — |
 | f10 unit undefined | writer cannot produce it; reader delivers the code; consumer refuses | ✅ | ✅ | deferred² |
@@ -255,7 +298,12 @@ format change and belongs on this page first.**
 | f14 hostile chars | a char is text; the figure after it survives | ✅ | ✅ | — |
 | f15 same simple name | full identity recorded and kept distinct | ✅ | ✅ | — |
 | f16 unknown frame | frames before it delivered; then reported | ✅ | ✅ | — |
-| writer refusals (no file) | overflow, 65,536 entries, dictionary full, oversize name, undefined unit: refused before any byte, on every path | ✅ `BinaryAuditEndToEndTest` | — | overflow ✅, others source-inspected² |
+| f17 unresolved value ids | CHARSEQ/OBJECT value ids count like every other role; rendered `#id`; reported beside the evidence | ✅ | ✅ | — |
+| f18 duplicate dict id | both definitions delivered; the latest names what follows | ✅ | ✅ | — |
+| f19 malformed UTF-8 | replaced with U+FFFD, never fatal | ✅ | ✅ | — |
+| writer refusals (no file) | overflow, 65,536 entries, oversize LATER name, a full FILE dictionary across record instances, undefined unit: refused before any byte, stream and dictionary unchanged | ✅ `BinaryAuditEndToEndTest` | — | overflow ✅, others source-inspected² |
+| header refusals (no file) | bad magic, unknown version | ✅ `BinaryLogFileRoundTripTest` | ✅ (`canOpen`) | — |
+| read paths (no file) | mapped and streamed reads agree, including a frame straddling a chunk | ✅ `BinaryLogFileReadPathTest` | — | — |
 | CLI (no file) | bounds scaled; refusal on unstated/undefined unit; `--declare-unit` | ✅ `AuditLogToolTest` | — | — |
 
 ¹ The C++ writer is held to the Java writer by the compiler's Java-to-C++ audit parity tests, not yet
@@ -264,8 +312,19 @@ by byte-equality against this corpus.
 and by-name id translation.
 
 The Java suite is `FlxaConformanceTest` in `fluxtion-runtime`; the analyser's is its
-`FlxaConformanceTest` over the same bytes, loaded from this jar, through its reader, record parser
-and tokenizer. Passing both is what "reads FLXA" means.
+`FlxaConformanceTest` over the same bytes, loaded from this jar, through its reader, store, record
+parser and tokenizer. **Passing both means these named cases pass.** The corpus is an executable
+baseline, not a proof that every MUST on this page is pinned: for each rule, the table names the
+fixture or test that would fail if the rule were broken, and a rule with no such name is a rule
+this page asks for and no test yet enforces. Those are listed here so they are not mistaken for
+tested:
+
+| obligation | expected fact | what a broken implementation would show | status |
+|---|---|---|---|
+| §4 redefinition by a writer is forbidden | the Java writer never emits two DICT frames for one id | a second frame for an id in a writer-produced file | reader side pinned (f18); no writer-side mutation test |
+| §7.3 one unit per writer | a strategy change mid-file is not honoured by the header | a file whose readings change unit after some record | stated policy, not mechanically prevented |
+| §8.5 I/O failure | a partial frame after a stream error reads as a truncated tail | a reader failing the whole file | not tested against a failing stream |
+| §9.5 unknown tag in every consumer | the CLI prints the diagnostic form | a consumer throwing on tag 9 | Java reader and analyser pinned (f12); CLI not separately |
 
 ## 14. Versioning
 
