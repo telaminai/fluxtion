@@ -59,6 +59,7 @@ config.performanceProfile(EventProcessorConfig.PerformanceProfile.LOWEST_LATENCY
 | Event `toString()` in each record | ✅ | ❌ | ❌ | — |
 | Thread name in each record | ✅ | ❌ | ❌ | — |
 | **`Clock`** — a system clock read per event | ✅ | ✅ | ✅ | ❌ |
+| Which clock STRATEGY that read uses | ✋ | ✋ | ✋ | — |
 | **Node registration** — supplies each node its `EventLogger` | ✅ | ✅ | ✅ | ❌ |
 | Runtime node-name map (`getNodeById`) | ✅ | ✅ | ✅ | ❌ |
 | **Dirty filtering** — conditional propagation | ✅ | ✅ | ❌ | ❌ |
@@ -149,6 +150,12 @@ recording nothing.
 Every profile except `LOWEST_LATENCY` reads a system clock per event, and an audited record reads one
 again for `endTime`.
 
+**No profile selects a clock strategy — that row is ✋, your call.** A profile is a build-time decision
+and `Clock` is a process-wide singleton whose strategy is installed at runtime, so the two cannot meet:
+choosing `LOW_LATENCY_AUDIT` gets you the audit-path savings but still reads the default clock unless you
+say otherwise. On a profile that reads the clock every event, that is the single largest per-event cost
+left, so it is worth saying otherwise.
+
 **The default is `System::currentTimeMillis`** — epoch milliseconds, read fresh every time. Two cheaper
 strategies exist and both are **opt-in**, because both trade away something the default promises:
 
@@ -170,9 +177,14 @@ correlates with something outside the JVM — so the accurate clock is the defau
 chosen deliberately.
 
 ```java
-// cheaper, same unit, will not track a wall-clock correction
+// cheaper, same unit, will not track a wall-clock correction.
+// Worth pairing with LOW_LATENCY_AUDIT, which reads the clock on every event.
 processor.onEvent(ClockStrategy.registerClockEvent(ClockStrategy.fastEpochMillisClock()));
 ```
+
+Decide it against the log's readers, not the latency alone: under a projected clock the `logTime` on
+every record drifts from wall-clock for the life of the process. If nothing correlates those timestamps
+with anything outside the JVM, take the saving.
 
 !!! warning "`nanoEpochClock()` changes the unit, and time-windowed nodes name theirs"
     `getWallClockTime()` returns nanoseconds under it where the default returns milliseconds, and
