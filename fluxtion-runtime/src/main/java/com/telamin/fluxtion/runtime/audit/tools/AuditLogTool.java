@@ -48,6 +48,9 @@ public final class AuditLogTool {
         private final PrintStream out;
         private String pending;
         private boolean anyPrinted;
+        private long pendingEndTime;
+        /** A record whose header was printed and whose endTime line has not been. */
+        private boolean recordOpen;
 
         TextSink(PrintStream out) {
             this.out = out;
@@ -55,6 +58,10 @@ public final class AuditLogTool {
 
         @Override
         public void record(String eventType, long eventTime, long logTime, long endTime) {
+            // endTime is emitted after nodeLogs, where the text record puts it - the callback supplied
+            // it and this output claimed the text record's shape while dropping it.
+            closeRecord();
+            pendingEndTime = endTime;
             pending = "eventLogRecord: \n"
                     + "    eventTime: " + eventTime + "\n"
                     + "    logTime: " + logTime + "\n"
@@ -71,12 +78,22 @@ public final class AuditLogTool {
                 out.println(pending);
                 pending = null;
                 anyPrinted = true;
+                recordOpen = true;
             }
             out.println("        - " + node + ": { " + key + ": " + value + "}");
         }
 
+        /** Prints the deferred {@code endTime} line for a record whose header was printed. */
+        private void closeRecord() {
+            if (recordOpen) {
+                out.println("    endTime: " + pendingEndTime);
+                recordOpen = false;
+            }
+        }
+
         @Override
         public void close() {
+            closeRecord();
             out.flush();
         }
     }

@@ -30,19 +30,32 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
     private int dictionaryWritten;
     private long recordsWritten;
 
+    private final int timeUnit;
+
+    /** Writes epoch-millisecond timestamps — Java's default clock — and says so in the header. */
     public BinaryLogWriter(OutputStream out) {
+        this(out, BinaryLogFile.TIME_UNIT_EPOCH_MILLIS);
+    }
+
+    /**
+     * @param timeUnit one of the {@code BinaryLogFile.TIME_UNIT_*} codes. The writer cannot know the
+     *                 installed clock's unit - a strategy is a bare {@code long} supplier by design -
+     *                 so whoever installs a non-default strategy states the unit here, and the file
+     *                 carries it to every reader. Before this field existed the analyser labelled every
+     *                 file milliseconds while the C++ runtime wrote nanoseconds into the same fields.
+     */
+    public BinaryLogWriter(OutputStream out, int timeUnit) {
+        this.timeUnit = timeUnit;
         this.out = out;
         try {
             out.write(BinaryLogFile.MAGIC);
             writeShort(BinaryLogFile.FORMAT_VERSION);
-            writeShort(0);
+            writeShort(timeUnit);   // was the reserved u16, always 0; 0 still means "unspecified"
         } catch (IOException e) {
             throw new UncheckedIOException("cannot write audit log header", e);
         }
     }
 
-    /** The dictionary frame declares a name's byte length in a u16, so this is the hard maximum. */
-    private static final int MAX_DICTIONARY_NAME_BYTES = 0xFFFF;
 
     /** The file's dictionary: name -> the id this FILE uses for it. Authoritative over any record. */
     private final java.util.Map<String, Integer> fileIdByName = new java.util.HashMap<>();
@@ -53,8 +66,6 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
     private int lastDictionaryLength = -1;
     private int[] translation = new int[0];
 
-    /** Dictionary ids are written as a u16. */
-    private static final int MAX_DICTIONARY_ID = 0xFFFF;
 
     /** Slot 0 packs nodeId in bits 48-63 and keyId in 32-47; both are record-scoped ids. */
     private static long translateEntry(long slot0, int[] translate) {
@@ -92,9 +103,23 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
         try {
             int[] translate = translationFor(record);
             int entries = record.length() / 16;
+            // The entry count is a u16 on the wire. A record capacity can hold more; writing 65,536
+            // wrapped the count to 0 with every entry byte following, and the reader failed thousands
+            // of bytes later with "unknown frame type". Refuse before the first frame byte is written.
+            if (entries > BinaryLogFile.MAX_ENTRIES_PER_RECORD) {
+                throw new IllegalStateException(
+                        "audit record holds " + entries + " entries; the record format's count field "
+                                + "holds at most " + BinaryLogFile.MAX_ENTRIES_PER_RECORD
+                                + ". Writing it would corrupt the file. Log fewer entries per event.");
+            }
             out.write(BinaryLogFile.FRAME_RECORD);
             writeShort(entries);
-            writeShort(record.eventTypeId());
+            // TRANSLATED. eventTypeId is allocated by the record's own tableId(), so it is exactly as
+            // record-scoped as the node, key and value ids below - and it was the one id left out. A
+            // replacement record allocated B into the id A held in the first record, and the file went
+            // on calling that id A: a B event silently recorded as A, integrity counter clean. The
+            // highest-risk polarity an audit system has.
+            writeShort((int) mapped(record.eventTypeId(), translate));
             writeLong(record.eventTime());
             writeLong(record.logTime());
             writeLong(record.endTime());
@@ -144,9 +169,9 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
             }
             Integer fileId = fileIdByName.get(name);
             if (fileId == null) {
-                if (nextFileId > MAX_DICTIONARY_ID) {
+                if (nextFileId > BinaryLogFile.MAX_DICTIONARY_ID) {
                     throw new IllegalStateException(
-                            "audit file dictionary is full: " + MAX_DICTIONARY_ID + " distinct names. "
+                            "audit file dictionary is full: " + BinaryLogFile.MAX_DICTIONARY_ID + " distinct names. "
                                     + "Ids are a u16 in the record format, so there is no id left for '"
                                     + name + "'. Start a new file, or log unbounded values as an "
                                     + "identifier rather than as a distinct string each time.");
@@ -168,10 +193,10 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
         // by every byte, so the reader resumed mid-string and read payload as frame tags - "unknown
         // frame type 0x78" some thousands of bytes later, with nothing pointing at the cause.
         // Reachable from a public API: audit VALUES are interned as dictionary names.
-        if (utf8.length > MAX_DICTIONARY_NAME_BYTES) {
+        if (utf8.length > BinaryLogFile.MAX_DICTIONARY_NAME_BYTES) {
             throw new IllegalStateException(
                     "audit dictionary name is " + utf8.length + " UTF-8 bytes; the record format's "
-                            + "length field holds at most " + MAX_DICTIONARY_NAME_BYTES
+                            + "length field holds at most " + BinaryLogFile.MAX_DICTIONARY_NAME_BYTES
                             + ". Writing it would corrupt the file rather than truncate the name. "
                             + "This is almost always a long String VALUE being logged as an audit "
                             + "entry; log an identifier instead.");

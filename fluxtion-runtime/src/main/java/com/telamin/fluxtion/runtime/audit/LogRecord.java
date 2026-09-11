@@ -69,7 +69,7 @@ public class LogRecord {
      * record.</b> This flag is new; defaulting it off silently removed a field from the default text
      * output, which is a changed output contract rather than the additive change this release claims.
      * A consumer parsing the record for {@code endTime} would have found it gone. The saving is real
-     * and is still available - set this false, or select a profile that does - but it is opted into
+     * and is still available - set this false - but it is opted into
      * rather than imposed.
      *
      * <p>Turn it off when you do not consume the duration. Leave it on, and pair it with a clock that
@@ -224,7 +224,12 @@ public class LogRecord {
 
     public void addRecord(String sourceId, String propertyKey, Object value) {
         addSourceId(sourceId, propertyKey);
-        sb.append(value == null ? "NULL" : value);
+        // "null", not "NULL". The analyser's format spec reads the lowercase literal as a null value and
+        // anything else as a String, so the uppercase spelling reached it as the string "NULL" - and the
+        // CharSequence overload already wrote lowercase, so the two null paths disagreed with each other
+        // as well as with the reader. Existing logs carrying "NULL" are unchanged and still parse as the
+        // String they always parsed as; only new output moves.
+        sb.append(value == null ? "null" : value);
     }
 
     public void addRecord(String sourceId, String propertyKey, boolean value) {

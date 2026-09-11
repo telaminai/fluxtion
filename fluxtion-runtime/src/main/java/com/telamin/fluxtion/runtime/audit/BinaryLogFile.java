@@ -39,6 +39,33 @@ public final class BinaryLogFile {
     public static final int FRAME_RECORD = 0x01;
     public static final int FRAME_DICT = 0x02;
 
+    // ---- THE BOUNDS TABLE ------------------------------------------------------------------------
+    // Every field the wire writes as a u16, in one place, so both writers check the same limits and a
+    // reader can state what it can represent. Three of these were unchecked in one or both writers:
+    // an entry count of 65,536 wrapped to 0; a dictionary id wrapped negative; a name longer than the
+    // length field emitted a short length then every byte. The C++ runtime carries this table too, in
+    // fluxtion_writer.h, and the two MUST agree - a bound one side enforces and the other does not is
+    // a file one side writes and the other cannot read.
+    /** {@code entryCount:u16} in the record frame. */
+    public static final int MAX_ENTRIES_PER_RECORD = 0xFFFF;
+    /** {@code id:u16} in the dictionary frame and in every entry slot. Id 0 is reserved for "none". */
+    public static final int MAX_DICTIONARY_ID = 0xFFFF;
+    /** {@code len:u16} in the dictionary frame — UTF-8 bytes, not characters. */
+    public static final int MAX_DICTIONARY_NAME_BYTES = 0xFFFF;
+
+    // ---- THE TIME UNIT ---------------------------------------------------------------------------
+    // The header's second u16 was reserved and written as 0. It now carries the unit of eventTime,
+    // logTime and endTime, because nothing else did: Java's default clock is epoch milliseconds, the
+    // C++ runtime's was epoch nanoseconds, the analyser declared every file milliseconds, and the same
+    // field held both. A consumer cannot infer a unit from magnitude safely. 0 keeps its old meaning -
+    // a file written before the unit was recorded - so every existing file still parses.
+    /** Written by files predating the unit field. A reader may not assume a unit. */
+    public static final int TIME_UNIT_UNSPECIFIED = 0;
+    /** Epoch milliseconds — Java's default clock, and what the analyser assumes. */
+    public static final int TIME_UNIT_EPOCH_MILLIS = 1;
+    /** Epoch nanoseconds — {@code ClockStrategy.nanoEpochClock()} and the C++ {@code SystemNanoClock}. */
+    public static final int TIME_UNIT_EPOCH_NANOS = 2;
+
     /** Fixed part of a RECORD frame: tag, entryCount, eventTypeId, and three timestamps. */
     public static final int RECORD_FIXED_BYTES = 1 + 2 + 2 + 8 + 8 + 8;
 

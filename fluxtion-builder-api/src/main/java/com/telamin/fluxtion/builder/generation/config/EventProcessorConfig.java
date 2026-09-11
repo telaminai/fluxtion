@@ -514,8 +514,10 @@ public class EventProcessorConfig {
          * logging node and 5.1× when every node on the path logs</b>, and 54 bytes per record against
          * 193.
          *
-         * <p><b>Nothing can read it yet.</b> The analyser registers only a YAML reader and the
-         * Chronicle reader is unfiled, so a processor built with this produces a log no existing tool
+         * <p><b>Readable by BinaryLogReader, the AuditLogTool CLI, and the analyser's BinaryAuditReader.</b>
+         * It is not the default because it needs a sink installed - a BinaryLogWriter - after the
+         * processor is constructed and before it processes events; the text record needs nothing. A
+         * default that adds a required step to every existing build is not a safe default.
          * can open. That is why {@link PerformanceProfile#LOW_LATENCY_AUDIT} does not select it for you.
          */
         BINARY

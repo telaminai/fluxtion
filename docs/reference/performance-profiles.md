@@ -255,7 +255,8 @@ config.performanceProfile(LOW_LATENCY_AUDIT)
 processor.onEvent(new ClockStrategy.ClockStrategyEvent(ClockStrategy.nanoEpochClock()));
 ```
 
-…and note that `BINARY` produces a log the analyser UI cannot yet open, though the command-line reader
+…and note that `BINARY` needs a `BinaryLogWriter` sink installed after construction and before the
+first event, or the first record refuses — the analyser and the command-line reader
 can. See [Binary audit logging](../how-to/binary-audit-logging.md).
 
 **Developing, and you do not yet know what you are looking for:** `AUDITED` with tracing. It is 30× the

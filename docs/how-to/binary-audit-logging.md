@@ -42,6 +42,16 @@ config.addLowLatencyEventLog(LogLevel.INFO);                           // TEXT �
 config.addLowLatencyEventLog(LogLevel.INFO, AuditRecordFormat.BINARY); // BINARY
 ```
 
+**Then install a sink, or the first record refuses.** A binary record has no text form, so the default
+sink cannot take it. The window is after construction and before the first event:
+
+```java
+DataFlow processor = Fluxtion.compileAot(cfg -> { /* as above */ });
+EventLogManager audit = processor.getAuditorById(EventLogManager.NODE_NAME);
+audit.setLogSink(new BinaryLogWriter(Files.newOutputStream(Path.of("audit.flxa"))));
+processor.init();                                   // now events can flow
+```
+
 `EventLogManager` builds the chosen record at `init()`. Swapping the record on a *running* processor
 through `EventLogControlEvent` still works and is still how you change format at runtime; this is how
 you start in the right one.
@@ -80,15 +90,13 @@ against assembling the same bytes one at a time — a 23% larger record for a mu
   this profile should not be logging `Object`.
 - **`asCharSequence()` throws.** A binary record has no text form. A sink written against the text record
   will fail loudly rather than emit something wrong.
-- **The analyser UI cannot open a binary log yet.** The command-line reader can — see
-  [Reading a binary audit log](read-a-binary-audit-log.md) — but a binary log does not open in the
-  analyser. **This is why `TEXT` is still the default**: a default that changes what your existing
-  tooling can read is not a default.
+- **The analyser opens it** through its `BinaryAuditReader`, as does the `AuditLogTool` command line.
+  `TEXT` stays the default only because binary needs the sink step below and text needs nothing.
 
 ## Two things that have caught people out
 
 !!! danger "`LOW_LATENCY_AUDIT` can be configured into producing no audit log at all"
-    The profile turns off node-name lookup, and node registration is what supplies each node its
+    `LOWEST_LATENCY` turns off node-name lookup; `LOW_LATENCY_AUDIT` keeps it, because node registration is what supplies each node its
     `EventLogger`. An early version of this profile disabled registration and therefore the audit log,
     while still reporting excellent numbers — because a benchmark measuring nothing is very fast.
 

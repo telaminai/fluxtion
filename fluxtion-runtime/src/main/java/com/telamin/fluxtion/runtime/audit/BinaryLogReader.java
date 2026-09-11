@@ -61,6 +61,13 @@ public final class BinaryLogReader {
         public long entries;
         public int truncatedBytes;
         public int unresolvedIds;
+        /**
+         * The unit of every timestamp in the file, as one of the {@code BinaryLogFile.TIME_UNIT_*}
+         * codes. {@code TIME_UNIT_UNSPECIFIED} for a file written before the header carried it —
+         * and a reader must not then assume: Java wrote milliseconds and the C++ runtime wrote
+         * nanoseconds into the same fields, which is why this exists.
+         */
+        public int timeUnit = BinaryLogFile.TIME_UNIT_UNSPECIFIED;
         public final List<String> dictionary = new ArrayList<>();
 
         @Override
@@ -193,6 +200,7 @@ public final class BinaryLogReader {
                 throw new IOException("audit log format version " + version
                         + ", this reader understands " + BinaryLogFile.FORMAT_VERSION);
             }
+            result.timeUnit = u16(data, 6);
             p = BinaryLogFile.HEADER_BYTES;
             cursor.consumed = p;
         }

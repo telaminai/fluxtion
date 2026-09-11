@@ -398,8 +398,8 @@ public final class BinaryLogRecord extends LogRecord {
     public void addRecord(String sourceId, String propertyKey, Object value) {
         writeSlots(tableId(sourceId), propertyKey == null ? 0 : keyId(propertyKey),
                 // Id 0 for null, as the CharSequence path does - rather than interning the literal
-                // "NULL", which both burned a dictionary id and rendered with different casing from
-                // the text record's "null".
+                // "NULL", which burned a dictionary id. The text record's Object path wrote "NULL" too
+                // until both were aligned to the lowercase literal the analyser reads as a null value.
                 TAG_OBJECT, value == null ? 0 : tableId(value.toString()));
     }
 

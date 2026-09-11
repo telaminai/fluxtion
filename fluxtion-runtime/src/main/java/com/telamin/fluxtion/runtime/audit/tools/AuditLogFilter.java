@@ -104,11 +104,11 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
     @Override
     public boolean onRecord(int eventTypeId, String eventType,
                             long eventTime, long logTime, long endTime, int entryCount) {
-        // ROLE DISCOVERY FIRST, before any filter can decline the record. It answers "does this name
-        // exist in this role ANYWHERE in the file", which is what the unmatchable diagnostic claims -
-        // and recording it after the time, limit and event filters made the answer a property of the
-        // query it was meant to explain. A node present only under another event was then reported as
-        // absent from the file, which is false: the name exists, the combination does not match.
+        // The EVENT role is observed for every record the reader offers, before any filter declines
+        // it. NODE and KEY roles cannot be: entries arrive only for records this method admitted, and
+        // that early skip is the cheap path the event and time filters exist for. So the three roles
+        // have different scopes, and unmatchableWithinSelection() states the narrower one for all of
+        // them rather than claiming the wider one for any.
         eventIdsSeen.set(eventTypeId);
         recordOpen = false;
         if (matchedRecords >= limit) {

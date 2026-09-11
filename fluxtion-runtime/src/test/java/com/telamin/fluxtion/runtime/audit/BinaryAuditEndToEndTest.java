@@ -261,4 +261,101 @@ public class BinaryAuditEndToEndTest {
                     refused.getMessage().contains("IDENTITY"));
         }
     }
+
+    /** Two distinct event types, so an untranslated header would be visible. */
+    public static final class EventA { }
+    public static final class EventB { }
+
+    /**
+     * THE PUBLIC RECORD-SWAP PATH, with an event type that changes. The earlier swap test used
+     * {@code new Object()} on both sides, so the event id was identical in both records and the
+     * untranslated header could not be seen: a B event was written as A, and the integrity counter
+     * said the file was clean.
+     */
+    @Test
+    public void aRecordSwappedThroughTheControlEventKeepsItsEventType() throws Exception {
+        Path file = Files.createTempFile("audit-swap-event", ".flxa");
+        EventLogManager manager;
+        try (BinaryLogWriter w = new BinaryLogWriter(Files.newOutputStream(file))) {
+            manager = new EventLogManager(w).tracingOff().binaryRecord(true);
+            manager.clock = new Clock();
+            manager.clock.init();
+            manager.init();
+            // A real EventLogSource node: registration hands it its logger, as generated code does.
+            // The manager re-hands a logger on every record swap (setLogger is called again with a
+            // logger bound to the NEW record), so the node must always log through the current one.
+            // A first version of this test held the first logger and so wrote its third entry into
+            // the retired record - the swap looked like it lost an event when the test had.
+            EventLogger[] current = new EventLogger[1];
+            manager.nodeRegistered((EventLogSource) log -> current[0] = log, "source");
+
+            fire(manager, current, new EventA(), 1);
+            fire(manager, current, new EventB(), 2);
+            // the PUBLIC swap: a fresh record re-interns, so B can land on A's old id
+            manager.calculationLogConfig(new EventLogControlEvent(new BinaryLogRecord(manager.clock, 4096)));
+            fire(manager, current, new EventB(), 3);
+        }
+        List<String> events = new ArrayList<>();
+        BinaryLogReader.read(file, new BinaryLogReader.Visitor() {
+            public boolean onRecord(int id, String type, long a, long b, long c, int n) {
+                events.add(type.substring(type.lastIndexOf('$') + 1)); return true; }
+            public void onEntry(int a, String b, int c, String d, int e, long f) { }
+        });
+        assertEquals("the third event was B and must be recorded as B", "[EventA, EventB, EventB]",
+                events.toString());
+    }
+
+    private static void fire(EventLogManager m, EventLogger[] current, Object event, int value) {
+        m.eventReceived(event);
+        current[0].info("k", value);
+        m.processingComplete();
+    }
+
+    /** The entry count is a u16; a record that exceeds it must be refused, not wrapped to 0. */
+    @Test
+    public void tooManyEntriesForTheCountFieldIsRefused() {
+        Clock clock = new Clock();
+        clock.init();
+        BinaryLogRecord r = new BinaryLogRecord(clock, 0xFFFF * 16 + 64);
+        r.updateLogLevel(LogLevel.INFO);
+        r.triggerObject(new Object());
+        EventLogger logger = loggerOn(r);
+        for (int i = 0; i <= 0xFFFF; i++) {
+            logger.info("k", i);
+        }
+        org.junit.Assume.assumeFalse("fixture must not overflow the slot buffer", r.overflowed());
+        r.terminateRecord();
+        try (BinaryLogWriter w = new BinaryLogWriter(new ByteArrayOutputStream())) {
+            w.processLogRecord(r);
+            fail("65,536 entries must be refused - the count field wraps to 0");
+        } catch (IllegalStateException refused) {
+            assertTrue(refused.getMessage(), refused.getMessage().contains("65535"));
+        } catch (Exception e) {
+            fail("expected refusal, got " + e);
+        }
+    }
+
+    /** The header carries the time unit, and a reader can see it. */
+    @Test
+    public void theHeaderCarriesTheTimeUnit() throws Exception {
+        Path millis = Files.createTempFile("audit-unit-ms", ".flxa");
+        Path nanos = Files.createTempFile("audit-unit-ns", ".flxa");
+        for (Object[] c : new Object[][]{{millis, BinaryLogFile.TIME_UNIT_EPOCH_MILLIS},
+                                         {nanos, BinaryLogFile.TIME_UNIT_EPOCH_NANOS}}) {
+            BinaryLogRecord r = record();
+            r.addRecord("n", "k", 1);
+            r.terminateRecord();
+            try (BinaryLogWriter w = new BinaryLogWriter(Files.newOutputStream((Path) c[0]), (int) c[1])) {
+                w.processLogRecord(r);
+            }
+        }
+        BinaryLogReader.Visitor ignore = new BinaryLogReader.Visitor() {
+            public boolean onRecord(int a, String b, long c, long d, long e, int f) { return true; }
+            public void onEntry(int a, String b, int c, String d, int e, long f) { }
+        };
+        assertEquals(BinaryLogFile.TIME_UNIT_EPOCH_MILLIS, BinaryLogReader.read(millis, ignore).timeUnit);
+        assertEquals(BinaryLogFile.TIME_UNIT_EPOCH_NANOS, BinaryLogReader.read(nanos, ignore).timeUnit);
+        assertEquals("the default writer declares milliseconds",
+                BinaryLogFile.TIME_UNIT_EPOCH_MILLIS, BinaryLogReader.read(millis, ignore).timeUnit);
+    }
 }
