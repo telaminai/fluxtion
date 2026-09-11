@@ -77,7 +77,9 @@ java -cp fluxtion-runtime.jar com.telamin.fluxtion.runtime.audit.tools.AuditLogT
 ```
 
 The copy is byte-identical past the header, the tool fills in only a header that states none, and
-every reader then trusts it. The tool's own `--from`/`--to` are milliseconds whatever the file's unit:
+every reader then trusts it. The format itself — header, frames, tags, bounds, what a writer must
+refuse and a reader must deliver — is specified in [FLXA — the binary audit log format](../reference/flxa-format.md),
+with a conformance corpus that ships in the runtime jar. The tool's own `--from`/`--to` are milliseconds whatever the file's unit:
 it reads the header first, scales the bounds for a nanosecond file, and refuses a time query over a
 file whose unit it cannot honour rather than report zero matches.
 

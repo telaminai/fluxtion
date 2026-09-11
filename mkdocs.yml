@@ -103,6 +103,7 @@ nav:
       - Alternative comparisons: reference/alternative-comparisons.md
       - Performance results: reference/performance.md
       - Performance profiles: reference/performance-profiles.md
+      - FLXA binary audit format: reference/flxa-format.md
       - Tuning for lowest latency: reference/performance-tuning.md
       - Audit latency harness: reference/audit-latency-harness.md
 
