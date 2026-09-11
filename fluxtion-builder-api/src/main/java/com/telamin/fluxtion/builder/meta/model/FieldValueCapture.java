@@ -85,6 +85,11 @@ public final class FieldValueCapture {
                 if (isGraphNode.test(v)) {
                     continue;   // a parent reference, bound by the target, not serialised state
                 }
+                final FieldValue sequence = asSequence(f, v);
+                if (sequence != null) {
+                    out.add(sequence);
+                    continue;
+                }
                 final FieldValue.Kind kind = kindOf(f.getType());
                 if (kind == null) {
                     // NOT skipped. Java would serialise this; a target that cannot carry it must be
@@ -122,6 +127,64 @@ public final class FieldValueCapture {
     private static boolean isFrameworkOwned(Class<?> t) {
         final String n = t.getName();
         return n.startsWith("com.telamin.fluxtion.runtime.");
+    }
+
+    /**
+     * An array, {@code List} or {@code Set} of one scalar kind, captured as DATA.
+     *
+     * <p>Returns null for anything else — a mixed-element collection, a {@code Map}, a collection of
+     * objects — which then falls through to UNSUPPORTED and is refused by name. Refusing a mixed
+     * collection is deliberate: there is no single element type to give a target, and picking the
+     * widest would silently change what the author declared.
+     */
+    private static FieldValue asSequence(java.lang.reflect.Field f, Object v) {
+        final List<Object> raw = new ArrayList<>();
+        if (f.getType().isArray()) {
+            final int n = java.lang.reflect.Array.getLength(v);
+            for (int i = 0; i < n; i++) {
+                raw.add(java.lang.reflect.Array.get(v, i));
+            }
+        } else if (v instanceof java.util.List || v instanceof java.util.Set) {
+            raw.addAll((java.util.Collection<?>) v);
+        } else {
+            return null;
+        }
+
+        FieldValue.Kind elementKind = null;
+        if (f.getType().isArray()) {
+            elementKind = kindOf(f.getType().getComponentType());
+            if (elementKind == null) {
+                return null;   // an array of objects: not this tier
+            }
+        }
+        final List<String> literals = new ArrayList<>(raw.size());
+        for (Object e : raw) {
+            if (e == null) {
+                return null;   // a null element has no literal, and guessing one would be a lie
+            }
+            final FieldValue.Kind k = kindOf(e.getClass());
+            if (k == null) {
+                return null;
+            }
+            if (elementKind == null) {
+                elementKind = k;
+            } else if (elementKind != k && !bothNumericSameWidth(elementKind, k)) {
+                return null;   // mixed elements: no single type to hand a target
+            }
+            literals.add(literalOf(k, e));
+        }
+        if (elementKind == null) {
+            // An EMPTY array still has a component type, and an empty collection does not. An empty
+            // collection carries no type information at all, so it is refused rather than guessed.
+            return null;
+        }
+        return new FieldValue(f.getName(), f.getType().getCanonicalName(),
+                FieldValue.Kind.SEQUENCE, f.getType().getCanonicalName(), elementKind, literals);
+    }
+
+    /** Boxed and primitive forms of one width are the same element type to a target. */
+    private static boolean bothNumericSameWidth(FieldValue.Kind a, FieldValue.Kind b) {
+        return a == b;
     }
 
     private static FieldValue.Kind kindOf(Class<?> t) {

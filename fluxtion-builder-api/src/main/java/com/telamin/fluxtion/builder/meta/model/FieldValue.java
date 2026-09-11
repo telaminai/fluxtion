@@ -52,20 +52,50 @@ public final class FieldValue implements Serializable {
          * those are the author stating the field is not part of the configured state, and Java's own
          * serialisation honours the same words.
          */
-        UNSUPPORTED
+        UNSUPPORTED,
+        /**
+         * An array, {@code List} or {@code Set} whose elements are all one scalar kind.
+         *
+         * <p>{@link #elementKind()} gives that kind and {@link #elements()} the element literals.
+         * {@link #literal()} is the declared type, as for {@link #UNSUPPORTED}.
+         *
+         * <p>The DATA crosses, deliberately, and not a container. A {@code List<Integer>} could be a
+         * {@code std::vector}, a flat array, or something the author hand-rolls for a hot path;
+         * choosing one here would be the target deciding a representation on their behalf. The target
+         * emits the values and hands them over, and the author's {@code @Initialise} builds whatever
+         * it wants from them.
+         */
+        SEQUENCE
     }
 
     private final String name;
     private final String declaredType;
     private final Kind kind;
     private final String literal;
+    private final Kind elementKind;
+    private final java.util.List<String> elements;
 
     public FieldValue(String name, String declaredType, Kind kind, String literal) {
+        this(name, declaredType, kind, literal, null, java.util.Collections.emptyList());
+    }
+
+    public FieldValue(String name, String declaredType, Kind kind, String literal,
+                      Kind elementKind, java.util.List<String> elements) {
         this.name = name;
         this.declaredType = declaredType;
         this.kind = kind;
         this.literal = literal;
+        this.elementKind = elementKind;
+        this.elements = elements == null
+                ? java.util.Collections.emptyList()
+                : java.util.Collections.unmodifiableList(new java.util.ArrayList<>(elements));
     }
+
+    /** For {@link Kind#SEQUENCE}: the scalar kind every element shares. Null otherwise. */
+    public Kind elementKind() { return elementKind; }
+
+    /** For {@link Kind#SEQUENCE}: the element literals, in order. Empty otherwise. */
+    public java.util.List<String> elements() { return elements; }
 
     /** The field's name on the node class. */
     public String name() { return name; }
