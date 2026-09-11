@@ -54,7 +54,7 @@ public class BinaryLogFileRoundTripTest {
             manager.setLogSink(writer);
             manager.init();
             BinaryLogRecord rec = new BinaryLogRecord(clock, 4096);
-            rec.setRecordEndTime(true);     // off by default; this test asserts the header carries it
+            rec.setRecordEndTime(true);     // on by default; set explicitly so the test states its premise
             manager.calculationLogConfig(new EventLogControlEvent(rec));
             Book a = new Book();
             Book b = new Book();

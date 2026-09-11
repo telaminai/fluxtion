@@ -150,9 +150,11 @@ recording nothing.
 Every profile except `LOWEST_LATENCY` reads a system clock per event, and an audited record reads one
 again for `endTime`.
 
-**No profile selects a clock strategy — that row is ✋, your call.** A profile is a build-time decision
-and `Clock` is a process-wide singleton whose strategy is installed at runtime, so the two cannot meet:
-choosing `LOW_LATENCY_AUDIT` still reads the default clock unless you say otherwise.
+**No profile selects a clock strategy — that row is ✋, your call.** Not because a build input could
+never carry one: a generated processor holds its own `Clock`, and build inputs routinely produce runtime
+setup. It is that **no such policy exists today**, and that changing the graph's clock changes what every
+time-windowed node believes the time is — so it is not a dial a latency profile should quietly turn.
+Choosing `LOW_LATENCY_AUDIT` reads the default clock unless you say otherwise.
 
 !!! note "Giving the audit record its own clock does not help, and was tried"
     The obvious shortcut — a private fast clock for the record, leaving the graph's alone — makes the

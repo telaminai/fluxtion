@@ -245,7 +245,7 @@ public final class BinaryLogRecord extends LogRecord {
      * The time processing COMPLETED — deliberately a live reading, because {@code endTime - logTime} is
      * the processing duration and a cached value would report every event as taking zero time.
      *
-     * <p>Only called when {@link #recordEndTime} is set. It is off by default: it is the second clock
+     * <p>Only called when {@link #recordEndTime} is set. It is ON by default: it is the second clock
      * read on an audited event path, and a deployment that does not consume the duration is paying for
      * a field nothing looks at.
      */

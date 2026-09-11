@@ -37,9 +37,9 @@ The record format is a **build input**:
 [Setting a profile in your build](../reference/performance-profiles.md#setting-a-profile-in-your-build).
 
 ```java
-config.performanceProfile(EventProcessorConfig.PerformanceProfile.LOW_LATENCY_AUDIT)
-      .addLowLatencyEventLog(LogLevel.INFO);                           // TEXT — the default
-      .addLowLatencyEventLog(LogLevel.INFO, AuditRecordFormat.BINARY); // BINARY
+config.performanceProfile(EventProcessorConfig.PerformanceProfile.LOW_LATENCY_AUDIT);
+config.addLowLatencyEventLog(LogLevel.INFO);                           // TEXT — the default
+config.addLowLatencyEventLog(LogLevel.INFO, AuditRecordFormat.BINARY); // BINARY
 ```
 
 `EventLogManager` builds the chosen record at `init()`. Swapping the record on a *running* processor
@@ -76,7 +76,7 @@ against assembling the same bytes one at a time — a 23% larger record for a mu
 ## What it cannot do
 
 - **`Object` values still cost text.** The `Object` overload has to call `toString()`; it is encoded as a
-  length-prefixed string so the record stays complete, not because it is fast. A deployment targeting
+  dictionary id so the record stays complete, not because it is fast. A deployment targeting
   this profile should not be logging `Object`.
 - **`asCharSequence()` throws.** A binary record has no text form. A sink written against the text record
   will fail loudly rather than emit something wrong.

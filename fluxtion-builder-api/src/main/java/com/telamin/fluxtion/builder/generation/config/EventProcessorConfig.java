@@ -542,7 +542,7 @@ public class EventProcessorConfig {
      * at about 26 ns per entry, against 3.4 for bits.
      *
      * @param entryLevel threshold for the entries nodes themselves write
-     * @param format     {@link AuditRecordFormat#TEXT} unless you have a reader for the binary form
+     * @param format     {@link AuditRecordFormat#TEXT} the binary form needs a sink installed and is read by BinaryLogReader or the AuditLogTool CLI
      */
     public EventProcessorConfig addLowLatencyEventLog(LogLevel entryLevel, AuditRecordFormat format) {
         EventLogManager manager = new EventLogManager()

@@ -171,7 +171,9 @@ public class LowLatencyAuditProfileTest {
 
     /**
      * The record format is a <b>build input</b> selected through the profile, not something swapped in
-     * at runtime. Default stays TEXT because nothing can read the binary form yet — the analyser
+     * at runtime. Default stays TEXT because it needs no extra step: the binary form IS readable -
+     * BinaryLogReader and the AuditLogTool CLI both open it - but it requires a sink to be installed
+     * and a reader to open it, so it is chosen rather than defaulted. The analyser
      * registers only a YAML reader.
      */
     @Test
@@ -181,7 +183,7 @@ public class LowLatencyAuditProfileTest {
         config.addLowLatencyEventLog(com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel.INFO);
 
         EventLogManager manager = (EventLogManager) config.getAuditorMap().get(EventLogManager.NODE_NAME);
-        assertFalse("a binary log nothing can open is not a safe default", manager.binaryRecord);
+        assertFalse("binary requires an installed sink, so it is not a safe default", manager.binaryRecord);
     }
 
     /**
