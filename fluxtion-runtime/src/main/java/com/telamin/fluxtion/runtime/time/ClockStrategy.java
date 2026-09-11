@@ -18,47 +18,25 @@ public interface ClockStrategy {
     }
 
     /**
-     * A monotonic clock reporting <b>nanoseconds since the epoch</b>, anchored once at construction.
+     * <b>Opt-in.</b> Epoch <b>milliseconds</b>, projected from {@link System#nanoTime()}.
      *
-     * <p>The default strategy is {@code System::currentTimeMillis}. Measured on an Apple M4 it costs
-     * <b>12.9 ns</b> per call against <b>8.0 ns</b> for {@code System.nanoTime()}, and the audited path
-     * reads a clock twice per event — once in {@link Clock#eventReceived}, once for the record's
-     * {@code endTime}. That is ~26 ns/event.
+     * <p>Anchors {@code System.currentTimeMillis()} against {@code System.nanoTime()} ONCE and advances
+     * by the monotonic delta thereafter. Cheaper than the default — {@code currentTimeMillis} costs
+     * 12.9 ns a call on an Apple M4 against 8.0 for {@code nanoTime}, and an audited path reads the
+     * clock once per event — and monotonic, so it will not step backwards over an NTP correction.
      *
-     * <p>The resolution matters more than the cost. {@code currentTimeMillis} advances 1000 times a
-     * second, so on any event faster than a millisecond {@code endTime - logTime} — the field that
-     * exists to report processing duration — is <b>always zero</b>. The framework pays twice per event
-     * for a number that cannot be non-zero.
+     * <p><b>It also never steps FORWARD over one.</b> The wall clock is sampled once, at construction,
+     * and never again: this reports elapsed time projected from that anchor, not the current time. A
+     * host clock correction — NTP, an operator, a VM resume — is invisible to it, and a long-lived
+     * process goes on stamping a pre-correction timeline. Drift accumulates and is never reconciled.
      *
-     * <p>This strategy anchors {@code System.currentTimeMillis()} against {@code System.nanoTime()} once
-     * and advances by the monotonic delta thereafter, so timestamps stay comparable to wall-clock time
-     * while durations become real. It is monotonic — it will not step backwards over an NTP correction,
-     * which {@code currentTimeMillis} can.
+     * <p>That is why this is not the default. It is the right choice when the readings are used for
+     * DURATIONS, and the wrong one when they are used as absolute timestamps — and the runtime's own
+     * audit record is the second case: {@code Clock.eventReceived} stores the reading and the record
+     * emits it as {@code logTime}. Choose it deliberately, for a process whose lifetime and accuracy
+     * needs you know.
      *
-     * <p><b>The unit changes.</b> This returns nanoseconds where the default returns milliseconds, so it
-     * is opt-in: a consumer reading a log has to know which it is looking at.
-     */
-    /**
-     * <b>The default.</b> Epoch <b>milliseconds</b>, read through {@link System#nanoTime()}.
-     *
-     * <p>Fast and monotonic like {@link #nanoEpochClock()}, and — unlike it — in the unit the rest of
-     * the framework means by wall-clock time. {@code System.currentTimeMillis()} costs 12.9 ns a call
-     * on an Apple M4 against 8.0 for {@code nanoTime}, and an audited path reads the clock once per
-     * event, so the anchor-once form is worth having as the default.
-     *
-     * <p><b>Why milliseconds, when the clock is deliberately unit-free.</b>
-     * {@link Clock#getWallClockTime()} returns a bare {@code long} and says nothing about its unit —
-     * that is a runtime concern, decided by whichever strategy is installed, which is exactly what
-     * makes data-driven replay possible. What the framework does require is that the strategy and the
-     * time-based nodes <b>agree</b>, and some of those nodes name their unit in their own API:
-     * {@code FixedRateTrigger.atMillis(300)} is milliseconds by construction.
-     *
-     * <p>The default was briefly {@link #nanoEpochClock()}, on the reasoning that milliseconds cannot
-     * express a sub-millisecond duration. True, and beside the point: it left {@code atMillis} callers
-     * comparing a millisecond window against a nanosecond clock, so every tumbling and sliding window
-     * silently stopped rolling — 30 tests, arithmetic off by a factor of a million, and not one of
-     * them mentioning a clock. A default has to agree with the unit the framework's own API names;
-     * a graph that installs its own strategy is free to choose any unit, provided its nodes use it.
+     * @return a monotonic epoch-millisecond strategy that does not track wall-clock corrections
      */
     static ClockStrategy fastEpochMillisClock() {
         final long epochMillis = System.currentTimeMillis();
@@ -66,6 +44,20 @@ public interface ClockStrategy {
         return () -> epochMillis + (System.nanoTime() - nanoBase) / 1_000_000L;
     }
 
+    /**
+     * <b>Opt-in.</b> Epoch <b>nanoseconds</b>, projected from {@link System#nanoTime()}.
+     *
+     * <p>Same anchor-once behaviour as {@link #fastEpochMillisClock()} and the same caveat: it does not
+     * track later wall-clock corrections.
+     *
+     * <p><b>The unit differs from the default</b>, which is milliseconds, so a consumer reading a log
+     * has to know which produced it — and the framework's own time-windowed nodes name milliseconds
+     * ({@code FixedRateTrigger.atMillis}). Installing this on a graph with a tumbling or sliding window
+     * stops the window rolling, silently. Use it when sub-millisecond timestamps matter and the graph
+     * has no time-windowed nodes.
+     *
+     * @return a monotonic epoch-nanosecond strategy that does not track wall-clock corrections
+     */
     static ClockStrategy nanoEpochClock() {
         final long epochNanos = System.currentTimeMillis() * 1_000_000L;
         final long nanoBase = System.nanoTime();

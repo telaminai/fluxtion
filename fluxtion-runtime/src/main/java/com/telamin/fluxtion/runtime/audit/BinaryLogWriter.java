@@ -41,6 +41,12 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
         }
     }
 
+    /** The dictionary frame declares a name's byte length in a u16, so this is the hard maximum. */
+    private static final int MAX_DICTIONARY_NAME_BYTES = 0xFFFF;
+
+    /** id -> name as actually written to this file, so a conflicting reuse can be refused. */
+    private final java.util.Map<Integer, String> namesWritten = new java.util.HashMap<>();
+
     @Override
     public void processLogRecord(LogRecord logRecord) {
         if (!(logRecord instanceof BinaryLogRecord)) {
@@ -49,6 +55,17 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
                     + " — build with addLowLatencyEventLog(level, AuditRecordFormat.BINARY)");
         }
         BinaryLogRecord record = (BinaryLogRecord) logRecord;
+        // A RECORD THAT OVERFLOWED IS NOT A RECORD. writeSlots sets the flag and drops the entries it
+        // could not fit; writing the prefix anyway produced a well-formed file whose records were
+        // silently short, so a reader could not tell a complete log from lost audit evidence. Audit
+        // output exists to be trusted about what happened, so losing part of it has to be loud.
+        if (record.overflowed()) {
+            throw new IllegalStateException(
+                    "audit record overflowed its buffer - " + (record.length() / 16)
+                            + " entries fit and the rest were dropped. Writing it would produce a file "
+                            + "that looks complete and is not. Reduce entries logged per event, or raise "
+                            + "the record buffer, and re-run.");
+        }
         try {
             emitNewDictionaryEntries(record.dictionary());
             int entries = record.length() / 16;
@@ -68,18 +85,55 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
         }
     }
 
-    /** Only ids not yet described are written, so the cost is paid once per name, not per record. */
+    /**
+     * Only ids not yet described are written, so the cost is paid once per name, not per record.
+     *
+     * <p><b>This assumes one record instance per writer</b>, whose dictionary only ever grows —
+     * which is what the runtime does: {@code EventLogManager} holds a single record and clears it
+     * between events, so an id means the same name for the life of the file.
+     *
+     * <p>Hand a SECOND record instance to the same writer and that assumption breaks silently. The new
+     * record's ids restart at 1, every one of them below the high-water mark, so nothing is emitted and
+     * the reader goes on resolving those ids to the FIRST record's names — every entry after the first
+     * record is attributed to the wrong node, in a file that parses cleanly. Found by a test fixture
+     * that built a record per iteration; the check below turns it into a refusal.
+     */
     private void emitNewDictionaryEntries(String[] dictionary) throws IOException {
+        for (int id = 1; id < Math.min(dictionaryWritten, dictionary.length); id++) {
+            String name = dictionary[id];
+            if (name != null && !name.equals(namesWritten.get(id))) {
+                throw new IllegalStateException(
+                        "audit dictionary id " + id + " was written as '" + namesWritten.get(id)
+                                + "' and this record calls it '" + name + "'. Ids are file-scoped, so "
+                                + "reusing one for a second name would silently re-label every earlier "
+                                + "entry. A writer takes ONE record instance, reused across events - "
+                                + "the runtime clears and reuses a single record rather than making a "
+                                + "new one per event.");
+            }
+        }
         for (int id = dictionaryWritten; id < dictionary.length; id++) {
             String name = dictionary[id];
             if (name == null) {
                 continue;
             }
             byte[] utf8 = name.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            // The length field is u16. Without this check a longer name wrote a TRUNCATED length
+            // followed by every byte, so the reader resumed mid-string and read payload as frame tags -
+            // "unknown frame type 0x78" some thousands of bytes later, with nothing pointing at the
+            // cause. Reachable from a public API: audit VALUES are interned as dictionary names.
+            if (utf8.length > MAX_DICTIONARY_NAME_BYTES) {
+                throw new IllegalStateException(
+                        "audit dictionary name is " + utf8.length + " UTF-8 bytes; the record format's "
+                                + "length field holds at most " + MAX_DICTIONARY_NAME_BYTES
+                                + ". Writing it would corrupt the file rather than truncate the name. "
+                                + "This is almost always a long String VALUE being logged as an audit "
+                                + "entry; log an identifier instead.");
+            }
             out.write(BinaryLogFile.FRAME_DICT);
             writeShort(id);
             writeShort(utf8.length);
             out.write(utf8);
+            namesWritten.put(id, name);
         }
         dictionaryWritten = Math.max(dictionaryWritten, dictionary.length);
     }

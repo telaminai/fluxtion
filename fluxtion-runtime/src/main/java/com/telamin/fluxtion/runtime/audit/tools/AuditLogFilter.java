@@ -46,9 +46,34 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
     private final BitSet eventIds = new BitSet();
     private final BitSet nodeIds = new BitSet();
     private final BitSet keyIds = new BitSet();
-    private boolean anyEventMatched;
-    private boolean anyNodeMatched;
-    private boolean anyKeyMatched;
+
+    /**
+     * Names by id, so a value written as a dictionary id can be rendered as its text.
+     *
+     * <p>String and Object audit values are stored as ids in the value slot. Without this the shipped
+     * CLI printed them as {@code #tag5:4} — the raw tag and id — because the renderer had no dictionary.
+     */
+    private final java.util.List<String> namesById = new java.util.ArrayList<>();
+
+    /**
+     * Which ids were actually USED in each role.
+     *
+     * <p>The dictionary is untyped: one id space for event types, node names, keys and string values.
+     * Matching a glob against every name therefore said "--event matched" when the pattern only ever
+     * matched a NODE name, so {@link #unmatchablePattern()} stayed silent and the CLI reported an empty
+     * result instead of "nothing in this log is called that". Role is only knowable where an id is
+     * consumed, so it is recorded there.
+     */
+    private final BitSet eventIdsSeen = new BitSet();
+    private final BitSet nodeIdsSeen = new BitSet();
+    private final BitSet keyIdsSeen = new BitSet();
+
+    /** Held until an entry survives the node/key filters — see {@link #onEntry}. */
+    private String pendingEventType;
+    private long pendingEventTime;
+    private long pendingLogTime;
+    private long pendingEndTime;
+    private boolean recordPending;
 
     private long matchedRecords;
     private long matchedEntries;
@@ -67,9 +92,13 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
 
     @Override
     public void onDictionaryEntry(int id, String name) {
-        if (matches(eventGlob, name)) { eventIds.set(id); anyEventMatched = true; }
-        if (matches(nodeGlob, name)) { nodeIds.set(id); anyNodeMatched = true; }
-        if (matches(keyGlob, name)) { keyIds.set(id); anyKeyMatched = true; }
+        while (namesById.size() <= id) {
+            namesById.add(null);
+        }
+        namesById.set(id, name);
+        if (matches(eventGlob, name)) { eventIds.set(id); }
+        if (matches(nodeGlob, name)) { nodeIds.set(id); }
+        if (matches(keyGlob, name)) { keyIds.set(id); }
     }
 
     @Override
@@ -82,8 +111,22 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
         if (logTime < from || logTime > to) {
             return false;
         }
+        eventIdsSeen.set(eventTypeId);
         if (eventGlob != null && !eventIds.get(eventTypeId)) {
             return false;
+        }
+        // WITH AN ENTRY FILTER, A RECORD IS NOT MATCHED UNTIL AN ENTRY MATCHES. Counting it here spent
+        // --limit on records that contained nothing the caller asked for, so `--node x --limit 1` could
+        // report empty when the second record held the only x. The header is therefore held and emitted
+        // by the first surviving entry.
+        if (nodeGlob != null || keyGlob != null) {
+            pendingEventType = eventType;
+            pendingEventTime = eventTime;
+            pendingLogTime = logTime;
+            pendingEndTime = endTime;
+            recordPending = true;
+            recordOpen = true;
+            return true;
         }
         matchedRecords++;
         sink.record(eventType, eventTime, logTime, endTime);
@@ -96,14 +139,26 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
         if (!recordOpen) {
             return;
         }
+        nodeIdsSeen.set(nodeId);
+        keyIdsSeen.set(keyId);
         if (nodeGlob != null && !nodeIds.get(nodeId)) {
             return;
         }
         if (keyGlob != null && !keyIds.get(keyId)) {
             return;
         }
+        if (recordPending) {
+            recordPending = false;
+            matchedRecords++;
+            sink.record(pendingEventType, pendingEventTime, pendingLogTime, pendingEndTime);
+        }
         matchedEntries++;
-        sink.entry(node, key, BinaryRecordDecoder.renderValue(tag, rawBits));
+        sink.entry(node, key, BinaryRecordDecoder.renderValue(tag, rawBits, this::nameById));
+    }
+
+    /** Resolves a dictionary id for the value renderer; {@code null} when the id has no entry. */
+    private String nameById(int id) {
+        return id >= 0 && id < namesById.size() ? namesById.get(id) : null;
     }
 
     public long matchedRecords() {
@@ -118,11 +173,22 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
      * A glob that matched no name in the whole file. Nothing can match it, so a caller can say so
      * rather than reporting an empty result as though the log simply had nothing of interest.
      */
+    /**
+     * The pattern that matched no name IN ITS OWN ROLE, or null.
+     *
+     * <p>Asks whether any id used as an event type / node / key matches the glob, rather than whether
+     * any dictionary name anywhere does. The dictionary is one untyped id space, so the weaker question
+     * answered "yes" for an {@code --event} pattern that only ever matched a node name.
+     */
     public String unmatchablePattern() {
-        if (eventGlob != null && !anyEventMatched) { return "--event " + eventGlob; }
-        if (nodeGlob != null && !anyNodeMatched) { return "--node " + nodeGlob; }
-        if (keyGlob != null && !anyKeyMatched) { return "--key " + keyGlob; }
+        if (eventGlob != null && noneSeenMatching(eventIds, eventIdsSeen)) { return "--event " + eventGlob; }
+        if (nodeGlob != null && noneSeenMatching(nodeIds, nodeIdsSeen)) { return "--node " + nodeGlob; }
+        if (keyGlob != null && noneSeenMatching(keyIds, keyIdsSeen)) { return "--key " + keyGlob; }
         return null;
+    }
+
+    private static boolean noneSeenMatching(BitSet matchedIds, BitSet seenInRole) {
+        return !matchedIds.intersects(seenInRole);
     }
 
     /** {@code *} and {@code ?} only — enough for names, and no regex compilation per file. */

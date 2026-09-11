@@ -159,10 +159,36 @@ public final class BinaryLogRecord extends LogRecord {
         */
     }
 
+    /**
+     * Interns a name to a dictionary id, and REFUSES when the id space is exhausted.
+     *
+     * <p>Ids are a signed {@code short} because that is what the record format writes. Without this
+     * check {@code nextId++} wrapped at 32767 to -32768, and the next {@link #dictionary()} call then
+     * did {@code new String[-32768]} and threw {@code NegativeArraySizeException} from inside the
+     * publish path. Reachable without an enormous graph: String and Object audit VALUES are interned
+     * here too, so a node logging distinct strings consumes the space dynamically.
+     *
+     * <p>Refused rather than silently reused or wrapped: a reused id relabels every earlier entry that
+     * held it, which corrupts a log in a way no reader can detect.
+     */
     private short intern(String name) {
         Short existing = ids.get(name);
         if (existing != null) {
             return existing;
+        }
+        if (nextId == Short.MAX_VALUE) {
+            throw new IllegalStateException(
+                    "binary audit dictionary is full: " + Short.MAX_VALUE + " distinct names. "
+                            + "Ids are a signed short in the record format, so there is no id left for '"
+                            + name + "'.\n"
+                            + "Names are interned BY IDENTITY, because generated node source passes string "
+                            + "literals and the same reference arrives every call. A key built at runtime "
+                            + "- \"k\" + i, a concatenation, a substring - is a new instance each time and "
+                            + "takes a new id each time, so a handful of distinct key NAMES can still "
+                            + "exhaust the space. Use literals for keys.\n"
+                            + "Otherwise: node names and keys are bounded by the graph, so an exhausted "
+                            + "dictionary means unbounded distinct STRING VALUES are being logged - log an "
+                            + "identifier instead, or at a level that excludes them.");
         }
         short id = nextId++;
         ids.put(name, id);
@@ -272,6 +298,16 @@ public final class BinaryLogRecord extends LogRecord {
     @Override
     public void addRecord(int sourceRef, int keyRef, boolean value) {
         writeSlots(sourceRef, keyRef, TAG_BOOL, value ? 1L : 0L);
+    }
+
+    /**
+     * char was the one primitive with no id/slot path, so it went to the byte buffer this record
+     * abandons: {@code length()} describes only the slot array, so the record reported itself
+     * publishable while the file declared zero entries and the value was gone with nothing said.
+     */
+    @Override
+    public void addRecord(int sourceRef, int keyRef, char value) {
+        writeSlots(sourceRef, keyRef, TAG_CHAR, value);
     }
 
     private void head(String sourceId, String propertyKey) {

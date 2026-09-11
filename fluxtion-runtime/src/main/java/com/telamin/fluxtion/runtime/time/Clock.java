@@ -98,8 +98,8 @@ public class Clock implements Auditor, Auditor.FirstAfterEvent {
     }
 
     /**
-     * Current wall-clock time from the installed {@link ClockStrategy}. Nanoseconds since the epoch
-     * under the default strategy; whatever unit a supplied strategy uses otherwise.
+     * Current wall-clock time from the installed {@link ClockStrategy}. <b>Milliseconds</b> since the
+     * epoch under the default strategy; whatever unit a supplied strategy uses otherwise.
      *
      * @return current time from the clock strategy
      */
@@ -108,13 +108,17 @@ public class Clock implements Auditor, Auditor.FirstAfterEvent {
     }
 
     /**
-     * The default strategy is {@link ClockStrategy#fastEpochMillisClock()} — <b>milliseconds</b> since
-     * the epoch, derived from {@code System.nanoTime()} and anchored once.
+     * The default strategy is {@code System::currentTimeMillis} — <b>milliseconds</b> since the epoch,
+     * read fresh on every call.
      *
-     * <p>It was {@code System::currentTimeMillis}, which is slower for no benefit: measured on an
-     * Apple M4, {@code currentTimeMillis} costs 12.9 ns a call against 8.0 for {@code nanoTime}, and an
-     * audited path reads the clock once here per event. The default is now anchored once and read
-     * through {@code nanoTime} — same unit, less cost.
+     * <p><b>Why a CURRENT reading and not a faster projected one.</b>
+     * {@link ClockStrategy#fastEpochMillisClock()} is cheaper — {@code currentTimeMillis} costs 12.9 ns
+     * a call on an Apple M4 against 8.0 for {@code nanoTime} — but it anchors once and then advances
+     * from {@code nanoTime}, so it never sees a later NTP or manual wall-clock correction. This class
+     * promises the CURRENT time, and the runtime itself is an absolute-time consumer: {@link
+     * #eventReceived} stores this reading as {@code processTime} and the audit record emits it as
+     * {@code logTime}. A long-lived process on the projected clock keeps stamping records on a
+     * pre-correction timeline. That is a different contract, so it is opt-in rather than the default.
      *
      * <p><b>{@link #getWallClockTime()} is deliberately unit-free</b> — a bare {@code long}, with the
      * unit a runtime concern belonging to whichever {@link ClockStrategy} is installed. That is what
@@ -127,14 +131,15 @@ public class Clock implements Auditor, Auditor.FirstAfterEvent {
      * thirty tests failed, and not one of them mentioned a clock. Recorded rather than quietly
      * reverted, because the failure was silent and a long way from its cause.
      *
-     * <p>Sub-millisecond precision is still available and still opt-in: call {@link #setClockStrategy}
-     * with {@link ClockStrategy#nanoEpochClock()} if a graph wants nanosecond timestamps and has no
-     * time-windowed nodes, or supply a data-driven strategy for replay.
+     * <p>Both alternatives are opt-in through {@link #setClockStrategy}:
+     * {@link ClockStrategy#fastEpochMillisClock()} for cost, if you accept that it will not track a
+     * wall-clock correction; {@link ClockStrategy#nanoEpochClock()} for sub-millisecond timestamps, if
+     * the graph has no time-windowed nodes; or a data-driven strategy for replay.
      */
     @Initialise
     @Override
     public void init() {
-        wallClock = ClockStrategy.fastEpochMillisClock();
+        wallClock = System::currentTimeMillis;
     }
 
 }

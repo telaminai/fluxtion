@@ -147,34 +147,51 @@ recording nothing.
 ### 4 · The clock
 
 Every profile except `LOWEST_LATENCY` reads a system clock per event, and an audited record reads one
-again for `endTime`. The default strategy is `System::currentTimeMillis`:
+again for `endTime`.
 
-| clock source | cost/call | resolution |
-|---|---:|---|
-| `System::currentTimeMillis` | 12.9 ns | 1 ms |
-| **`ClockStrategy.nanoEpochClock()` — the default** | **8.0 ns** | 1 ns |
+**The default is `System::currentTimeMillis`** — epoch milliseconds, read fresh every time. Two cheaper
+strategies exist and both are **opt-in**, because both trade away something the default promises:
 
-The default was `System::currentTimeMillis`. It is both slower and unable to represent what it is read
-for: it advances a thousand times a second, so a duration taken across two readings is **always exactly
-zero** for any event faster than a millisecond. The default is now a monotonic, epoch-anchored
-nanosecond clock.
+| clock source | cost/call | resolution | tracks wall-clock corrections? |
+|---|---:|---|---|
+| **`System::currentTimeMillis` — the default** | 12.9 ns | 1 ms | **yes** |
+| `ClockStrategy.fastEpochMillisClock()` | 8.0 ns | 1 ms | no |
+| `ClockStrategy.nanoEpochClock()` | 8.0 ns | 1 ns | no |
 
-**The unit changed with it.** `getWallClockTime()` returns nanoseconds where it returned milliseconds.
-Restore the old behaviour, or drive the clock from your own data for replay, with:
+The two fast strategies sample the wall clock **once**, at construction, and advance from
+`System.nanoTime()` thereafter. That makes them monotonic — they will not step backwards over an NTP
+correction, which `currentTimeMillis` can — but it also means they never step *forwards* over one. A
+correction from NTP, an operator or a VM resume is invisible to them, and a long-lived process keeps
+stamping a pre-correction timeline with drift that is never reconciled.
+
+That matters because the runtime is itself an absolute-time consumer: `Clock.eventReceived` stores the
+reading and every audit record emits it as `logTime`. Good for durations, wrong for timestamps anyone
+correlates with something outside the JVM — so the accurate clock is the default and the fast ones are
+chosen deliberately.
 
 ```java
-processor.onEvent(new ClockStrategy.ClockStrategyEvent(() -> System.currentTimeMillis()));
+// cheaper, same unit, will not track a wall-clock correction
+processor.onEvent(ClockStrategy.registerClockEvent(ClockStrategy.fastEpochMillisClock()));
 ```
 
-**`endTime` is now off by default.** It is the *second* clock read on an audited event path, and its only
-purpose is `endTime - logTime`. Turn it on when you consume the duration:
+!!! warning "`nanoEpochClock()` changes the unit, and time-windowed nodes name theirs"
+    `getWallClockTime()` returns nanoseconds under it where the default returns milliseconds, and
+    `FixedRateTrigger.atMillis()` means milliseconds by construction. Installing it on a graph with a
+    tumbling or sliding window stops the window rolling — silently, with the arithmetic out by a factor
+    of a million. Use it when sub-millisecond timestamps matter and the graph has no time-windowed nodes.
+
+**`endTime` is on by default**, as it has been in every release. It is the *second* clock read on an
+audited event path and exists only for `endTime - logTime`, so suppress it if you do not consume the
+duration:
 
 ```java
-logRecord.setRecordEndTime(true);
+logRecord.setRecordEndTime(false);
 ```
 
-Together these two changes are worth **14.2 ns on JIT and 11.2 on native** on the audited binary arm —
-34.6 → 20.4 and 29.3 → 18.2.
+Taking both savings — the fast clock and no `endTime` — is worth **14.2 ns on JIT and 11.2 on native**
+on the audited binary arm. Both were briefly defaults during development, which is where that figure was
+measured; they are opt-in now because each changes a documented contract, so the saving is available on
+request rather than applied to everyone.
 
 !!! note "A nanosecond timestamp costs more to format in a text record"
     Nineteen decimal digits instead of thirteen. A binary record stores the raw `long` and pays nothing

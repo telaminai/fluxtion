@@ -85,7 +85,37 @@ public final class BinaryRecordDecoder {
         return entries;
     }
 
-    /** Renders a value the way the text record would, so decoded output is comparable to a YAML log. */
+    /**
+     * Renders a value, resolving {@code CharSequence}/{@code Object} entries through the dictionary.
+     *
+     * <p>Those two tags hold a dictionary ID in the value slot, not the value. The id-free overload
+     * cannot resolve one and falls through to {@code #tag5:4}, which is what the shipped CLI printed
+     * for every String a node logged. Callers that have a dictionary should use this form.
+     *
+     * @param nameById resolves a dictionary id to its name, or {@code null} if the id is unknown
+     */
+    public static String renderValue(int tag, long rawBits, java.util.function.IntFunction<String> nameById) {
+        switch (tag) {
+            case TAG_CHARSEQ:
+            case TAG_OBJECT: {
+                String name = nameById == null ? null : nameById.apply((int) rawBits);
+                // An unresolved id keeps the diagnostic form rather than inventing a value: the reader
+                // already renders an unknown id as #id and counts it, and a renderer that guessed would
+                // be the one place in this path that lies about what the log says.
+                return name != null ? name : "#" + rawBits;
+            }
+            default:
+                return renderValue(tag, rawBits);
+        }
+    }
+
+    /**
+     * Renders a value the way the text record would, so decoded output is comparable to a YAML log.
+     *
+     * <p>Has no dictionary, so {@code CharSequence} and {@code Object} values render as their raw
+     * tag/id pair — use {@link #renderValue(int, long, java.util.function.IntFunction)} where a
+     * dictionary is available.
+     */
     public static String renderValue(int tag, long rawBits) {
         switch (tag) {
             case TAG_DOUBLE:  return Double.toString(Double.longBitsToDouble(rawBits));

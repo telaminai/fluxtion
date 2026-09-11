@@ -72,7 +72,7 @@ public class LogRecordLogTimeTest {
 
         BinaryLogRecord record = new BinaryLogRecord(clock, 4096);
         record.updateLogLevel(EventLogControlEvent.LogLevel.INFO);
-        record.setRecordEndTime(true);          // off by default: this test is about what it does when on
+        record.setRecordEndTime(true);          // on by default; set explicitly so the test states its premise
 
         strategy.now = 5_000L;
         clock.eventReceived(new Object());      // processing begins: the clock is read once, here
@@ -91,31 +91,53 @@ public class LogRecordLogTimeTest {
     }
 
     /**
-     * {@code endTime} is <b>off by default</b>. It is the second clock read on an audited event path, and
-     * on any event faster than the clock's resolution the duration it exists to report is zero anyway.
-     * A deployment that consumes the duration turns it on and pairs it with a clock that can resolve it.
+     * {@code endTime} is <b>on by default</b>, and suppressing it is opt-in.
+     *
+     * <p>This test asserted the opposite until review pointed out what that meant: 1.0.13 emitted
+     * {@code endTime} on every record, so defaulting the new flag off removed a field from the default
+     * text output — a changed output contract inside a release claiming to be additive, and one no
+     * consumer was warned about. The saving is real and still available; it is now chosen rather than
+     * imposed.
+     *
+     * <p>The suppressed direction is asserted too, because a flag nobody can turn off is not an opt-out.
      */
     @Test
-    public void endTimeIsNotRecordedUnlessAskedFor() {
+    public void endTimeIsRecordedByDefaultAndSuppressionIsOptIn() {
         SteppingClock strategy = new SteppingClock();
         Clock clock = new Clock();
         clock.init();
         clock.setClockStrategy(new ClockStrategyEvent(strategy));
 
+        // DEFAULT: present, as every release before this one emitted it.
+        LogRecord onByDefault = new LogRecord(clock);
+        onByDefault.updateLogLevel(EventLogControlEvent.LogLevel.INFO);
+        assertTrue("endTime must be recorded by default - 1.0.13 emitted it on every record",
+                onByDefault.isRecordEndTime());
+        strategy.now = 5_000L;
+        clock.eventReceived(new Object());
+        onByDefault.triggerObject(new Object());
+        onByDefault.addRecord("node", "key", 1);
+        strategy.now = 7_500L;
+        onByDefault.terminateRecord();
+        assertTrue("the default record must carry endTime:\n" + onByDefault,
+                onByDefault.toString().contains("endTime"));
+
+        // OPT OUT: the saving is available to anyone who does not consume the duration.
         LogRecord text = new LogRecord(clock);
         text.updateLogLevel(EventLogControlEvent.LogLevel.INFO);
-        assertFalse("a second clock read per event is opt-in", text.isRecordEndTime());
+        text.setRecordEndTime(false);
         strategy.now = 5_000L;
         clock.eventReceived(new Object());
         text.triggerObject(new Object());
         text.addRecord("node", "key", 1);
         strategy.now = 7_500L;
         text.terminateRecord();
-        assertFalse("no endTime field when it was never asked for:\n" + text,
+        assertFalse("no endTime field once suppressed:\n" + text,
                 text.toString().contains("endTime"));
 
         BinaryLogRecord binary = new BinaryLogRecord(clock, 4096);
         binary.updateLogLevel(EventLogControlEvent.LogLevel.INFO);
+        binary.setRecordEndTime(false);
         assertFalse(binary.isRecordEndTime());
         clock.eventReceived(new Object());
         binary.triggerObject(new Object());
@@ -135,7 +157,7 @@ public class LogRecordLogTimeTest {
 
         LogRecord record = new LogRecord(clock);
         record.updateLogLevel(EventLogControlEvent.LogLevel.INFO);
-        record.setRecordEndTime(true);          // off by default: this test is about what it does when on
+        record.setRecordEndTime(true);          // on by default; set explicitly so the test states its premise
 
         strategy.now = 5_000L;
         clock.eventReceived(new Object());

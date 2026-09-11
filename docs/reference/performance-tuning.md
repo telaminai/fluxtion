@@ -14,6 +14,17 @@ and the traps that silently cost 3–5x.
 [round 59](https://github.com/telaminai/fluxtionauditlog-analyser/blob/main/docs/experience/runs/round-59/NOTES.md), medians over 200M-event runs with
 output verified identical across arms before any timing was believed.
 
+!!! warning "Provenance: measured, but not currently reproducible by you"
+    Every figure on this page was measured, and each names the shape it was measured in. **What is not
+    available is the workspace to re-run them**: round 58's build did not survive, and the runnable
+    example repository this page should point at does not exist yet (see *Reproducing this*). A review
+    on 2026-09-11 could inspect the committed notes and scripts but could not execute the claimed
+    inputs, so the headline native/PGO figures are **plausible, not independently verified**.
+
+    Treat this as a record of measurements taken, not as a claim you can check today. Where a number
+    would change a decision, re-measure on your own shape. The paragraph below stands as the rule the
+    figures were collected under.
+
 ## Read this first: every figure names its shape
 
 The same processor source has measured anywhere from **1.4 to 29 ns per event** depending on
@@ -981,7 +992,10 @@ Quote the shape, not the best number in the table.
 
 ## Reproducing this
 
-Nothing here should be taken on trust. [`tools/bench/dispatch-bench.py`](https://github.com/telaminai/fluxtionauditlog-analyser/blob/main/tools/bench/dispatch-bench.py) refuses to report unless both
+**"Nothing here should be taken on trust" is the intent, and is not yet true for a reader outside this
+project** — the harness below is real and its refusals are real, but the inputs it ran on are not
+published. Until the example project exists, a reader can check the METHOD and not the RESULT.
+[`tools/bench/dispatch-bench.py`](https://github.com/telaminai/fluxtionauditlog-analyser/blob/main/tools/bench/dispatch-bench.py) refuses to report unless both
 arms ran in one binary, the runtime kind is single and recorded, every arm emits identical check
 values before any timing is believed, and no arm falls below an elimination floor — a probe measuring
 0.0000 ns is a deleted loop, not a result, and that happened twice in round 58.

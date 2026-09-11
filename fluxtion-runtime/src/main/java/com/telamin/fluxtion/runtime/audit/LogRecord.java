@@ -57,7 +57,7 @@ public class LogRecord {
     protected String sourceId;
     protected boolean firstProp;
     /**
-     * Whether to take a second clock reading for {@code endTime}. <b>Off by default.</b>
+     * Whether to take a second clock reading for {@code endTime}. <b>On by default.</b>
      *
      * <p>{@code endTime} exists so {@code endTime - logTime} gives the processing duration, and it has
      * to be a live reading to do that — a cached one reports every event as taking zero time. But that
@@ -65,10 +65,18 @@ public class LogRecord {
      * is zero anyway. An audited event path reads a clock twice per event; this is the second one, and
      * most deployments do not need it.
      *
-     * <p>Enable it when you actually consume the duration, and pair it with a clock that can resolve it:
+     * <p><b>Default TRUE, because 1.0.13 and every release before it emitted {@code endTime} on every
+     * record.</b> This flag is new; defaulting it off silently removed a field from the default text
+     * output, which is a changed output contract rather than the additive change this release claims.
+     * A consumer parsing the record for {@code endTime} would have found it gone. The saving is real
+     * and is still available - set this false, or select a profile that does - but it is opted into
+     * rather than imposed.
+     *
+     * <p>Turn it off when you do not consume the duration. Leave it on, and pair it with a clock that
+     * can resolve the interval, when you do:
      * {@link com.telamin.fluxtion.runtime.time.ClockStrategy#nanoEpochClock()}.
      */
-    protected boolean recordEndTime = false;
+    protected boolean recordEndTime = true;
     @Setter
     protected Clock clock;
     protected boolean printEventToString = false;
@@ -182,6 +190,11 @@ public class LogRecord {
     public void addRecord(int sourceRef, int keyRef, boolean value) {
         throw new UnsupportedOperationException("record returned ids from internName but did not "
                 + "override addRecord(int, int, boolean)");
+    }
+
+    public void addRecord(int sourceRef, int keyRef, char value) {
+        throw new UnsupportedOperationException("record returned ids from internName but did not "
+                + "override addRecord(int, int, char)");
     }
 
     public void addRecord(String sourceId, String propertyKey, double value) {

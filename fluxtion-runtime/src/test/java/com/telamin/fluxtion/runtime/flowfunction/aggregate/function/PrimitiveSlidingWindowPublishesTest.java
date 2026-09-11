@@ -1,7 +1,11 @@
 package com.telamin.fluxtion.runtime.flowfunction.aggregate.function;
 
+import com.telamin.fluxtion.runtime.flowfunction.DoubleFlowFunction;
 import com.telamin.fluxtion.runtime.flowfunction.IntFlowFunction;
+import com.telamin.fluxtion.runtime.flowfunction.LongFlowFunction;
+import com.telamin.fluxtion.runtime.flowfunction.aggregate.function.primitive.DoubleSumFlowFunction;
 import com.telamin.fluxtion.runtime.flowfunction.aggregate.function.primitive.IntSumFlowFunction;
+import com.telamin.fluxtion.runtime.flowfunction.aggregate.function.primitive.LongSumFlowFunction;
 import com.telamin.fluxtion.runtime.time.Clock;
 import com.telamin.fluxtion.runtime.time.ClockStrategy;
 import com.telamin.fluxtion.runtime.time.FixedRateTrigger;
@@ -39,6 +43,90 @@ public class PrimitiveSlidingWindowPublishesTest {
         @Override public boolean hasChanged() { return true; }
         @Override public void parallel() { }
         @Override public boolean parallelCandidate() { return false; }
+    }
+
+    static final class DoubleSource implements DoubleFlowFunction {
+        double value;
+        @Override public double getAsDouble() { return value; }
+        @Override public Double get() { return value; }
+        @Override public boolean hasChanged() { return true; }
+        @Override public void parallel() { }
+        @Override public boolean parallelCandidate() { return false; }
+    }
+
+    static final class LongSource implements LongFlowFunction {
+        long value;
+        @Override public long getAsLong() { return value; }
+        @Override public Long get() { return value; }
+        @Override public boolean hasChanged() { return true; }
+        @Override public void parallel() { }
+        @Override public boolean parallelCandidate() { return false; }
+    }
+
+    /** The data-driven clock and roll trigger every case needs. */
+    private static Clock dataDrivenClock(long[] now) {
+        Clock clock = new Clock();
+        clock.init();
+        clock.setClockStrategy(new ClockStrategy.ClockStrategyEvent(() -> now[0]));
+        return clock;
+    }
+
+    /**
+     * DOUBLE — the same defect, the same order, and previously protected only by an identical source
+     * edit rather than by anything executed. All three specialisations shipped the bug; a regression
+     * covering one of them leaves two able to regress silently.
+     */
+    @Test
+    public void aRollingEventThatAlsoCarriesDataStillPublishes_double() {
+        final long[] now = {0};
+        Clock clock = dataDrivenClock(now);
+        DoubleSource source = new DoubleSource();
+        TimedSlidingWindow.TimedSlidingWindowDoubleStream<DoubleSumFlowFunction> window =
+                new TimedSlidingWindow.TimedSlidingWindowDoubleStream<>(
+                        source, DoubleSumFlowFunction::new, 2);
+        window.rollTrigger = new FixedRateTrigger(clock, 10);
+        window.rollTrigger.init();
+        for (int i = 0; i < 3; i++) {
+            source.value = 1;
+            window.inputUpdated(source);
+            now[0] += 10;
+            window.rollTrigger.hasExpired(new Object());
+            window.timeTriggerFired(window.rollTrigger);
+        }
+        now[0] += 10;
+        window.rollTrigger.hasExpired(new Object());
+        window.timeTriggerFired(window.rollTrigger);
+        source.value = 1;
+        window.inputUpdated(source);
+        assertTrue("a filled double sliding window must still publish when the rolling event also"
+                + " carried data", window.triggered());
+    }
+
+    /** LONG — as above. */
+    @Test
+    public void aRollingEventThatAlsoCarriesDataStillPublishes_long() {
+        final long[] now = {0};
+        Clock clock = dataDrivenClock(now);
+        LongSource source = new LongSource();
+        TimedSlidingWindow.TimedSlidingWindowLongStream<LongSumFlowFunction> window =
+                new TimedSlidingWindow.TimedSlidingWindowLongStream<>(
+                        source, LongSumFlowFunction::new, 2);
+        window.rollTrigger = new FixedRateTrigger(clock, 10);
+        window.rollTrigger.init();
+        for (int i = 0; i < 3; i++) {
+            source.value = 1;
+            window.inputUpdated(source);
+            now[0] += 10;
+            window.rollTrigger.hasExpired(new Object());
+            window.timeTriggerFired(window.rollTrigger);
+        }
+        now[0] += 10;
+        window.rollTrigger.hasExpired(new Object());
+        window.timeTriggerFired(window.rollTrigger);
+        source.value = 1;
+        window.inputUpdated(source);
+        assertTrue("a filled long sliding window must still publish when the rolling event also"
+                + " carried data", window.triggered());
     }
 
     @Test

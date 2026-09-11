@@ -9,6 +9,7 @@ import com.telamin.fluxtion.runtime.audit.EventLogManager;
 import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.fail;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -183,6 +184,32 @@ public class LowLatencyAuditProfileTest {
         assertFalse("a binary log nothing can open is not a safe default", manager.binaryRecord);
     }
 
+    /**
+     * Selecting BINARY and installing no sink must refuse at init, not at the first published record.
+     *
+     * <p>The default sink prints records as text and a binary record has no text form, so publishing
+     * one threw {@code UnsupportedOperationException} from inside the event cycle - after a build and a
+     * start that both looked fine. This test previously stopped at {@code init()} and so never reached
+     * it; that is why review found the defect and the suite did not.
+     */
+    @Test
+    public void binaryWithNoSinkRefusesAtInitNamingTheFix() {
+        EventProcessorConfig config = new EventProcessorConfig();
+        config.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
+        config.addLowLatencyEventLog(com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel.INFO,
+                EventProcessorConfig.AuditRecordFormat.BINARY);
+        EventLogManager manager = (EventLogManager) config.getAuditorMap().get(EventLogManager.NODE_NAME);
+        manager.clock = new com.telamin.fluxtion.runtime.time.Clock();
+        manager.clock.init();
+        try {
+            manager.init();
+            fail("binary records with no sink installed must be refused at init");
+        } catch (IllegalStateException refused) {
+            assertTrue("the refusal must name what to install, got: " + refused.getMessage(),
+                    refused.getMessage().contains("BinaryLogWriter"));
+        }
+    }
+
     @Test
     public void binaryRecordIsSelectableThroughTheProfileAndBuildsAtInit() {
         EventProcessorConfig config = new EventProcessorConfig();
@@ -195,8 +222,18 @@ public class LowLatencyAuditProfileTest {
 
         manager.clock = new com.telamin.fluxtion.runtime.time.Clock();
         manager.clock.init();
+        // Install the sink the format requires, as an application must.
+        java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+        manager.setLogSink(new com.telamin.fluxtion.runtime.audit.BinaryLogWriter(bytes));
         manager.init();
         assertTrue("and init must build the binary record, not swap one in later",
                 manager.lastRecordIsBinaryForTest());
+
+        // AND PUBLISH. Stopping at init is what let a sink incompatible with the chosen format sit
+        // undetected behind a green test.
+        manager.nodeRegistered(new Object(), "node");
+        manager.eventReceived(new Object());
+        manager.processingComplete();
+        assertTrue("a record must actually reach the sink", bytes.size() > 0);
     }
 }

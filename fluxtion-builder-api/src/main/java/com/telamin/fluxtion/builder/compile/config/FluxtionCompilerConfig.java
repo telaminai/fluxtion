@@ -22,6 +22,23 @@ import java.io.Writer;
 @Getter
 public class FluxtionCompilerConfig implements Serializable {
 
+    /**
+     * PINNED to the value 1.0.13 computed, so instances serialized by a released client still read.
+     *
+     * <p>This class is public and {@code Serializable} and had no declared UID, so the JVM computed one
+     * from its shape — and adding fields changed it. A {@code FluxtionCompilerConfig} written by 1.0.13
+     * (UID {@code 8518484796223925653}) failed to load here with {@code InvalidClassException}; the
+     * value below is that released UID, recovered with {@code serialver} against the 1.0.13 artifact.
+     *
+     * <p>Not the same thing as the remote graph DTO's compatibility, which has its own goldens and was
+     * already fine. This is the config object itself, which callers may persist or transport.
+     *
+     * <p><b>Do not change this.</b> Adding a field is compatible under a fixed UID; changing the UID
+     * breaks every previously written instance. {@code FluxtionCompilerConfigSerialCompatibilityTest}
+     * fails if it moves.
+     */
+    private static final long serialVersionUID = 8518484796223925653L;
+
     private static final String DEFAULT_JAVA_SOURCE_DIRECTORY =
             "target/generated-sources/fluxtion/";
     private static final String DEFAULT_RESOURCE_DIRECTORY =

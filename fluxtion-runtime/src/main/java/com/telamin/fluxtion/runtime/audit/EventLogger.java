@@ -405,7 +405,11 @@ public class EventLogger {
 
     public EventLogger log(String key, char value, LogLevel logLevel) {
         if (canLog(logLevel)) {
-            logrecord.addRecord(logSourceId, key, value);
+            if (useIds()) {
+                logrecord.addRecord(sourceRef, keyRef(key), value);
+            } else {
+                logrecord.addRecord(logSourceId, key, value);
+            }
         }
         return this;
     }
