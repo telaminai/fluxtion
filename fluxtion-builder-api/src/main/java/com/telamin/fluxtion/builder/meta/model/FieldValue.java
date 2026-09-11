@@ -39,7 +39,20 @@ public final class FieldValue implements Serializable {
 
     /** How to read {@link #literal()}. Scalars only; see the class comment. */
     public enum Kind {
-        BOOLEAN, CHAR, BYTE, SHORT, INT, LONG, FLOAT, DOUBLE, STRING, ENUM
+        BOOLEAN, CHAR, BYTE, SHORT, INT, LONG, FLOAT, DOUBLE, STRING, ENUM,
+        /**
+         * State Java WOULD serialise and this tier cannot carry — a collection, an array, a
+         * {@code java.time} value, an arbitrary object.
+         *
+         * <p>Recorded rather than skipped, so a target can REFUSE BY NAME instead of emitting a
+         * processor that silently differs from the Java one. {@link #literal()} holds the declared
+         * type, which is what the refusal message needs to be useful.
+         *
+         * <p>Fields the author marked {@code transient} or {@code @FluxtionIgnore} never reach here:
+         * those are the author stating the field is not part of the configured state, and Java's own
+         * serialisation honours the same words.
+         */
+        UNSUPPORTED
     }
 
     private final String name;
