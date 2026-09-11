@@ -392,4 +392,22 @@ public class AuditLogToolTest {
         Run none = runOn(undeclared);
         assertEquals("no bound given: raw inspection still works", 0, none.code);
     }
+
+    /** Both bounds outside the domain, on opposite sides, and an empty range with --limit. */
+    @Test
+    public void bothBoundsOutOfDomain_andAnEmptyRangeWithALimit() throws IOException {
+        Path nanos = withUnit(com.telamin.fluxtion.runtime.audit.BinaryLogFile.TIME_UNIT_EPOCH_NANOS);
+        // lower bound below every instant, upper above every instant: everything
+        Run all = runOn(nanos, "--from", "-9223372036855", "--to", "9223372036855", "--stats");
+        assertTrue(all.err, all.err.contains("records matched   : 3"));
+        // lower above every instant, upper below every instant: nothing, and the limit does not save it
+        Run none = runOn(nanos, "--from", "9223372036855", "--to", "-9223372036855", "--limit", "1", "--stats");
+        assertEquals(0, none.code);
+        assertTrue(none.err, none.err.contains("records matched   : 0"));
+        assertEquals("", none.out);
+        // an ordinary inverted range is empty too
+        Run inverted = runOn(withUnit(com.telamin.fluxtion.runtime.audit.BinaryLogFile.TIME_UNIT_EPOCH_MILLIS),
+                "--from", "300", "--to", "100", "--stats");
+        assertTrue(inverted.err, inverted.err.contains("records matched   : 0"));
+    }
 }

@@ -56,7 +56,7 @@ slot1  := value bits, meaning given by tag (§6)
 ```
 
 The fixed part is 29 bytes; each entry is 16. `reserved` bits MUST be written as zero and MUST be
-ignored by a reader.
+ignored by a reader: node, key and tag decode the same with every reserved bit set (f21).
 
 | field | meaning |
 |---|---|
@@ -64,7 +64,7 @@ ignored by a reader.
 | `eventTypeId` | dictionary id of the event's **fully-qualified** class name (`Class.getName()`), so two events with one simple name stay distinct (f15). |
 | `eventTime` | when the event was created, in the unit §7.2 assigns to it. |
 | `logTime` | the processor clock's reading when the cycle began. The primary timeline. |
-| `endTime` | the clock's reading when the cycle ended, or `0` when the producer does not record it. |
+| `endTime` | the clock's reading when the cycle ended, or `0` when the producer does not record it. A consumer MUST treat `0` as *not recorded* — absent, not an instant — and MUST NOT place it on a timeline (f25). |
 
 ### 3.3 Tags
 
@@ -77,7 +77,7 @@ ignored by a reader.
 | 5 | CHARSEQ | a dictionary id of the string's text; `0` is `null` | the string |
 | 6 | OBJECT | a dictionary id of the object's `toString()`; `0` is `null` | the string |
 | 7 | BOOL | `0` or `1` | `false` / `true` |
-| 8 | TRACE | ignored | no value: "this node ran". `keyId` MUST be `0`. |
+| 8 | TRACE | ignored — a reader MUST decode the entry the same whatever the bits hold (f24) | no value: "this node ran". `keyId` MUST be `0`; a reader delivers a non-zero key as written, and a text constructor then renders that key with an empty string rather than `invoked`. |
 
 A writer MUST NOT emit a tag outside this table. A reader MUST deliver an entry whose tag it does
 not know, with its bits, and MUST NOT fail the record or the file (f12); rendering it is
@@ -101,9 +101,13 @@ diagnostic (`#tag<n>:<bits>`), and a text constructor treats it as text (§11).
 - A name is at most `65535` UTF-8 bytes. A writer MUST refuse a longer name (§8) rather than
   truncate the length field.
 - **Redefinition.** A writer MUST NOT define an id twice. A reader MUST accept a second DICT frame
-  for an id and use the most recent definition for the frames that follow it; both definitions are
-  delivered to the visitor in order (f18). This is stated so that a repaired or concatenated file
-  has one defined reading, not so that writers may rely on it.
+  for an id, use the most recent definition for the frames that follow it, deliver both definitions
+  in order, and **count** the redefinition (`Result.redefinedIds`) so a consumer can report it
+  (f18). This is stated so that a repaired or concatenated file has one defined reading, not so
+  that writers may rely on it.
+- **Empty names are legal.** A zero-length name is a valid dictionary entry — a logged empty String
+  value is the common case, and an empty key is representable. A reader resolves it like any other;
+  a text constructor quotes it (§11.5; f22).
 - **Malformed UTF-8** in a name MUST NOT fail the file: the reader replaces undecodable bytes with
   U+FFFD and continues (f19). A writer never produces it; a reader must survive it.
 - The record a processor logs into allocates its own **record-scoped** ids; the file's ids are the
@@ -117,8 +121,11 @@ diagnostic (`#tag<n>:<bits>`), and a text constructor treats it as text (§11).
 
 - A record is delivered in file order. `logTime` SHOULD be non-decreasing across a file; a reader
   MUST NOT re-sort.
-- Consecutive entries with the same `nodeId` are one node's contribution and a text constructor
-  groups them (§11); the same node MAY appear again later in the record.
+- **Entry order is the wire's, and MUST be preserved** by every consumer, through any text it
+  constructs and into its model. The same node MAY appear again later in the record, and the same
+  key MAY appear more than once under it; where a consumer needs one value per record, the **last
+  occurrence wins**, and that rule depends on order having been kept (f23). Consecutive entries with
+  the same `nodeId` are one node's contribution and a text constructor groups them (§11.7).
 - `entryCount` bounds a record at `65535` entries. A writer MUST refuse a record with more (§8).
 
 ## 6. Values
@@ -228,7 +235,10 @@ while a writer is open is unsupported: start a new writer with the new unit.
 The format carries no producer identity, thread, grouping id, host, or processor name. A consumer
 that presents those MUST take them from outside the file and say so; it MUST NOT invent them. The
 analyser's provenance model (its *§E provenance*) is the consumer-side answer, and the text it
-constructs omits `thread` and `groupingId` rather than writing `null`.
+constructs omits `thread` and `groupingId` rather than writing `null`. The consequence to state
+plainly: **two files written by two processors with the same graph are not distinguishable by
+content.** Which process wrote a file is evidence that must be kept beside the file — a file name,
+a directory, a deployment record — and a dispute that turns on it cannot be settled from the bytes.
 
 ## 11. Constructing text from a file
 
@@ -301,10 +311,17 @@ format change and belongs on this page first.**
 | f17 unresolved value ids | CHARSEQ/OBJECT value ids count like every other role; rendered `#id`; reported beside the evidence | ✅ | ✅ | — |
 | f18 duplicate dict id | both definitions delivered; the latest names what follows | ✅ | ✅ | — |
 | f19 malformed UTF-8 | replaced with U+FFFD, never fatal | ✅ | ✅ | — |
-| writer refusals (no file) | overflow, 65,536 entries, oversize LATER name, a full FILE dictionary across record instances, undefined unit: refused before any byte, stream and dictionary unchanged | ✅ `BinaryAuditEndToEndTest` | — | overflow ✅, others source-inspected² |
+| f20 damage, both kinds | an undefined value id and a cut tail: both counted, both reported, in a stable order | ✅ | ✅ | — |
+| f21 reserved bits | all ones in the reserved 24 bits: node, key, tag decode unchanged | ✅ | ✅ | — |
+| f22 empty names | an empty key and an empty String value resolve; the text quotes them | ✅ | ✅ | — |
+| f23 entry order | a key logged three times under one node, with another node between: order kept, last wins | ✅ | ✅ | — |
+| f24 trace bits | non-zero bits on a TRACE entry are ignored; it is still "invoked" | ✅ | ✅ | — |
+| f25 no endTime | `0` reads as not recorded — absent in the model, not an instant | ✅ | ✅ | — |
+| f26 concatenated | the first file's records, then the second header reported as an unknown frame | ✅ | ✅ | — |
+| writer refusals (no file) | overflow, 65,536 entries, oversize LATER name, a full FILE dictionary across record instances (and exactly filling it is allowed), a name of exactly 65,535 bytes, undefined unit: refused before any byte, stream and dictionary unchanged; a refused record instance is reusable after its next trigger; the preflight length equals the encoded length for surrogate pairs and lone surrogates | ✅ `BinaryAuditEndToEndTest` | — | overflow ✅, others source-inspected² |
 | header refusals (no file) | bad magic, unknown version | ✅ `BinaryLogFileRoundTripTest` | ✅ (`canOpen`) | — |
 | read paths (no file) | mapped and streamed reads agree, including a frame straddling a chunk | ✅ `BinaryLogFileReadPathTest` | — | — |
-| CLI (no file) | bounds scaled; refusal on unstated/undefined unit; `--declare-unit` | ✅ `AuditLogToolTest` | — | — |
+| CLI (no file) | bounds scaled; out-of-domain bounds keep their inequality on both sides, together, and with `--limit`; an explicit extreme is a bound; refusal on unstated/undefined unit; `--declare-unit` | ✅ `AuditLogToolTest` | — | — |
 
 ¹ The C++ writer is held to the Java writer by the compiler's Java-to-C++ audit parity tests, not yet
 by byte-equality against this corpus.
@@ -321,7 +338,7 @@ tested:
 
 | obligation | expected fact | what a broken implementation would show | status |
 |---|---|---|---|
-| §4 redefinition by a writer is forbidden | the Java writer never emits two DICT frames for one id | a second frame for an id in a writer-produced file | reader side pinned (f18); no writer-side mutation test |
+| §4 redefinition by a writer is forbidden | the Java writer never emits two DICT frames for one id | a second frame for an id in a writer-produced file | reader side pinned and counted (f18); no writer-side mutation test |
 | §7.3 one unit per writer | a strategy change mid-file is not honoured by the header | a file whose readings change unit after some record | stated policy, not mechanically prevented |
 | §8.5 I/O failure | a partial frame after a stream error reads as a truncated tail | a reader failing the whole file | not tested against a failing stream |
 | §9.5 unknown tag in every consumer | the CLI prints the diagnostic form | a consumer throwing on tag 9 | Java reader and analyser pinned (f12); CLI not separately |
@@ -344,3 +361,8 @@ tested:
 - No per-record unit and no record of whether an event implemented `Event` (§7.2).
 - A String value interned as a dictionary name exhausts the dictionary at `65535` distinct
   strings; log an identifier, not free text, on a hot path.
+- **Concatenation is not rolling.** Two files joined with `cat` are not one file: the second header
+  is a frame tag the reader does not know (`0x46`, the `F` of `FLXA`), and the read stops there after
+  delivering the first file's records (f26). Rolling is the writer's job — a new writer, a new file,
+  a new dictionary — and a rolled file's dictionary is not carried into the next one; ids used in a
+  later file whose names were defined in an earlier one are unresolved there (§4, f11).

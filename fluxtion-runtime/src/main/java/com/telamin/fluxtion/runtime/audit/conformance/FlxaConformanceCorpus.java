@@ -85,6 +85,13 @@ public final class FlxaConformanceCorpus {
         FIXTURES.put("f17-unresolved-value-ids", FlxaConformanceCorpus::unresolvedValueIds);
         FIXTURES.put("f18-duplicate-dict-id", FlxaConformanceCorpus::duplicateDictId);
         FIXTURES.put("f19-malformed-utf8", FlxaConformanceCorpus::malformedUtf8);
+        FIXTURES.put("f20-damage-both", FlxaConformanceCorpus::damageBoth);
+        FIXTURES.put("f21-reserved-bits", FlxaConformanceCorpus::reservedBits);
+        FIXTURES.put("f22-empty-names", FlxaConformanceCorpus::emptyNames);
+        FIXTURES.put("f23-entry-order", FlxaConformanceCorpus::entryOrder);
+        FIXTURES.put("f24-trace-bits", FlxaConformanceCorpus::traceBits);
+        FIXTURES.put("f25-no-end-time", FlxaConformanceCorpus::noEndTime);
+        FIXTURES.put("f26-concatenated", FlxaConformanceCorpus::concatenated);
     }
 
     private FlxaConformanceCorpus() {
@@ -424,6 +431,99 @@ public final class FlxaConformanceCorpus {
         int at = indexOf(bytes, "pricer".getBytes(java.nio.charset.StandardCharsets.UTF_8));
         bytes[at] = (byte) 0xFF;
         return bytes;
+    }
+
+    /** Two records: the first's String value id undefined, the second cut mid-frame. Two damages. */
+    static byte[] damageBoth() {
+        Clock clock = countingClock(MILLIS_BASE);
+        byte[] bytes = write(BinaryLogFile.TIME_UNIT_EPOCH_MILLIS, w -> {
+            BinaryLogRecord r = record(clock);
+            arrive(clock, r, new Tick());
+            r.addRecord("node", "aString", (CharSequence) "text");
+            r.terminateRecord();
+            w.processLogRecord(r);
+            arrive(clock, r, new Tick());
+            r.addRecord("node", "aDouble", 1.25d);
+            r.terminateRecord();
+            w.processLogRecord(r);
+        });
+        patchValueId(bytes, 0, 65000);
+        return Arrays.copyOf(bytes, bytes.length - 5);
+    }
+
+    /** The minimal file with the entry's reserved 24 bits (slot0 bits 31..8) set to all ones. */
+    static byte[] reservedBits() {
+        byte[] bytes = minimal();
+        int slot0 = firstRecordOffset(bytes) + BinaryLogFile.RECORD_FIXED_BYTES;
+        bytes[slot0 + 4] = (byte) 0xFF;   // bits 31..24
+        bytes[slot0 + 5] = (byte) 0xFF;   // bits 23..16
+        bytes[slot0 + 6] = (byte) 0xFF;   // bits 15..8
+        return bytes;
+    }
+
+    /** An empty KEY and an empty String VALUE: both are legal names. */
+    static byte[] emptyNames() {
+        Clock clock = countingClock(MILLIS_BASE);
+        return write(BinaryLogFile.TIME_UNIT_EPOCH_MILLIS, w -> {
+            BinaryLogRecord r = record(clock);
+            arrive(clock, r, new Tick());
+            r.addRecord("node", "", 1.0d);
+            r.addRecord("node", "empty", (CharSequence) "");
+            r.addRecord("node", "after", 2.0d);
+            r.terminateRecord();
+            w.processLogRecord(r);
+        });
+    }
+
+    /** One node logs one key three times in one record; order is the wire's, and last wins. */
+    static byte[] entryOrder() {
+        Clock clock = countingClock(MILLIS_BASE);
+        return write(BinaryLogFile.TIME_UNIT_EPOCH_MILLIS, w -> {
+            BinaryLogRecord r = record(clock);
+            arrive(clock, r, new Tick());
+            r.addRecord("node", "k", 1.0d);
+            r.addRecord("other", "k", 9.0d);
+            r.addRecord("node", "k", 2.0d);
+            r.addRecord("node", "k", 3.0d);
+            r.terminateRecord();
+            w.processLogRecord(r);
+        });
+    }
+
+    /** A TRACE entry whose value bits are not zero: the bits are ignored. */
+    static byte[] traceBits() {
+        Clock clock = countingClock(MILLIS_BASE);
+        byte[] bytes = write(BinaryLogFile.TIME_UNIT_EPOCH_MILLIS, w -> {
+            BinaryLogRecord r = record(clock);
+            arrive(clock, r, new Tick());
+            r.addTrace("tracer");
+            r.addRecord("node", "after", 2.0d);
+            r.terminateRecord();
+            w.processLogRecord(r);
+        });
+        patchValueId(bytes, 0, 0x7FFFFFFFFFFFFFFFL);
+        return bytes;
+    }
+
+    /** A producer that does not record endTime writes 0 there. */
+    static byte[] noEndTime() {
+        Clock clock = countingClock(MILLIS_BASE);
+        return write(BinaryLogFile.TIME_UNIT_EPOCH_MILLIS, w -> {
+            BinaryLogRecord r = record(clock);
+            r.setRecordEndTime(false);
+            arrive(clock, r, new Tick());
+            r.addRecord("pricer", "price", 1.25d);
+            r.terminateRecord();
+            w.processLogRecord(r);
+        });
+    }
+
+    /** Two whole files concatenated: the second header is an unknown frame ('F' = 0x46). */
+    static byte[] concatenated() {
+        byte[] a = minimal();
+        byte[] out = Arrays.copyOf(a, a.length * 2);
+        System.arraycopy(a, 0, out, a.length, a.length);
+        return out;
     }
 
     // ------------------------------------------------------------------ byte edits

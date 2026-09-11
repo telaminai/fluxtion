@@ -224,14 +224,19 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
         }
     }
 
-    /** UTF-8 length without allocating the bytes - the preflight runs once per NEW name only. */
-    private static int utf8Length(String s) {
+    /**
+     * UTF-8 length without allocating the bytes - the preflight runs once per NEW name only. Must agree
+     * with {@code getBytes(UTF_8).length}, which is what {@link #emitDictionaryEntry} writes; a test pins
+     * that for pairs and lone surrogates. Package-visible for that test.
+     */
+    static int utf8Length(String s) {
         int n = 0;
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
             if (c < 0x80) n += 1;
             else if (c < 0x800) n += 2;
             else if (Character.isHighSurrogate(c) && i + 1 < s.length() && Character.isLowSurrogate(s.charAt(i + 1))) { n += 4; i++; }
+            else if (Character.isSurrogate(c)) n += 1;   // a lone surrogate: getBytes(UTF_8) writes '?'
             else n += 3;
         }
         return n;

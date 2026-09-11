@@ -666,4 +666,84 @@ public class BinaryAuditEndToEndTest {
         c.init();
         return c;
     }
+
+    /** The boundary, not the overflow: exactly 65,535 names write; the 65,536th is refused. */
+    @Test
+    public void exactlyFillingTheFileDictionaryIsAllowed_oneMoreIsNot() throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        BinaryLogWriter w = new BinaryLogWriter(out);
+        // a RECORD interns at most 32,767 names, so three instances: 32,000 + 32,000 + 1,533 keys,
+        // plus the event type and the node name once each in the FILE = 65,535 exactly
+        int[] batches = {32_000, 32_000, 1_533};
+        for (int b = 0; b < batches.length; b++) {
+            BinaryLogRecord r = new BinaryLogRecord(clockInit(), batches[b] * 16 + 4096);
+            r.updateLogLevel(LogLevel.INFO);
+            r.triggerObject(new Object());   // java.lang.Object: one name, shared by both records
+            for (int i = 0; i < batches[b]; i++) {
+                r.addRecord("n", "k" + b + "_" + i, 1);
+            }
+            r.terminateRecord();
+            w.processLogRecord(r);
+        }
+        int full = out.size();
+        BinaryLogRecord one = record();
+        one.addRecord("n", "oneMore", 1);
+        one.terminateRecord();
+        try {
+            w.processLogRecord(one);
+            fail("65,536th name");
+        } catch (IllegalStateException refused) {
+            assertTrue(refused.getMessage(), refused.getMessage().contains("65535"));
+        }
+        assertEquals(full, out.size());
+        // and a record that uses ONLY already-defined names still writes into the full dictionary
+        BinaryLogRecord reuse = record();
+        reuse.addRecord("n", "k0_0", 2);
+        reuse.terminateRecord();
+        w.processLogRecord(reuse);
+        assertTrue(out.size() > full);
+    }
+
+    /** A name of exactly the length field's maximum writes; the preflight length is the real one. */
+    @Test
+    public void aNameOfExactlyTheMaximumLengthWrites_andTheLengthIsTheEncodedLength() throws Exception {
+        StringBuilder max = new StringBuilder();
+        for (int i = 0; i < BinaryLogFile.MAX_DICTIONARY_NAME_BYTES; i++) max.append('y');
+        BinaryLogRecord r = record();
+        r.addRecord("n", "k", (CharSequence) max.toString());
+        r.terminateRecord();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (BinaryLogWriter w = new BinaryLogWriter(out)) {
+            w.processLogRecord(r);
+        }
+        assertEquals(1, BinaryLogReader.read(out.toByteArray(), new BinaryLogReader.Visitor() {
+            public boolean onRecord(int a, String b, long c, long d, long e, int f) { return true; }
+            public void onEntry(int a, String b, int c, String d, int e, long f) { }
+        }).records);
+
+        String[] samples = {"ascii", "café", "€", "😀", "\uD83D", "\uDE00", "\uD83Dx", "x\uDE00😀"};
+        for (String sample : samples) {
+            assertEquals("utf8Length must be what emitDictionaryEntry writes for " + sample,
+                    sample.getBytes(java.nio.charset.StandardCharsets.UTF_8).length, BinaryLogWriter.utf8Length(sample));
+        }
+    }
+
+    /** After a refusal the same record instance is reusable: the next trigger resets its state. */
+    @Test
+    public void aRefusedRecordInstanceIsReusableAfterTheNextTrigger() throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        BinaryLogWriter w = new BinaryLogWriter(out);
+        BinaryLogRecord r = record();
+        EventLogger logger = loggerOn(r);
+        for (int i = 0; i < 600; i++) logger.info("k", i);
+        r.terminateRecord();
+        assertTrue(r.overflowed());
+        try { w.processLogRecord(r); fail(); } catch (IllegalStateException expected) { }
+        r.triggerObject(new Object());
+        logger.info("k", 1);
+        r.terminateRecord();
+        assertFalse("the trigger cleared the overflow", r.overflowed());
+        w.processLogRecord(r);
+        assertEquals(1, w.recordsWritten());
+    }
 }

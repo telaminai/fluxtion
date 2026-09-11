@@ -81,6 +81,11 @@ public final class BinaryLogReader {
          */
         public int unresolvedIds;
         /**
+         * DICT frames that redefined an id the file had already defined. A writer never does this; a
+         * repaired, concatenated or damaged file can. The latest definition names what follows it.
+         */
+        public int redefinedIds;
+        /**
          * The unit of every timestamp in the file, as one of the {@code BinaryLogFile.TIME_UNIT_*}
          * codes. {@code TIME_UNIT_UNSPECIFIED} for a file written before the header carried it —
          * and a reader must not then assume: Java wrote milliseconds and the C++ runtime wrote
@@ -92,7 +97,8 @@ public final class BinaryLogReader {
         @Override
         public String toString() {
             return "records=" + records + " entries=" + entries
-                    + " truncatedBytes=" + truncatedBytes + " unresolvedIds=" + unresolvedIds;
+                    + " truncatedBytes=" + truncatedBytes + " unresolvedIds=" + unresolvedIds
+                    + " redefinedIds=" + redefinedIds;
         }
     }
 
@@ -233,6 +239,9 @@ public final class BinaryLogReader {
                 if (p + 5 + len > data.length) { break; }
                 while (names.size() <= id) { names.add(null); }
                 String name = new String(data, p + 5, len, java.nio.charset.StandardCharsets.UTF_8);
+                if (names.get(id) != null) {
+                    result.redefinedIds++;
+                }
                 names.set(id, name);
                 visitor.onDictionaryEntry(id, name);
                 p += 5 + len;

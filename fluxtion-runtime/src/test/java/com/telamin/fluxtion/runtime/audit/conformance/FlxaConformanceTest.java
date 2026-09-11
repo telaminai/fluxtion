@@ -72,7 +72,7 @@ public class FlxaConformanceTest {
                     + "treat the diff as a FORMAT change to be specified, not a file to be refreshed",
                     FlxaConformanceCorpus.generate(name), FlxaConformanceCorpus.committed(name));
         }
-        assertEquals("the set is the published artefact; add a fixture here AND a test below", 19,
+        assertEquals("the set is the published artefact; add a fixture here AND a test below", 26,
                 FlxaConformanceCorpus.names().size());
     }
 
@@ -262,6 +262,67 @@ public class FlxaConformanceTest {
         assertTrue("the bad byte becomes U+FFFD and the rest of the name survives: " + r.entries.get(0),
                 r.entries.get(0).startsWith("\uFFFDricer.price tag=1 1.25"));
         assertEquals(0, result("f19-malformed-utf8").unresolvedIds);
+    }
+
+    @Test
+    public void f18_redefinitions_areCountedAsWell() throws IOException {
+        assertEquals(1, result("f18-duplicate-dict-id").redefinedIds);
+        assertEquals(0, result("f01-minimal").redefinedIds);
+    }
+
+    @Test
+    public void f20_damageBoth_bothCountersReport() throws IOException {
+        BinaryLogReader.Result res = result("f20-damage-both");
+        assertEquals("the whole first record", 1, res.records);
+        assertEquals("its String value id", 1, res.unresolvedIds);
+        assertTrue("and the cut second record", res.truncatedBytes > 0);
+    }
+
+    @Test
+    public void f21_reservedBits_areIgnored() throws IOException {
+        Recording r = read("f21-reserved-bits");
+        assertEquals("node, key and tag decode as if the bits were zero",
+                Arrays.asList("pricer.price tag=1 1.25"), r.entries);
+        assertEquals(0, result("f21-reserved-bits").unresolvedIds);
+    }
+
+    @Test
+    public void f22_emptyNames_areLegalAndResolve() throws IOException {
+        Recording r = read("f22-empty-names");
+        assertEquals(Arrays.asList("node. tag=1 1.0", "node.empty tag=5 ", "node.after tag=1 2.0"), r.entries);
+        assertEquals(0, result("f22-empty-names").unresolvedIds);
+    }
+
+    @Test
+    public void f23_entryOrder_isTheWires() throws IOException {
+        Recording r = read("f23-entry-order");
+        assertEquals(Arrays.asList("node.k tag=1 1.0", "other.k tag=1 9.0", "node.k tag=1 2.0", "node.k tag=1 3.0"), r.entries);
+    }
+
+    @Test
+    public void f24_traceBits_areIgnored() throws IOException {
+        Recording r = read("f24-trace-bits");
+        assertEquals(Arrays.asList("tracer.null tag=8 ", "node.after tag=1 2.0"), r.entries);
+        assertEquals(0, result("f24-trace-bits").unresolvedIds);
+    }
+
+    @Test
+    public void f25_noEndTime_isZero() throws IOException {
+        Recording r = read("f25-no-end-time");
+        assertTrue(r.records.get(0), r.records.get(0).contains(" end=0 "));
+        assertTrue("logTime is still a reading", r.records.get(0).contains(" log=1700000000000 "));
+    }
+
+    @Test
+    public void f26_concatenated_theSecondHeaderIsAnUnknownFrame() {
+        Recording r = new Recording();
+        try {
+            BinaryLogReader.read(FlxaConformanceCorpus.committed("f26-concatenated"), r);
+            fail("a header mid-stream is not a frame");
+        } catch (IOException reported) {
+            assertTrue(reported.getMessage(), reported.getMessage().contains("unknown frame type 0x46"));
+        }
+        assertEquals("the first file's record was delivered", 1, r.records.size());
     }
 
     @Test
