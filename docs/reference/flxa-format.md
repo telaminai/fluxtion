@@ -446,7 +446,7 @@ what is implemented, so that a consumer does not infer the second from the first
 | **Redaction and retention** | a String value lives once, in the dictionary: redacting it is one DICT frame, and every record that referenced it then reads the redacted text. Nothing marks a file as redacted. | — | — |
 | **Replay** | **not a journal.** Values are `toString()` text, not event payloads; a log cannot re-drive a processor. | — | — |
 | **Non-JVM readers** | this page is sufficient to write one; the C++ writer is held to the Java writer by parity tests, not by byte-equality against the corpus (§13). | the corpus ships in the runtime jar, not as a download. | — |
-| **Clock domains** | the unit is stated (§7); a projected strategy's readings do not track wall-clock corrections and the file does not say which strategy wrote it. | documented on the clock strategies | presents milliseconds UTC; refuses other units. |
+| **Clock domains** | the unit is stated (§7); a projected strategy's readings do not track wall-clock corrections and the file does not say which strategy wrote it. | documented on the clock strategies. **Next release:** a re-anchoring nanosecond strategy that tracks wall-clock corrections by slewing, never stepping back. | presents milliseconds UTC; refuses other units. **Next release:** per-file time base from the header, with `eventTime` in a nanosecond file stated as unplaceable (§7.2). |
 
 Where a cell says unimplemented, that is the statement: the format does not promise it, and a
 consumer must not present it as if it did.
