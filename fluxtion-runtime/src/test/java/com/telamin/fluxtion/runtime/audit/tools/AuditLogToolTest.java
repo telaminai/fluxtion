@@ -410,4 +410,63 @@ public class AuditLogToolTest {
                 "--from", "300", "--to", "100", "--stats");
         assertTrue(inverted.err, inverted.err.contains("records matched   : 0"));
     }
+
+    // ---- round 8, R8-5: the "nothing matching" diagnostic agrees with the selection ----
+
+    private static void dict(ByteArrayOutputStream out, int id, String name) {
+        byte[] b = name.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        out.write(com.telamin.fluxtion.runtime.audit.BinaryLogFile.FRAME_DICT);
+        out.write(id >>> 8); out.write(id);
+        out.write(b.length >>> 8); out.write(b.length);
+        out.write(b, 0, b.length);
+    }
+
+    private static void record(ByteArrayOutputStream out, int type, int node, int key, long value) {
+        out.write(com.telamin.fluxtion.runtime.audit.BinaryLogFile.FRAME_RECORD);
+        out.write(0); out.write(1);
+        out.write(type >>> 8); out.write(type);
+        for (long t : new long[]{1L, 1L, 2L}) { for (int sh = 56; sh >= 0; sh -= 8) out.write((int) (t >>> sh)); }
+        long slot0 = ((long) node << 48) | ((long) key << 32) | 2L;
+        for (int sh = 56; sh >= 0; sh -= 8) out.write((int) (slot0 >>> sh));
+        for (int sh = 56; sh >= 0; sh -= 8) out.write((int) (value >>> sh));
+    }
+
+    /**
+     * REVIEWER PROBE (round 8). The selection was right after the round-7 fix - oldNode's record only
+     * - but the diagnostic joined the ids ever seen with their FINAL names and said "nothing matching
+     * --node oldNode appears" beside a printed match. The opposite error: a name renamed to match
+     * AFTER its last use matched nothing during the selection, and must be reported as such.
+     */
+    @Test
+    public void theUnmatchableDiagnosticAgreesWithTheSelection_acrossRedefinitions() throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        new BinaryLogWriter(out).close();
+        dict(out, 1, "Tick"); dict(out, 2, "oldNode"); dict(out, 3, "price");
+        record(out, 1, 2, 3, 42);
+        dict(out, 2, "newNode");
+        record(out, 1, 2, 3, 43);
+        Path renamedAway = folder.newFile("renamed-away.flxa").toPath();
+        java.nio.file.Files.write(renamedAway, out.toByteArray());
+
+        Run r = runOn(renamedAway, "--node", "oldNode", "--stats");
+        assertEquals(0, r.code);
+        assertEquals("one record, under its then-current name", 1, count(r.out, "eventLogRecord:"));
+        assertTrue(r.out, r.out.contains("oldNode: { price: 42}"));
+        assertFalse("a non-empty result is not called empty: " + r.err, r.err.contains("nothing matching"));
+        assertTrue(r.err, r.err.contains("records matched   : 1"));
+
+        // renamed TO match after its last use: nothing in the selection ever matched, and it says so
+        ByteArrayOutputStream late = new ByteArrayOutputStream();
+        new BinaryLogWriter(late).close();
+        dict(late, 1, "Tick"); dict(late, 2, "other"); dict(late, 3, "price");
+        record(late, 1, 2, 3, 42);
+        dict(late, 2, "wanted");                   // after the only record that used id 2
+        Path renamedLate = folder.newFile("renamed-late.flxa").toPath();
+        java.nio.file.Files.write(renamedLate, late.toByteArray());
+        Run none = runOn(renamedLate, "--node", "wanted", "--stats");
+        assertEquals(0, none.code);
+        assertEquals(0, count(none.out, "eventLogRecord:"));
+        assertTrue("a currently matching name that never matched during any selected record: " + none.err,
+                none.err.contains("nothing matching --node wanted"));
+    }
 }

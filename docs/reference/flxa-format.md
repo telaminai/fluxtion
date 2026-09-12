@@ -77,7 +77,12 @@ ignored by a reader: node, key and tag decode the same with every reserved bit s
 | 5 | CHARSEQ | a dictionary id of the string's text; `0` is `null` | the string |
 | 6 | OBJECT | a dictionary id of the object's `toString()`; `0` is `null` | the string |
 | 7 | BOOL | `0` or `1` | `false` / `true` |
-| 8 | TRACE | ignored — a reader MUST decode the entry the same whatever the bits hold (f24) | no value: "this node ran". `keyId` MUST be `0`; a reader delivers a non-zero key as written, and a text constructor then renders that key with an empty string rather than `invoked`. |
+| 8 | TRACE | ignored — a reader MUST decode the entry the same whatever the bits hold (f24) | no value: "this node ran". `keyId` MUST be `0`; a reader delivers a non-zero key as written, and a text constructor then renders that key with an empty string and asserts no trace provenance. |
+
+**Key `0` on a tag other than TRACE** is a value logged without a key (the public API accepts a
+null key and does not intern the string `null`). It is a keyless value, not a trace: a reader
+delivers it with key `0`, and a text constructor MUST keep the value as a keyless entry and MUST NOT
+turn it into trace provenance. Provenance comes from the TAG, and only with key `0`.
 
 A writer MUST NOT emit a tag outside this table. A reader MUST deliver an entry whose tag it does
 not know, with its bits, and MUST NOT fail the record or the file (f12); rendering it is
@@ -270,8 +275,19 @@ writing typed values into a grammar that types by inspection. These rules keep t
 7. Consecutive entries of one node are one `- node: { … }` item. A TRACE entry is written with a
    key **reserved to the constructor** — the analyser's is the bare `@invoked`, which a business key
    can never produce bare because a producer's key containing `@` is quoted (rule 5) — so that its
-   provenance survives into the consumer's model as *a wire TRACE entry said this node ran*. A TRACE
-   entry describes ITS node's invocation and nothing else. **Absence establishes non-execution only
+   provenance survives into the consumer's model as *a wire TRACE entry said this node ran*. The
+   full contract, beyond the lexical rule:
+     - only a wire TAG_TRACE entry with key `0` may create trace provenance; a keyless value on any
+       other tag is written under a second reserved key (the analyser's `@unkeyed`) and kept as a
+       keyless entry;
+     - provenance and business keys are **separate identities in every reduction, lookup, diff and
+       field projection** — the consumer's model holds provenance as node metadata beside the
+       entries, never as an entry, so no business key can share a slot with it;
+     - a quoted business key that decodes to the reserved spelling stays an ordinary entry and
+       remains accessible even when a genuine trace is present;
+     - applicability of any completeness inference comes from trusted context — the reader's
+       declared grammar, carried on the record — never from a property spelling.
+   A TRACE entry describes ITS node's invocation and nothing else. **Absence establishes non-execution only
    under a trusted, applicable declaration that every invocation was traced**, and this format
    carries no such declaration (§16): observing markers on every logged node is not one, and an
    ordinary business property spelled like a marker is not one — a review showed `invoked: true`
@@ -295,7 +311,9 @@ no entry manufactured and none lost.
    reader reads every quoted String as its quoted characters. A consumer MUST NOT offer such a dump
    as a re-loadable export; it MUST refuse, or write an artefact that carries its own context. For a
    binary log the lossless artefact is the `.flxa` file itself. Index-column exports (CSV) carry
-   values already interpreted and are unaffected.
+   values already interpreted and are unaffected. This covers every path that hands record text out
+   as re-loadable — a saved file and a clipboard copy alike — through one eligibility decision; raw
+   inspection text in a detail view or an agent's read is not an export promise and is not covered.
 
 ## 12. The command-line tool
 
@@ -304,7 +322,11 @@ whatever the file says; it reads the header, scales them, and refuses a time que
 unstated or undefined unit with exit code 2 and nothing printed. `--stats` labels the unit code.
 A filter that matches names against patterns MUST answer for an id's **current** name: on a
 redefinition (§4) every role's match is re-evaluated, set or cleared, so an id whose old name
-matched does not keep matching after the frames that renamed it. `--declare-unit` is §7.4's
+matched does not keep matching after the frames that renamed it. Its **diagnostics** are historical
+query evidence, not current match state: "nothing matching the pattern appeared" is true only if no
+selected record's id matched *at the moment it was seen*; joining the ids ever seen with their final
+names called a non-empty result empty, and would call a name renamed to match after its last use a
+match. `--declare-unit` is §7.4's
 declaration. Its text output is **raw inspection**, for people and
 `grep`: it has the text runtime's shape with every value written bare, and the difference from
 analyser input is semantic, not cosmetic — a logged String `"ok, invented: 42.0"` parses back as a
@@ -352,7 +374,11 @@ format change and belongs on this page first.**
 | equal names in one record (no file) | 2,000 equal-but-distinct String values in a near-full file cost one id; the true overflow is still refused | ✅ `BinaryAuditEndToEndTest` | — | — |
 | trace provenance (no file) | a business `invoked: true` establishes nothing; a real TRACE proves its node ran; a business `@invoked` decodes as an ordinary key; the silent node stays unknown | — | ✅ `BinaryAuditReaderTest` | — |
 | score with damage (no file) | a cut tail or undefined names on either side: untrustworthy, exit 2, readable-prefix comparison labelled | — | ✅ `ExpectationScorerTest` | — |
-| export of constructed text (no file) | refused for a store whose reader declares a grammar; CSV unaffected | — | ✅ `RecordExporterTest` | — |
+| export of constructed text (no file) | refused for a store whose reader declares a grammar, for the file export and the clipboard copy through one decision; CSV unaffected | — | ✅ `RecordExporterTest`, `BinaryAuditReaderTest` | — |
+| trace metadata beside business keys (no file) | a business `@invoked` and a real TRACE coexist in either order: the diff sees 42 → 99, the field read returns 99, the node is traced | — | ✅ `BinaryAuditReaderTest` | — |
+| binary business `method` (no file) | never establishes completeness; the text heuristic unchanged | — | ✅ `BinaryAuditReaderTest` | — |
+| null-key values (no file) | int, double, String, boolean under key 0 are keyless entries, never traces; the figure after them survives | — | ✅ `BinaryAuditReaderTest` | — |
+| filter diagnostics after redefinition (no file) | a non-empty selection is not called empty; a name renamed to match after its last use is | ✅ `AuditLogToolTest` | — | — |
 | writer refusals (no file) | overflow, 65,536 entries, oversize LATER name, a full FILE dictionary across record instances (and exactly filling it is allowed), a name of exactly 65,535 bytes, undefined unit: refused before any byte, stream and dictionary unchanged; a refused record instance is reusable after its next trigger; the preflight length equals the encoded length for surrogate pairs and lone surrogates | ✅ `BinaryAuditEndToEndTest` | — | overflow ✅, others source-inspected² |
 | header refusals (no file) | bad magic, unknown version | ✅ `BinaryLogFileRoundTripTest` | ✅ (`canOpen`) | — |
 | read paths (no file) | mapped and streamed reads agree, including a frame straddling a chunk | ✅ `BinaryLogFileReadPathTest` | — | — |

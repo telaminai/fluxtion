@@ -72,9 +72,9 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
      * result instead of "nothing in this log is called that". Role is only knowable where an id is
      * consumed, so it is recorded there.
      */
-    private final BitSet eventIdsSeen = new BitSet();
-    private final BitSet nodeIdsSeen = new BitSet();
-    private final BitSet keyIdsSeen = new BitSet();
+    private boolean eventMatchedWhenSeen;
+    private boolean nodeMatchedWhenSeen;
+    private boolean keyMatchedWhenSeen;
 
     /** Held until an entry survives the node/key filters — see {@link #onEntry}. */
     private String pendingEventType;
@@ -201,7 +201,11 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
         // that early skip is the cheap path the event and time filters exist for. So the three roles
         // have different scopes, and unmatchableWithinSelection() states the narrower one for all of
         // them rather than claiming the wider one for any.
-        eventIdsSeen.set(eventTypeId);
+        // WHEN it was seen, against its name AT THAT MOMENT. A redefinition (format §4) changes what an
+        // id means for the frames after it; a set of ids joined with the final names said "nothing
+        // matched" about a selection that had matched, and would say the opposite for a name renamed
+        // to match after its last use.
+        if (eventGlob != null && eventIds.get(eventTypeId)) { eventMatchedWhenSeen = true; }
         recordOpen = false;
         if (matchedRecords >= limit) {
             return false;
@@ -234,8 +238,8 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
     @Override
     public void onEntry(int nodeId, String node, int keyId, String key, int tag, long rawBits) {
         // As in onRecord: observe the role before any filter declines the entry.
-        nodeIdsSeen.set(nodeId);
-        keyIdsSeen.set(keyId);
+        if (nodeGlob != null && nodeIds.get(nodeId)) { nodeMatchedWhenSeen = true; }
+        if (keyGlob != null && keyIds.get(keyId)) { keyMatchedWhenSeen = true; }
         if (!recordOpen) {
             return;
         }
@@ -259,6 +263,34 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
         return id >= 0 && id < namesById.size() ? namesById.get(id) : null;
     }
 
+    /**
+     * The pattern that matched no name in its own role <b>within the records this query reached</b>,
+     * or null.
+     *
+     * <p>Asks whether any id used as an event type / node / key matched the glob <em>at the moment it
+     * was used</em>, rather than whether any dictionary name anywhere does. The dictionary is one
+     * untyped id space, so the weaker question answered "yes" for an {@code --event} pattern that only
+     * ever matched a node name. And it is historical query evidence, not current match state: after a
+     * redefinition (format §4) an id's final name says nothing about what it was called when a
+     * selected record used it. Joining the ids ever seen with their final names called a non-empty
+     * result empty, and would call a name renamed to match after its last use a match (review, round 8).
+     *
+     * <p><b>The three roles have different scopes, and the caller must claim the narrower one.</b>
+     * The EVENT role is observed for every record the reader offers, before any filter — so an
+     * {@code --event} pattern reported here genuinely matched no event type in the file. The NODE and
+     * KEY roles are observed only in records the event and time filters admitted, because entries are
+     * offered only for those; that early skip is the cheap path the filters exist for. So a
+     * {@code --node} or {@code --key} pattern reported here matched nothing <em>within the selection</em>,
+     * and a node appearing only under another event is not observed. Claiming whole-file absence for
+     * those two would be false: the name exists, the combination does not match.
+     */
+    public String unmatchableWithinSelection() {
+        if (eventGlob != null && !eventMatchedWhenSeen) { return "--event " + eventGlob; }
+        if (nodeGlob != null && !nodeMatchedWhenSeen) { return "--node " + nodeGlob; }
+        if (keyGlob != null && !keyMatchedWhenSeen) { return "--key " + keyGlob; }
+        return null;
+    }
+
     public long matchedRecords() {
         return matchedRecords;
     }
@@ -271,34 +303,6 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
      * A glob that matched no name in the whole file. Nothing can match it, so a caller can say so
      * rather than reporting an empty result as though the log simply had nothing of interest.
      */
-    /**
-     * The pattern that matched no name in its own role <b>within the records this query reached</b>,
-     * or null.
-     *
-     * <p>Asks whether any id used as an event type / node / key matches the glob, rather than whether
-     * any dictionary name anywhere does. The dictionary is one untyped id space, so the weaker question
-     * answered "yes" for an {@code --event} pattern that only ever matched a node name.
-     *
-     * <p><b>The three roles have different scopes, and the caller must claim the narrower one.</b>
-     * The EVENT role is observed for every record the reader offers, before any filter — so an
-     * {@code --event} pattern reported here genuinely matched no event type in the file. The NODE and
-     * KEY roles are observed only in records the event and time filters admitted, because entries are
-     * offered only for those; that early skip is the cheap path the filters exist for. So a
-     * {@code --node} or {@code --key} pattern reported here matched nothing <em>within the selection</em>,
-     * and a node appearing only under another event is not observed. Claiming whole-file absence for
-     * those two would be false: the name exists, the combination does not match. Answering the
-     * whole-file question for them would mean reading every record, which is a different feature.
-     */
-    public String unmatchableWithinSelection() {
-        if (eventGlob != null && noneSeenMatching(eventIds, eventIdsSeen)) { return "--event " + eventGlob; }
-        if (nodeGlob != null && noneSeenMatching(nodeIds, nodeIdsSeen)) { return "--node " + nodeGlob; }
-        if (keyGlob != null && noneSeenMatching(keyIds, keyIdsSeen)) { return "--key " + keyGlob; }
-        return null;
-    }
-
-    private static boolean noneSeenMatching(BitSet matchedIds, BitSet seenInRole) {
-        return !matchedIds.intersects(seenInRole);
-    }
 
     /** {@code *} and {@code ?} only — enough for names, and no regex compilation per file. */
     static boolean matches(String glob, String name) {
