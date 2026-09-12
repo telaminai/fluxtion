@@ -241,8 +241,10 @@ config.performanceProfile(LOW_LATENCY_AUDIT)
 ((EventLogManager) config.getAuditorMap().get(EventLogManager.NODE_NAME))
         .recordEndTime(true);                                                // back on, generated that way
 
-// RUNTIME - on a generated processor, any time after construction; applies to the live record
-processor.getAuditorById(EventLogManager.NODE_NAME).recordEndTime(true);
+// RUNTIME (Java targets) - on a generated processor, any time after construction; the setter is live
+// and applies to the record the manager holds. getAuditorById infers its return type from the target.
+EventLogManager manager = processor.getAuditorById(EventLogManager.NODE_NAME);
+manager.recordEndTime(true);
 
 // RUNTIME - a record you supply keeps its own setting, under any profile
 BinaryLogRecord mine = new BinaryLogRecord(clock);
@@ -251,9 +253,15 @@ processor.onEvent(new EventLogControlEvent(mine));
 ```
 
 Taking both savings — the fast clock and no `endTime` — is worth **14.2 ns on JIT and 11.2 on native**
-on the audited binary arm. Both were briefly defaults during development, which is where that figure was
-measured; they are opt-in now because each changes a documented contract, so the saving is available on
-request rather than applied to everyone.
+on the audited binary arm, measured when both were briefly defaults during development. The two ship
+differently. `endTime` off **is** the profile's default: `LOW_LATENCY_AUDIT` and `addLowLatencyEventLog`
+take no second clock reading, and the examples above put it back. The projected clock stays opt-in under
+every profile because it changes the meaning of `logTime` (a nanoTime projection, never re-anchored);
+`LOW_LATENCY_AUDIT` keeps the accurate default clock, and the fast clock is a separate choice.
+
+The runtime precedence — a supplied record keeps its own setting, the live setter governs the record the
+manager holds — is **Java runtime** behaviour. The C++ target has no runtime record swap and no live
+setter: its `recordEndTime` is fixed at generation from the captured field, and `false` under the profile.
 
 !!! note "A nanosecond timestamp costs more to format in a text record"
     Nineteen decimal digits instead of thirteen. A binary record stores the raw `long` and pays nothing
