@@ -57,6 +57,16 @@ public class EventLogManager implements Auditor {
      * way to change format on a running processor; this is the way to start in the right one.
      */
     public boolean binaryRecord = false;
+    /**
+     * Whether the record takes a second clock reading for {@code endTime}. Default true - every
+     * release has emitted {@code endTime}. {@code LOW_LATENCY_AUDIT} sets it false: that second
+     * reading is 13.6 ns of a 37 ns audited event on the accurate default clock, and it exists only for
+     * {@code endTime - logTime}. A generated processor carries this as a field assignment, so the
+     * profile decision made at build time is the one the record runs under. A record swapped in at
+     * runtime through {@link EventLogControlEvent} takes this setting too. On the wire an unrecorded
+     * {@code endTime} is 0, which the format defines as "not recorded" and the analyser reads as absent.
+     */
+    public boolean recordEndTime = true;
     private LogLevel logLevel = LogLevel.INFO;
 
 
@@ -208,6 +218,7 @@ public class EventLogManager implements Auditor {
             newLogRecord.replaceBuffer(logRecord.sb);
             this.logRecord = newLogRecord;
             this.logRecord.setClock(clock);
+            this.logRecord.setRecordEndTime(recordEndTime);   // the profile's decision survives a swap
             updateLogRecord();
         }
 
@@ -290,11 +301,18 @@ public class EventLogManager implements Auditor {
         return this;
     }
 
+    /** @see #recordEndTime */
+    public EventLogManager recordEndTime(boolean recordEndTime) {
+        this.recordEndTime = recordEndTime;
+        return this;
+    }
+
     @Override
     public void init() {
         logRecord = binaryRecord ? new BinaryLogRecord(clock) : new LogRecord(clock);
         logRecord.printEventToString(printEventToString);
         logRecord.setPrintThreadName(printThreadName);
+        logRecord.setRecordEndTime(recordEndTime);
         node2Logger = new HashMap<>();
         name2LogSourceMap = new HashMap<>();
         clearAfterPublish = true;

@@ -243,4 +243,33 @@ public class LowLatencyAuditProfileTest {
         manager.processingComplete();
         assertTrue("a record must actually reach the sink", bytes.size() > 0);
     }
+
+    /**
+     * The profile's audit log takes no second clock reading, in either order of configuration; an
+     * ordinary audit log still does. Measured 2026-09-12: endTime is 13.6 ns of a 37.5 ns audited event.
+     */
+    @Test
+    public void lowLatencyAuditTakesNoEndTimeReading_inEitherOrder() {
+        EventProcessorConfig profileFirst = new EventProcessorConfig();
+        profileFirst.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
+        profileFirst.addLowLatencyEventLog(com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel.INFO,
+                EventProcessorConfig.AuditRecordFormat.BINARY);
+        assertFalse(managerOf(profileFirst).recordEndTime);
+
+        EventProcessorConfig logFirst = new EventProcessorConfig();
+        logFirst.addEventAudit();                      // the ordinary audit log, added first
+        assertTrue("an ordinary audit log records endTime, as every release has", managerOf(logFirst).recordEndTime);
+        logFirst.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
+        assertFalse("the profile applies to an audit log added before it", managerOf(logFirst).recordEndTime);
+
+        EventProcessorConfig plain = new EventProcessorConfig();
+        plain.addEventAudit();
+        assertTrue(managerOf(plain).recordEndTime);
+    }
+
+    private static EventLogManager managerOf(EventProcessorConfig cfg) {
+        Object m = cfg.getAuditorMap().get(EventLogManager.NODE_NAME);
+        assertNotNull("the audit log is registered", m);
+        return (EventLogManager) m;
+    }
 }

@@ -59,6 +59,7 @@ config.performanceProfile(EventProcessorConfig.PerformanceProfile.LOWEST_LATENCY
 | Event `toString()` in each record | ✅ | ❌ | ❌ | — |
 | Thread name in each record | ✅ | ❌ | ❌ | — |
 | **`Clock`** — a system clock read per event | ✅ | ✅ | ✅ | ❌ |
+| `endTime` — a SECOND clock read per audited event | ✅ | ✅ | ❌ | — |
 | Which clock STRATEGY that read uses | ✋ | ✋ | ✋ | — |
 | **Node registration** — supplies each node its `EventLogger` | ✅ | ✅ | ✅ | ❌ |
 | Runtime node-name map (`getNodeById`) | ✅ | ✅ | ✅ | ❌ |
@@ -206,12 +207,18 @@ with anything outside the JVM, take the saving.
     an `Event`'s own `eventTime` stays in the producer's milliseconds — see
     [Binary audit logging](../how-to/binary-audit-logging.md).
 
-**`endTime` is on by default**, as it has been in every release. It is the *second* clock read on an
-audited event path and exists only for `endTime - logTime`, so suppress it if you do not consume the
-duration:
+**`endTime` is on by default**, as it has been in every release, **and `LOW_LATENCY_AUDIT` turns it
+off.** It is the *second* clock read on an audited event path and exists only for `endTime - logTime`.
+Measured 2026-09-12 on the six-node quote engine, GraalVM 25.3.4 JIT, accurate default clock: the
+audited event is 37.5 ns with it and 23.9 ns without — the second reading is a third of the event. The
+profile keeps the accurate clock (a projected clock changes what `logTime` means) and drops the
+reading nothing needs. On the wire an unrecorded `endTime` is `0`, which the binary format defines as
+*not recorded* and the analyser reads as absent. Restore it on the profile, or suppress it elsewhere:
 
 ```java
-logRecord.setRecordEndTime(false);
+config.addLowLatencyEventLog(LogLevel.INFO, AuditRecordFormat.BINARY);   // endTime off with the profile
+eventLogManager.recordEndTime(true);                                      // put it back
+logRecord.setRecordEndTime(false);                                        // drop it on any other profile
 ```
 
 Taking both savings — the fast clock and no `endTime` — is worth **14.2 ns on JIT and 11.2 on native**

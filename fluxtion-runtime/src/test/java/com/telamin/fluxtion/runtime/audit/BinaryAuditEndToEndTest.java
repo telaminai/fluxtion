@@ -813,4 +813,47 @@ public class BinaryAuditEndToEndTest {
         });
         assertEquals("event type, node, key", 3, accepted.unresolvedIds);
     }
+
+    static class Book extends EventLogNode {
+        void publish(int qty) { auditLog.info("qty", qty); }
+    }
+
+    /** With recordEndTime off the wire carries 0 for endTime - "not recorded" - and a swapped record inherits it. */
+    @Test
+    public void aManagerWithoutEndTimeWritesZero_andASwappedRecordInheritsIt() throws Exception {
+        List<Long> endTimes = new ArrayList<>();
+        EventLogManager manager = new EventLogManager(r -> endTimes.add(((BinaryLogRecord) r).endTime()))
+                .tracingOff().binaryRecord(true).recordEndTime(false);
+        Clock clock = clockInit();
+        manager.clock = clock;
+        manager.init();
+        Book book = new Book();
+        manager.nodeRegistered(book, "book");
+        Object e1 = new Object();
+        clock.eventReceived(e1);
+        manager.eventReceived(e1);
+        book.publish(1);
+        manager.processingComplete();
+        manager.calculationLogConfig(new EventLogControlEvent(new BinaryLogRecord(clock, 4096)));
+        Object e2 = new Object();
+        clock.eventReceived(e2);
+        manager.eventReceived(e2);
+        book.publish(2);
+        manager.processingComplete();
+        assertEquals(List.of(0L, 0L), endTimes);
+
+        List<Long> withEnd = new ArrayList<>();
+        EventLogManager ordinary = new EventLogManager(r -> withEnd.add(((BinaryLogRecord) r).endTime()))
+                .tracingOff().binaryRecord(true);
+        ordinary.clock = clock;
+        ordinary.init();
+        Book book2 = new Book();
+        ordinary.nodeRegistered(book2, "book");
+        clock.eventReceived(e1);
+        ordinary.eventReceived(e1);
+        book2.publish(3);
+        ordinary.processingComplete();
+        assertEquals(1, withEnd.size());
+        assertTrue("the default still records endTime", withEnd.get(0) > 0L);
+    }
 }

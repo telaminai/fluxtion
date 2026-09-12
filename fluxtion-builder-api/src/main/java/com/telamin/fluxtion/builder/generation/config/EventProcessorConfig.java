@@ -472,7 +472,16 @@ public class EventProcessorConfig {
             setSupportDirtyFiltering(false);
             // NOT setSupportReentrancy(false): see LOWEST_LATENCY. It is the one setting here that can
             // turn a working graph into an exception, and a profile should not spend that.
-            // The EventLogManager's own settings are applied by addLowLatencyEventLog() below.
+            // The EventLogManager's other settings are applied by addLowLatencyEventLog() below.
+            // And no second clock reading, whether the audit log was added before or after the
+            // profile: 13.6 ns of the audited event on the accurate clock, for a duration field.
+            if (getAuditorMap() != null) {
+                for (Object auditor : getAuditorMap().values()) {
+                    if (auditor instanceof EventLogManager) {
+                        ((EventLogManager) auditor).recordEndTime(false);
+                    }
+                }
+            }
             return this;
         }
         // AUDITED intentionally changes nothing here: its two settings live on the EventLogManager
@@ -551,7 +560,13 @@ public class EventProcessorConfig {
                 .tracingOff()
                 .logLevel(entryLevel == null ? LogLevel.INFO : entryLevel)
                 .printEventToString(false)
-                .printThreadName(false);
+                .printThreadName(false)
+                // No second clock reading. Measured 2026-09-12 on the quote engine, GraalVM 25.3.4
+                // JIT: endTime alone is 13.6 ns of a 37.5 ns audited event on the accurate default
+                // clock. The clock itself stays accurate (a projected clock changes what logTime
+                // means); endTime only ever served endTime - logTime. Restore it with
+                // EventLogManager.recordEndTime(true) or logRecord.setRecordEndTime(true).
+                .recordEndTime(false);
         if (format == AuditRecordFormat.BINARY) {
             manager.binaryRecord(true);
         }
