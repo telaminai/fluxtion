@@ -4,7 +4,7 @@
 Fluxtion supports join operations for groupBy data flow nodes.
 
 ### Inner join
-Joins are create with the data flow node of a group by or using the [JoinFlowBuilder]({{fluxtion_src_compiler}}/builder/dataflow/JoinFlowBuilder.java)
+Joins are create with the data flow node of a group by or using the [JoinFlowBuilder]({{ fluxtion_src_builder }}/flowfunction/JoinFlowBuilder.java)
 
 `JoinFlowBuilder.innerJoin(schools, pupils)`
 
@@ -66,7 +66,7 @@ Running the example code above logs to console
 ```
 
 ### Left outer join
-Joins are create with the data flow node of a group by or using the [JoinFlowBuilder]({{fluxtion_src_compiler}}/builder/dataflow/JoinFlowBuilder.java)
+Joins are create with the data flow node of a group by or using the [JoinFlowBuilder]({{ fluxtion_src_builder }}/flowfunction/JoinFlowBuilder.java)
 
 `JoinFlowBuilder.leftJoin(schools, pupils)`
 
@@ -133,7 +133,7 @@ left outer join
 ```
 
 ### right outer join
-Joins are create with the data flow node of a group by or using the [JoinFlowBuilder]({{fluxtion_src_compiler}}/builder/dataflow/JoinFlowBuilder.java)
+Joins are create with the data flow node of a group by or using the [JoinFlowBuilder]({{ fluxtion_src_builder }}/flowfunction/JoinFlowBuilder.java)
 
 `JoinFlowBuilder.rightJoin(schools, pupils)`
 
@@ -196,7 +196,7 @@ right outer join
 
 
 ###Full outer join
-Joins are create with the data flow node of a group by or using the [JoinFlowBuilder]({{fluxtion_src_compiler}}/builder/dataflow/JoinFlowBuilder.java)
+Joins are create with the data flow node of a group by or using the [JoinFlowBuilder]({{ fluxtion_src_builder }}/flowfunction/JoinFlowBuilder.java)
 
 `JoinFlowBuilder.outerJoin(schools, pupils)`
 
@@ -263,7 +263,7 @@ full outer join
 
 ###Multi join or Co-group
 
-Multi leg joins are supported with no limitation on the number of joins, The [MultiJoinBuilder]({{fluxtion_src_compiler}}/builder/dataflow/MultiJoinBuilder.java)
+Multi leg joins are supported with no limitation on the number of joins, The [MultiJoinBuilder]({{ fluxtion_src_builder }}/flowfunction/MultiJoinBuilder.java)
 is used to construct a multi leg join with a builder style pattern
 
 `MultiJoinBuilder.builder(Class<K> keyClass, Supplier<T> target`

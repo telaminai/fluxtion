@@ -23,7 +23,7 @@ DataFlowBuilder offers a DSL to bind functions into the event processor using th
 stream api. Bound functions are invoked in accordance to the [dispatch rules](../event-processor-model.md#event-dispatch-rules).
 A DataFlow starts a calculation cycle when there is a matching subscriber dispatch rule.
 
-The [DataFlowBuilder]({{fluxtion_src_compiler}}/builder/dataflow/DataFlow.java) class provides builder methods to
+The [DataFlowBuilder]({{ fluxtion_src_builder }}/DataFlowBuilder.java) class provides builder methods to
 create and bind event streams to [DataFlow]. There is no restriction on the number of DataFlows bound inside a host
 DataFlow.
 

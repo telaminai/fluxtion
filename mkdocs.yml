@@ -59,6 +59,9 @@ extra:
       link: https://github.com/telaminai
   # Define variables here
   fluxtion_src_runtime: https://github.com/telaminai/fluxtion/tree/main/fluxtion-runtime/src/main/java/com/telamin/fluxtion/runtime
+  # The builder API is public and lives in this repository; the compiler that consumes it is not,
+  # which is why there is no fluxtion_src_compiler - the six links that used it pointed nowhere.
+  fluxtion_src_builder: https://github.com/telaminai/fluxtion/tree/main/fluxtion-builder-api/src/main/java/com/telamin/fluxtion/builder
   fluxtion_example_src: https://github.com/telaminai/fluxtion-examples/tree/main
   fluxtion_version: 1.0.8
   fluxtion_javadoc: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-runtime/${fluxtion_version}/index.html
