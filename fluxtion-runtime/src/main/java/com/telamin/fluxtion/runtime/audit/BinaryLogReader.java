@@ -75,9 +75,11 @@ public final class BinaryLogReader {
         /** Bytes at the end of the input that did not form a whole frame - a cut record, a damaged tail. */
         public int truncatedBytes;
         /**
-         * OCCURRENCES of an id the file never defined, in any of the four roles - event type, node,
-         * key, String/Object value - over the records the visitor accepted (the entries of a record
-         * {@code onRecord} declined are not examined). Id 0 is null or no-key, never unresolved.
+         * OCCURRENCES of an id the file never defined, in any of the four roles. The scope differs by
+         * role, and exactly so: the EVENT TYPE of every record is resolved before {@code onRecord} is
+         * asked, so an undefined event type counts whether or not the record is accepted; NODE, KEY
+         * and VALUE ids are resolved only for the records {@code onRecord} accepted - a declined
+         * record's entries are not examined. Id 0 is null or no-key, never unresolved.
          */
         public int unresolvedIds;
         /**

@@ -97,7 +97,13 @@ diagnostic (`#tag<n>:<bits>`), and a text constructor treats it as text (§11).
   event type, node, key, CHARSEQ value and OBJECT value. The count is of **occurrences** (an
   undefined id used three times counts three), over the entries of records the visitor accepted —
   a record `onRecord` declined is not examined, so a filtered read's count is scoped to what it
-  read. Id `0` is never an occurrence.
+  read — with one stated exception: a record's **event type** is resolved before `onRecord` is
+  asked, so an undefined event type counts whether or not the record is then accepted. Id `0` is
+  never an occurrence.
+- **Record identities are not file names.** A record may intern equal strings as separate ids (the
+  Java record interns by identity); the file deduplicates by equality, and a writer's capacity
+  check MUST count the set of new *names*, not the record's ids — the plan it validates is the plan
+  it emits. Two thousand equal String values pending in one record cost one file id.
 - A name is at most `65535` UTF-8 bytes. A writer MUST refuse a longer name (§8) rather than
   truncate the length field.
 - **Redefinition.** A writer MUST NOT define an id twice. A reader MUST accept a second DICT frame
@@ -261,25 +267,45 @@ writing typed values into a grammar that types by inspection. These rules keep t
 5. Keys and node names outside `[A-Za-z0-9_$.-]` are quoted.
 6. `event:` carries the simple class name and `eventType:` the full one; neither may contain a line
    break, so one in the dictionary is made visible rather than allowed to start a scalar.
-7. Consecutive entries of one node are one `- node: { … }` item; a TRACE entry is `invoked: true`,
-   and a consumer deciding whether a record traces every invocation MUST accept that marker under
-   the same every-node rule it applies to the text runtime's `method` key — a binary TRACE carries no
-   method name, only "this node ran".
+7. Consecutive entries of one node are one `- node: { … }` item. A TRACE entry is written with a
+   key **reserved to the constructor** — the analyser's is the bare `@invoked`, which a business key
+   can never produce bare because a producer's key containing `@` is quoted (rule 5) — so that its
+   provenance survives into the consumer's model as *a wire TRACE entry said this node ran*. A TRACE
+   entry describes ITS node's invocation and nothing else. **Absence establishes non-execution only
+   under a trusted, applicable declaration that every invocation was traced**, and this format
+   carries no such declaration (§16): observing markers on every logged node is not one, and an
+   ordinary business property spelled like a marker is not one — a review showed `invoked: true`
+   logged as data on the one logging node turning a silent node into *did not run*. Without that
+   declaration a consumer MUST keep absence unknown. The text runtime's `method`-on-every-node
+   heuristic is that format's own, and is not generalised here.
 
 Fixtures f13 and f14 are the test: every value MUST parse back to exactly the string logged, with
 no entry manufactured and none lost.
 
-8. **Damage travels with the evidence.** What the runtime reader could not read (§9.3, §9.6) MUST
-   reach the consumer beside the records it did read — the analyser carries it through the SPI's
-   diagnostic consumer into the store and shows it as a *source damage* finding — and MUST NOT be
-   delivered as a synthetic node or a fabricated event.
+8. **Damage travels with the evidence, to every consumer.** What the runtime reader could not read
+   (§9.3, §9.6) MUST reach the consumer beside the records it did read — the analyser carries it
+   through the SPI's diagnostic consumer into the store and shows it as a *source damage* finding —
+   and MUST NOT be delivered as a synthetic node or a fabricated event. A consumer that produces a
+   **verdict** (the analyser's score command) MUST NOT report an unqualified whole-input result over a
+   partially readable input: the comparison of the readable prefix MAY be shown, labelled as exactly
+   that, and the verdict is *untrustworthy* (the score command's exit 2), for a cut tail and for
+   undefined names alike, on either side. Salvage for inspection is a different promise from a PASS.
+9. **What survives export.** Constructed record text is not self-describing: the grammar lives in
+   the reader's declaration (rule 1), not in the text, so a text dump of it re-opened by the text
+   reader reads every quoted String as its quoted characters. A consumer MUST NOT offer such a dump
+   as a re-loadable export; it MUST refuse, or write an artefact that carries its own context. For a
+   binary log the lossless artefact is the `.flxa` file itself. Index-column exports (CSV) carry
+   values already interpreted and are unaffected.
 
 ## 12. The command-line tool
 
 `AuditLogTool` is the reference consumer for §7.4 and §9. Its `--from`/`--to` are milliseconds
 whatever the file says; it reads the header, scales them, and refuses a time query over an
 unstated or undefined unit with exit code 2 and nothing printed. `--stats` labels the unit code.
-`--declare-unit` is §7.4's declaration. Its text output is **raw inspection**, for people and
+A filter that matches names against patterns MUST answer for an id's **current** name: on a
+redefinition (§4) every role's match is re-evaluated, set or cleared, so an id whose old name
+matched does not keep matching after the frames that renamed it. `--declare-unit` is §7.4's
+declaration. Its text output is **raw inspection**, for people and
 `grep`: it has the text runtime's shape with every value written bare, and the difference from
 analyser input is semantic, not cosmetic — a logged String `"ok, invented: 42.0"` parses back as a
 second, numeric entry. Open the `.flxa` file in the analyser for typed reading; do not pipe the
@@ -321,6 +347,12 @@ format change and belongs on this page first.**
 | f24 trace bits | non-zero bits on a TRACE entry are ignored; it is still "invoked" | ✅ | ✅ | — |
 | f25 no endTime | `0` reads as not recorded — absent in the model, not an instant | ✅ | ✅ | — |
 | f26 concatenated | the first file's records, then the second header reported as an unknown frame | ✅ | ✅ | — |
+| filter redefinition (no file) | an id renamed matching → non-matching → matching is selected only while its current name matches, for node, key and event | ✅ `AuditLogFilterCompositionTest` | — | — |
+| counter scope (no file) | f11 with every record declined: the event type counts, no entry is examined | ✅ `BinaryAuditEndToEndTest` | — | — |
+| equal names in one record (no file) | 2,000 equal-but-distinct String values in a near-full file cost one id; the true overflow is still refused | ✅ `BinaryAuditEndToEndTest` | — | — |
+| trace provenance (no file) | a business `invoked: true` establishes nothing; a real TRACE proves its node ran; a business `@invoked` decodes as an ordinary key; the silent node stays unknown | — | ✅ `BinaryAuditReaderTest` | — |
+| score with damage (no file) | a cut tail or undefined names on either side: untrustworthy, exit 2, readable-prefix comparison labelled | — | ✅ `ExpectationScorerTest` | — |
+| export of constructed text (no file) | refused for a store whose reader declares a grammar; CSV unaffected | — | ✅ `RecordExporterTest` | — |
 | writer refusals (no file) | overflow, 65,536 entries, oversize LATER name, a full FILE dictionary across record instances (and exactly filling it is allowed), a name of exactly 65,535 bytes, undefined unit: refused before any byte, stream and dictionary unchanged; a refused record instance is reusable after its next trigger; the preflight length equals the encoded length for surrogate pairs and lone surrogates | ✅ `BinaryAuditEndToEndTest` | — | overflow ✅, others source-inspected² |
 | header refusals (no file) | bad magic, unknown version | ✅ `BinaryLogFileRoundTripTest` | ✅ (`canOpen`) | — |
 | read paths (no file) | mapped and streamed reads agree, including a frame straddling a chunk | ✅ `BinaryLogFileReadPathTest` | — | — |
@@ -381,7 +413,7 @@ what is implemented, so that a consumer does not infer the second from the first
 | **Tailing a file being written** | supported: frames are self-delimiting, a partial trailing frame is the normal state of an open file (§9.3), and a reader that re-reads from the last whole frame delivers nothing twice. Nothing distinguishes "still being written" from "cut" except that the tail later completes. | the reader reads whole files; no tail mode | **unimplemented.** The binary reader declares `follow=false`; opening a live file shows what was whole at open. |
 | **Rolling** | a new file is a new writer: new header, new dictionary; ids are never carried across files (§4, §15). | **no rolling writer.** Rolling is the installer's job today: close the writer, open a new one. | roll sets are text only; a binary member is refused by name. Opening a day of binary files is unimplemented. |
 | **Large files** | no limit; a reader MAY map or stream (§9). | maps up to 2 GB, streams above it. | the SPI store holds every record's constructed text in memory; a large binary log costs more heap than the same log as text. No mapped store for binary. |
-| **Exported service calls and timers** | **not representable.** The record has no `eventToString` and no *not event-driven* sentinel; an exported call is a record whose event type is the service's class. | as the format | the exported-call dimension (text C13) cannot be derived; every binary record is an event. |
+| **Exported service calls and timers** | partly representable. The generated processor audits an exported call as an `ExportFunctionAuditEvent`, whose `getEventTime()` is `-1`; the clock and the record preserve it, so the *no creation time* sentinel IS on the wire and the analyser reads it as absent. What the record lacks is the text format's `eventToString` — the function description — so the **method-specific callback dimension** (text C13) cannot be derived, and `-1` alone does not identify an exported call: any `Event` may report no creation time. | as the format | the record's event type is the audit wrapper's class; the callback is null; the sentinel reads as absent. |
 | **Pairing with a graph** | out of scope: the file carries no processor identity (§10). | — | the binary reader supplies no graph; coverage and readiness need one from elsewhere. A sidecar convention is not defined. |
 | **Several processors in one process** | one file per processor is implied and MUST be the rule: the format cannot interleave. | — | no naming convention for which file is which processor. |
 | **Tamper evidence** | **none.** No checksum, no signature (§15). A file can be edited without detection; f09–f12 are byte edits. A version-two trailer with a running hash is the natural addition and version one's layout does not preclude it. | — | — |

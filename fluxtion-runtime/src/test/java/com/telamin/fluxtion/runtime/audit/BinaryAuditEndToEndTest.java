@@ -746,4 +746,71 @@ public class BinaryAuditEndToEndTest {
         w.processLogRecord(r);
         assertEquals(1, w.recordsWritten());
     }
+
+    /**
+     * REVIEWER PROBE (round 7). The record interns by identity; the file by equality. The preflight
+     * counted record ids, so 2,000 equal-but-distinct String values in a near-full file were refused
+     * as 2,000 new names when they would have cost one. The plan is the set of new FILE names.
+     */
+    @Test
+    public void equalButNotIdenticalStringsCostOneFileId() throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        BinaryLogWriter w = new BinaryLogWriter(out);
+        for (int batch = 0; batch < 2; batch++) {
+            BinaryLogRecord r = new BinaryLogRecord(clockInit(), 32_000 * 16 + 4096);
+            r.updateLogLevel(LogLevel.INFO);
+            r.triggerObject(new Object());
+            for (int i = 0; i < 32_000; i++) {
+                r.addRecord("n", "k" + batch + "_" + i, 1);
+            }
+            r.terminateRecord();
+            w.processLogRecord(r);
+        }
+        // 64,002 names defined. 2,000 distinct String OBJECTS of one value under a defined node and key.
+        BinaryLogRecord third = new BinaryLogRecord(clockInit(), 4096 * 16);
+        third.updateLogLevel(LogLevel.INFO);
+        third.triggerObject(new Object());
+        for (int i = 0; i < 2_000; i++) {
+            third.addRecord("n", "k0_0", (CharSequence) new String("same-new-value"));
+        }
+        third.terminateRecord();
+        w.processLogRecord(third);
+        assertEquals("one new name, one id; the record is representable", 3, w.recordsWritten());
+        List<String> names = new ArrayList<>();
+        BinaryLogReader.Result res = BinaryLogReader.read(out.toByteArray(), new BinaryLogReader.Visitor() {
+            public void onDictionaryEntry(int id, String name) { names.add(name); }
+            public boolean onRecord(int a, String b, long c, long d, long e, int f) { return true; }
+            public void onEntry(int a, String b, int c, String d, int e, long f) { }
+        });
+        assertEquals(64_003, names.size());
+        assertEquals(0, res.unresolvedIds);
+        // and the true overflow is still refused: 1,533 DISTINCT new names would fit, 1,534 would not
+        BinaryLogRecord fill = new BinaryLogRecord(clockInit(), 4096 * 16);
+        fill.updateLogLevel(LogLevel.INFO);
+        fill.triggerObject(new Object());
+        for (int i = 0; i < 1_533; i++) fill.addRecord("n", "z" + i, (CharSequence) new String("v" + i));
+        fill.terminateRecord();
+        try { w.processLogRecord(fill); fail("1,532 keys + 1,533 values = 3,066 new names > 1,532 left"); }
+        catch (IllegalStateException refused) { assertTrue(refused.getMessage(), refused.getMessage().contains("Nothing was written")); }
+    }
+
+    /**
+     * The scope of unresolvedIds, by role (S6): an event type is resolved before onRecord is asked,
+     * so it counts for a declined record; entries of a declined record are never examined.
+     */
+    @Test
+    public void unresolvedIdScope_eventTypeBeforeAcceptance_entriesOnlyAfter() throws Exception {
+        byte[] file = com.telamin.fluxtion.runtime.audit.conformance.FlxaConformanceCorpus.committed("f11-unresolved-ids");
+        BinaryLogReader.Result declined = BinaryLogReader.read(file, new BinaryLogReader.Visitor() {
+            public boolean onRecord(int a, String b, long c, long d, long e, int f) { return false; }
+            public void onEntry(int a, String b, int c, String d, int e, long f) { fail("a declined record's entries are not examined"); }
+        });
+        assertEquals("the event type only", 1, declined.unresolvedIds);
+        assertEquals(1, declined.records);
+        BinaryLogReader.Result accepted = BinaryLogReader.read(file, new BinaryLogReader.Visitor() {
+            public boolean onRecord(int a, String b, long c, long d, long e, int f) { return true; }
+            public void onEntry(int a, String b, int c, String d, int e, long f) { }
+        });
+        assertEquals("event type, node, key", 3, accepted.unresolvedIds);
+    }
 }

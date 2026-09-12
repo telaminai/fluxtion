@@ -171,15 +171,18 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
         // unchanged, and the writer's id table had advanced for a record that was never written. So
         // every semantic refusal - a name too long for its length field, more new names than ids
         // remain - is decided over the whole record before the first byte of it.
-        int newNames = 0;
+        // The record interns by IDENTITY - two equal Strings are two record ids - and the file
+        // deduplicates by EQUALITY. The plan is the set of new FILE names, so 2,000 equal-but-distinct
+        // String values pending in one record cost one id, as they will when emitted.
+        java.util.Set<String> planned = new java.util.HashSet<>();
         for (int id = 1; id < dictionary.length; id++) {
             String name = dictionary[id];
-            if (name == null || fileIdByName.containsKey(name)) {
+            if (name == null || fileIdByName.containsKey(name) || !planned.add(name)) {
                 continue;
             }
             checkNameLength(name);
-            newNames++;
         }
+        int newNames = planned.size();
         if (nextFileId - 1 + newNames > BinaryLogFile.MAX_DICTIONARY_ID) {
             throw new IllegalStateException(
                     "audit file dictionary would overflow: " + (nextFileId - 1) + " names defined, "

@@ -185,9 +185,12 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
             namesById.add(null);
         }
         namesById.set(id, name);
-        if (matches(eventGlob, name)) { eventIds.set(id); }
-        if (matches(nodeGlob, name)) { nodeIds.set(id); }
-        if (matches(keyGlob, name)) { keyIds.set(id); }
+        // SET OR CLEAR. A redefinition (format §4: the latest definition names what follows) must
+        // not leave an id matching the pattern its OLD name matched: the bits are the answer to
+        // "does this id's current name match", not a memory of every name it ever had.
+        eventIds.set(id, matches(eventGlob, name));
+        nodeIds.set(id, matches(nodeGlob, name));
+        keyIds.set(id, matches(keyGlob, name));
     }
 
     @Override
