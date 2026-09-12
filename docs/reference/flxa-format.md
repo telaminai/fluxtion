@@ -82,7 +82,12 @@ ignored by a reader: node, key and tag decode the same with every reserved bit s
 **Key `0` on a tag other than TRACE** is a value logged without a key (the public API accepts a
 null key and does not intern the string `null`). It is a keyless value, not a trace: a reader
 delivers it with key `0`, and a text constructor MUST keep the value as a keyless entry and MUST NOT
-turn it into trace provenance. Provenance comes from the TAG, and only with key `0`.
+turn it into trace provenance. Provenance comes from the TAG, and only with key `0`. **A keyless
+entry is distinct from every named property, including one named `null`.** It is unnamed evidence:
+retained in the model, shown beside the node, and **outside every named-figure reduction** — a
+scorer, a series, a graph menu, a field projection — because none of those can name it, and naming
+it `null` collided with the business key `null` and hid a change (review, round 9). A consumer that
+scores or plots names MUST state that keyless evidence is outside its coverage.
 
 A writer MUST NOT emit a tag outside this table. A reader MUST deliver an entry whose tag it does
 not know, with its bits, and MUST NOT fail the record or the file (f12); rendering it is
@@ -132,11 +137,15 @@ diagnostic (`#tag<n>:<bits>`), and a text constructor treats it as text (§11).
 
 - A record is delivered in file order. `logTime` SHOULD be non-decreasing across a file; a reader
   MUST NOT re-sort.
-- **Entry order is the wire's, and MUST be preserved** by every consumer, through any text it
-  constructs and into its model. The same node MAY appear again later in the record, and the same
-  key MAY appear more than once under it; where a consumer needs one value per record, the **last
-  occurrence wins**, and that rule depends on order having been kept (f23). Consecutive entries with
-  the same `nodeId` are one node's contribution and a text constructor groups them (§11.7).
+- **Entry order is the wire's.** The wire reader and any text a consumer constructs MUST preserve the
+  full entry sequence. A consumer's **query model** MUST preserve node-block order and the order of
+  business entries within a block, and MAY reduce TRACE entries to invocation-presence metadata on the
+  node (§11.7): such metadata does not promise invocation counts or TRACE positions relative to the
+  business entries — a consumer that needs those reads the wire sequence, not the model. The same node
+  MAY appear again later in the record, and the same key MAY appear more than once under it; where a
+  consumer needs one value per record, the **last occurrence wins**, and that rule depends on order
+  having been kept (f23). Consecutive entries with the same `nodeId` are one node's contribution and a
+  text constructor groups them (§11.7).
 - `entryCount` bounds a record at `65535` entries. A writer MUST refuse a record with more (§8).
 
 ## 6. Values
@@ -379,6 +388,8 @@ format change and belongs on this page first.**
 | binary business `method` (no file) | never establishes completeness; the text heuristic unchanged | — | ✅ `BinaryAuditReaderTest` | — |
 | null-key values (no file) | int, double, String, boolean under key 0 are keyless entries, never traces; the figure after them survives | — | ✅ `BinaryAuditReaderTest` | — |
 | filter diagnostics after redefinition (no file) | a non-empty selection is not called empty; a name renamed to match after its last use is | ✅ `AuditLogToolTest` | — | — |
+| keyless evidence in named reductions (no file) | a keyless number beside a business key named `null`, both orders, repeated blocks: the scorer compares the named figure and reports the change; the graph menu offers named series only and does not throw | — | ✅ `ExpectationScorerTest`, `TopologyPanelKeylessTest` | — |
+| `endTime` precedence (no file) | the manager governs the records it builds and the one it holds when set; a supplied record keeps its own setting; the setter is live on a generated processor | ✅ `BinaryAuditEndToEndTest`; generated: compiler `GeneratedBinaryAuditSinkTest` | — | — |
 | writer refusals (no file) | overflow, 65,536 entries, oversize LATER name, a full FILE dictionary across record instances (and exactly filling it is allowed), a name of exactly 65,535 bytes, undefined unit: refused before any byte, stream and dictionary unchanged; a refused record instance is reusable after its next trigger; the preflight length equals the encoded length for surrogate pairs and lone surrogates | ✅ `BinaryAuditEndToEndTest` | — | overflow ✅, others source-inspected² |
 | header refusals (no file) | bad magic, unknown version | ✅ `BinaryLogFileRoundTripTest` | ✅ (`canOpen`) | — |
 | read paths (no file) | mapped and streamed reads agree, including a frame straddling a chunk | ✅ `BinaryLogFileReadPathTest` | — | — |

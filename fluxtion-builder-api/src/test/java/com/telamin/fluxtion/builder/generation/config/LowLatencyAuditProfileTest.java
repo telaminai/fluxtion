@@ -245,11 +245,14 @@ public class LowLatencyAuditProfileTest {
     }
 
     /**
-     * The profile's audit log takes no second clock reading, in either order of configuration; an
-     * ordinary audit log still does. Measured 2026-09-12: endTime is 13.6 ns of a 37.5 ns audited event.
+     * The profile's audit log takes no second clock reading, by either registration route - the
+     * low-latency helper applies it itself, and the profile block applies it to a manager registered
+     * before the profile through the ordinary helper; an ordinary audit log without the profile still
+     * records it. Not an order-independence claim for every route: later setting wins, as documented.
+     * Measured 2026-09-12: endTime is 13.6 ns of a 37.5 ns audited event.
      */
     @Test
-    public void lowLatencyAuditTakesNoEndTimeReading_inEitherOrder() {
+    public void lowLatencyAuditTakesNoEndTimeReading_byEitherRegistrationRoute() {
         EventProcessorConfig profileFirst = new EventProcessorConfig();
         profileFirst.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
         profileFirst.addLowLatencyEventLog(com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel.INFO,

@@ -62,8 +62,12 @@ public class EventLogManager implements Auditor {
      * release has emitted {@code endTime}. {@code LOW_LATENCY_AUDIT} sets it false: that second
      * reading is 13.6 ns of a 37 ns audited event on the accurate default clock, and it exists only for
      * {@code endTime - logTime}. A generated processor carries this as a field assignment, so the
-     * profile decision made at build time is the one the record runs under. A record swapped in at
-     * runtime through {@link EventLogControlEvent} takes this setting too. On the wire an unrecorded
+     * profile decision made at build time is the one the record runs under.
+     *
+     * <p><b>Precedence.</b> This setting governs the records the manager BUILDS (at {@link #init()}) and
+     * the record it currently holds when the setter is called; a record the caller SUPPLIES through
+     * {@link EventLogControlEvent} keeps its own {@code setRecordEndTime}, because an explicit record
+     * is an explicit choice and a supplied record's default is true, as every release wrote it. On the wire an unrecorded
      * {@code endTime} is 0, which the format defines as "not recorded" and the analyser reads as absent.
      */
     public boolean recordEndTime = true;
@@ -218,7 +222,12 @@ public class EventLogManager implements Auditor {
             newLogRecord.replaceBuffer(logRecord.sb);
             this.logRecord = newLogRecord;
             this.logRecord.setClock(clock);
-            this.logRecord.setRecordEndTime(recordEndTime);   // the profile's decision survives a swap
+            // PRECEDENCE: the manager's recordEndTime governs the records the MANAGER builds; a record
+            // the caller supplies keeps its own setting. An earlier version overwrote it, so a caller
+            // who had chosen setRecordEndTime(false) on a replacement record - the route the docs
+            // recommend for any other profile - had the choice silently undone (review, round 9).
+            // A supplied record's default is true, as every release wrote endTime; a caller under
+            // LOW_LATENCY_AUDIT who swaps in a record and wants it off sets it on that record.
             updateLogRecord();
         }
 
@@ -301,9 +310,19 @@ public class EventLogManager implements Auditor {
         return this;
     }
 
-    /** @see #recordEndTime */
+    /**
+     * @see #recordEndTime
+     * <p>LIVE: applies to the record this manager currently holds as well as to the ones it will
+     * build. A generated processor constructs its manager and record before any user code runs, so
+     * a setter that updated only the field left the active record unchanged until the next swap
+     * (review, round 9). Precedence: this setting governs the records the manager builds; a record
+     * the caller supplies through {@link EventLogControlEvent} keeps its own.
+     */
     public EventLogManager recordEndTime(boolean recordEndTime) {
         this.recordEndTime = recordEndTime;
+        if (logRecord != null) {
+            logRecord.setRecordEndTime(recordEndTime);
+        }
         return this;
     }
 

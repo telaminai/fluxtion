@@ -207,18 +207,35 @@ with anything outside the JVM, take the saving.
     an `Event`'s own `eventTime` stays in the producer's milliseconds — see
     [Binary audit logging](../how-to/binary-audit-logging.md).
 
-**`endTime` is on by default**, as it has been in every release, **and `LOW_LATENCY_AUDIT` turns it
-off.** It is the *second* clock read on an audited event path and exists only for `endTime - logTime`.
-Measured 2026-09-12 on the six-node quote engine, GraalVM 25.3.4 JIT, accurate default clock: the
-audited event is 37.5 ns with it and 23.9 ns without — the second reading is a third of the event. The
-profile keeps the accurate clock (a projected clock changes what `logTime` means) and drops the
-reading nothing needs. On the wire an unrecorded `endTime` is `0`, which the binary format defines as
-*not recorded* and the analyser reads as absent. Restore it on the profile, or suppress it elsewhere:
+**`endTime` is on by default**, as it has been in every release, **and `LOW_LATENCY_AUDIT` elects
+not to collect it.** It is the *second* clock read on an audited event path and it exists only for
+`endTime - logTime`: the duration evidence this profile elects not to collect. Measured 2026-09-12 on
+the six-node quote engine, GraalVM 25.3.4 JIT, accurate default clock: the audited event is 37.5 ns
+with it and 23.9 ns without — the second reading is a third of the event. The profile keeps the
+accurate clock (a projected clock changes what `logTime` means). On the wire an unrecorded `endTime`
+is `0`, which the binary format defines as *not recorded* and the analyser reads as absent.
+
+**Precedence, and when each setting takes effect.** `EventLogManager.recordEndTime` governs the
+records the manager *builds* — at generation time it is written into the processor as a field
+assignment, and at runtime the setter is live, changing the record the manager currently holds. A
+record you *supply* through `EventLogControlEvent` keeps its own `setRecordEndTime`: an explicit
+record is an explicit choice, and a supplied record's default is true. Later setting wins, on
+whichever object you set it.
 
 ```java
-config.addLowLatencyEventLog(LogLevel.INFO, AuditRecordFormat.BINARY);   // endTime off with the profile
-eventLogManager.recordEndTime(true);                                      // put it back
-logRecord.setRecordEndTime(false);                                        // drop it on any other profile
+// BUILD TIME - the profile's default, and how to put endTime back before generation
+config.performanceProfile(LOW_LATENCY_AUDIT)
+      .addLowLatencyEventLog(LogLevel.INFO, AuditRecordFormat.BINARY);      // endTime off
+((EventLogManager) config.getAuditorMap().get(EventLogManager.NODE_NAME))
+        .recordEndTime(true);                                                // back on, generated that way
+
+// RUNTIME - on a generated processor, any time after construction; applies to the live record
+processor.getAuditorById(EventLogManager.NODE_NAME).recordEndTime(true);
+
+// RUNTIME - a record you supply keeps its own setting, under any profile
+BinaryLogRecord mine = new BinaryLogRecord(clock);
+mine.setRecordEndTime(false);
+processor.onEvent(new EventLogControlEvent(mine));
 ```
 
 Taking both savings — the fast clock and no `endTime` — is worth **14.2 ns on JIT and 11.2 on native**

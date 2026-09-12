@@ -818,9 +818,14 @@ public class BinaryAuditEndToEndTest {
         void publish(int qty) { auditLog.info("qty", qty); }
     }
 
-    /** With recordEndTime off the wire carries 0 for endTime - "not recorded" - and a swapped record inherits it. */
+    /**
+     * The PRECEDENCE rule (review, round 9): the manager's recordEndTime governs the records it builds
+     * and the one it holds when the setter is called; a record the caller supplies keeps its own
+     * setting - a supplied default record records endTime, a supplied record set to false does not,
+     * under either profile. And the setter is live: it changes the active record, not only the field.
+     */
     @Test
-    public void aManagerWithoutEndTimeWritesZero_andASwappedRecordInheritsIt() throws Exception {
+    public void endTimePrecedence_managerBuildsItsOwn_suppliedRecordsKeepTheirs_setterIsLive() throws Exception {
         List<Long> endTimes = new ArrayList<>();
         EventLogManager manager = new EventLogManager(r -> endTimes.add(((BinaryLogRecord) r).endTime()))
                 .tracingOff().binaryRecord(true).recordEndTime(false);
@@ -829,31 +834,41 @@ public class BinaryAuditEndToEndTest {
         manager.init();
         Book book = new Book();
         manager.nodeRegistered(book, "book");
-        Object e1 = new Object();
-        clock.eventReceived(e1);
-        manager.eventReceived(e1);
-        book.publish(1);
-        manager.processingComplete();
+        publish(manager, clock, book, 1);                                         // the manager's own record
         manager.calculationLogConfig(new EventLogControlEvent(new BinaryLogRecord(clock, 4096)));
-        Object e2 = new Object();
-        clock.eventReceived(e2);
-        manager.eventReceived(e2);
-        book.publish(2);
-        manager.processingComplete();
-        assertEquals(List.of(0L, 0L), endTimes);
+        publish(manager, clock, book, 2);                                         // a supplied DEFAULT record
+        BinaryLogRecord off = new BinaryLogRecord(clock, 4096);
+        off.setRecordEndTime(false);
+        manager.calculationLogConfig(new EventLogControlEvent(off));
+        publish(manager, clock, book, 3);                                         // a supplied record set to false
+        manager.recordEndTime(true);                                              // LIVE: applies to the held record
+        publish(manager, clock, book, 4);
+        assertEquals("built: off; supplied default: on; supplied off: off; live restore: on",
+                List.of(true, false, true, false), List.of(endTimes.get(0) == 0L, endTimes.get(1) == 0L, endTimes.get(2) == 0L, endTimes.get(3) == 0L));
 
-        List<Long> withEnd = new ArrayList<>();
-        EventLogManager ordinary = new EventLogManager(r -> withEnd.add(((BinaryLogRecord) r).endTime()))
+        // an ORDINARY manager does not undo a supplied record's explicit suppression either
+        List<Long> ordinary = new ArrayList<>();
+        EventLogManager plain = new EventLogManager(r -> ordinary.add(((BinaryLogRecord) r).endTime()))
                 .tracingOff().binaryRecord(true);
-        ordinary.clock = clock;
-        ordinary.init();
+        plain.clock = clock;
+        plain.init();
         Book book2 = new Book();
-        ordinary.nodeRegistered(book2, "book");
-        clock.eventReceived(e1);
-        ordinary.eventReceived(e1);
-        book2.publish(3);
-        ordinary.processingComplete();
-        assertEquals(1, withEnd.size());
-        assertTrue("the default still records endTime", withEnd.get(0) > 0L);
+        plain.nodeRegistered(book2, "book");
+        publish(plain, clock, book2, 1);
+        BinaryLogRecord suppressed = new BinaryLogRecord(clock, 4096);
+        suppressed.setRecordEndTime(false);
+        plain.calculationLogConfig(new EventLogControlEvent(suppressed));
+        assertFalse("the supplied record's choice stands", suppressed.isRecordEndTime());
+        publish(plain, clock, book2, 2);
+        assertTrue("the default still records endTime", ordinary.get(0) > 0L);
+        assertEquals("the supplied suppressed record writes 0", 0L, (long) ordinary.get(1));
+    }
+
+    private static void publish(EventLogManager manager, Clock clock, Book book, int qty) {
+        Object e = new Object();
+        clock.eventReceived(e);
+        manager.eventReceived(e);
+        book.publish(qty);
+        manager.processingComplete();
     }
 }
