@@ -16,13 +16,14 @@ java -cp fluxtion-runtime.jar \
 
 | option | meaning |
 |---|---|
-| `--from <millis>` · `--to <millis>` | `logTime` bounds |
+| `--from <millis>` · `--to <millis>` | inclusive `logTime` bounds, **always epoch milliseconds**: the tool reads the file's header first and scales them to the file's unit. A file whose header states no unit, or an undefined one, refuses a time query (exit 2) rather than compare milliseconds to something else |
 | `--event <glob>` | event type name |
 | `--node <glob>` | node name |
 | `--key <glob>` | property key |
 | `--limit <n>` | stop after *n* matching records |
 | `--sink text\|null` | output; `text` by default |
-| `--stats` | counts, unresolved ids, unreadable bytes |
+| `--stats` | counts, the file's time unit, unresolved ids, redefined ids, unreadable bytes |
+| `--declare-unit millis\|nanos --out <copy>` | for a file whose header states no unit: write a copy that states it. Fills in only a header that states none, never rewrites a stated unit, changes nothing past the header |
 | `-h`, `--help` | usage |
 
 Globs are matched **once, when the dictionary entry arrives** — not per entry. A pattern resolves to a
@@ -49,13 +50,20 @@ java -cp fluxtion-runtime.jar com.telamin.fluxtion.runtime.audit.tools.AuditLogT
 - **unreadable trailing bytes** — the file was truncated, most often because the writer was killed. The
   reader decodes everything it can and reports the remainder rather than failing the whole read, so a
   truncated file is still worth something.
+- **the time unit** — `epoch milliseconds` for anything the default writer wrote; `unspecified` for a
+  file from a pre-release runtime, which a millisecond consumer must not assume anything about — declare
+  it with `--declare-unit`. The analyser refuses an unstated unit for the same reason.
 
 Neither shows up in filtered output. A `--node` pattern that matches nothing and a `--node` pattern whose
 node was never named in the dictionary both print nothing.
 
 **A trace entry is not an unresolved id.** Method traces carry a node id and no key, and the reader
 reports that absent key as *no key* rather than as an id that failed to resolve — otherwise every traced
-log would look corrupt.
+log would look corrupt. An entry with no key that is **not** a trace is a value logged under a null
+key: kept as a keyless value, never turned into a trace.
+
+**A missing `endTime` reads as `0`.** `LOW_LATENCY_AUDIT` elects not to take that second clock reading;
+the format defines `0` as *not recorded*, and the analyser shows it as absent.
 
 ## Using the decoder directly
 
@@ -83,5 +91,9 @@ knows every tag will mis-render a newer log rather than say it cannot read it.
 
 ## What it cannot do
 
-It reads a binary log. It does not open one in the analyser UI, which is a separate piece of work; and it
-is not a general log viewer — for a text audit log, the analyser is the tool.
+It reads a binary log for people and `grep`. **Its text output is raw inspection, not analyser input**:
+values are printed bare, so a logged String such as `"ok, invented: 42.0"` would read back as a second,
+numeric entry. Open the `.flxa` file in the [audit log analyser](https://telaminai.github.io/fluxtionauditlog-analyser/)
+instead — it opens binary logs directly, keeps the wire's types, identity and unit, and refuses a file
+whose unit it cannot present. The format itself — header, frames, tags, bounds, what a writer must
+refuse and a reader must deliver — is specified in [FLXA — the binary audit log format](../reference/flxa-format.md).

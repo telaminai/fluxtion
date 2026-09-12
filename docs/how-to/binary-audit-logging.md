@@ -56,6 +56,12 @@ processor.init();                                   // now events can flow
 through `EventLogControlEvent` still works and is still how you change format at runtime; this is how
 you start in the right one.
 
+**`LOW_LATENCY_AUDIT` writes `endTime` as `0`.** The profile elects not to take the second clock
+reading — measured at a third of the audited event — and the format defines `0` as *not recorded*;
+the analyser shows it as absent. Put it back with `EventLogManager.recordEndTime(true)`; the
+[profiles page](../reference/performance-profiles.md#what-each-profile-costs) gives the build-time and
+runtime routes and the precedence rule.
+
 **The writer states the file's time unit, once.** `new BinaryLogWriter(out)` declares epoch
 milliseconds, which is what the default clock writes. If you install `ClockStrategy.nanoEpochClock()`,
 construct the writer with `BinaryLogFile.TIME_UNIT_EPOCH_NANOS` so the header tells every reader; an

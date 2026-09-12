@@ -62,7 +62,9 @@ public class PriceLadder {
   published benchmark reseeded per iteration, which is right for JMH's statistics and useless for
   comparing two arms, because they then do arithmetic on different numbers.
 - Single thread, no pinning. Apple M4, OpenJDK 25.0.2, Oracle GraalVM 25.0.4+7.1.
-- Native: `--gc=epsilon`, `-H:-SpawnIsolates`, PGO collected per image.
+- Native: `--gc=epsilon`, `-H:-SpawnIsolates`, PGO collected per image. (GraalVM 25.3 refuses
+  `-H:-SpawnIsolates` — "isolate support can no longer be disabled" — and the 2026-09-12 measurements
+  below were built without it, with no penalty visible on either arm.)
 - **The nodes mutate the input ladder in place**, so state accumulates across passes. That is inherent
   to this workload and identical for every arm at equal iteration counts.
 
@@ -89,6 +91,16 @@ Native no-audit figures are the mean of three independent PGO builds — hand
 4.299 / 4.292 / 4.301, generated 4.511 / 4.507 / 4.404. The spread is **0.009 ns** on the hand-written arm
 and 0.107 on the generated one: the build lottery that dominates an audited path is essentially absent
 when the path is lean.
+
+!!! note "Provenance of this table, and what has changed since"
+    Measured **2026-09-09** on Apple M4: JIT is OpenJDK 25.0.2 (C2), native is Oracle GraalVM 25.0.4
+    with PGO. The two `LOW_LATENCY_AUDIT` rows were measured under that day's **development defaults**
+    for the audit path — a projected millisecond clock and no `endTime` reading — which review then
+    reverted. What ships in 1.0.15 is the **accurate** wall clock (`System::currentTimeMillis`, about
+    5 ns more per read on this machine than the projected clock) with `endTime` **off** under
+    `LOW_LATENCY_AUDIT`. Expect the binary-audit row to read a few nanoseconds higher on the shipped
+    defaults than the 20.4 / 18.2 shown; the newer measurement below, on a larger graph and the newer
+    GraalVM, is the one taken on exactly what ships.
 
 ### What the table says
 
@@ -198,6 +210,36 @@ the dispatch path, applied to a hotter loop.
     measurement was real, but it was taken on a **dispatch-only graph** whose nodes do almost no work —
     where the event path is nearly all framework and there is little for a C++ compiler to be better at.
     On a graph doing real array work the gap opens up, and it opens up for hand-written Java too.
+
+## Newer toolchains: GraalVM 25.3.4 and its priority inliner (2026-09-12)
+
+A second, larger graph — a six-node quote engine (book, volatility window, inventory, quote, risk gate,
+publisher; two event types, 64 symbols) — measured on the toolchain current at release, **on the
+shipped defaults**: accurate clock, `endTime` off under `LOW_LATENCY_AUDIT`. Every figure is
+`measure.sh` repeatable, three batches of five, CV under 1.3%, on a settled machine.
+
+| toolchain | unaudited, `LOWEST_LATENCY` | audited, `LOW_LATENCY_AUDIT` + `BINARY` |
+|---|---:|---:|
+| **Oracle GraalVM 25.3.4 JIT** (new priority inliner) | **7.47 ns · 134 M/s** | 23.84 ns · 42 M/s |
+| Temurin 21 C2, same day | 8.98 ns · 111 M/s | 23.15 ns · 43 M/s |
+| Native AOT + PGO, GraalVM 25.3.4, `--gc=epsilon` | 13.17 ns · 76 M/s | 23.12 ns · 43 M/s |
+| recorded two days earlier: GraalVM 25.0.4 JIT | 12.03 ns | 21.31 ns¹ |
+| recorded two days earlier: OpenJDK 25.0.2 C2 | 8.60 ns | 21.99 ns¹ |
+
+¹ under the development defaults of the time — projected clock and no `endTime`.
+
+- **The new inliner is worth 38% on dispatch**, and Graal's JIT now beats C2 on this path where two days
+  earlier it trailed it. Native did not benefit, and on this graph native trails both JITs on dispatch:
+  the four-node ladder above is the case where native wins.
+- **Once auditing, the three Java toolchains converge at about 23 ns**, and 13 of those are the
+  accurate clock: the audit path is the same code on every toolchain and the clock dominates it. The
+  same audited arm read **37 ns** before `LOW_LATENCY_AUDIT` stopped taking the `endTime` reading —
+  a second wall-clock read that was a third of the event and served only `endTime - logTime`. The
+  A/B that attributed it: as shipped 37.5, projected clock alone 29.7, `endTime` off alone 23.9, both
+  21.4. See [performance profiles](performance-profiles.md#what-each-profile-costs).
+- The C++ control was not rebuilt for this measurement: the current C++ generator emits array-state
+  setters the bench's author-side code does not implement, a C++-round item. The recorded C++ figures
+  on this graph are 3.80 ns unaudited and 13.83 audited.
 
 ## Performance as business value
 

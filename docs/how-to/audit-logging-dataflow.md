@@ -130,7 +130,8 @@ How to read this YAML:
 - eventToString: Full string form of the event for quick human inspection.
 - thread: The processing thread name.
 - nodeLogs: Ordered list of node outputs in topological execution order. Each list item is a mapping where the key is the node name and the value is that node’s flat KV map.
-- endTime: Timestamp at the end of processing for this event.
+- endTime: Timestamp at the end of processing for this event — a second clock reading, taken by every profile
+  except `LOW_LATENCY_AUDIT`, which elects not to collect it (see [performance profiles](../reference/performance-profiles.md#what-each-profile-costs)).
 
 ## Enabling and configuring logging
 

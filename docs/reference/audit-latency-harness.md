@@ -75,7 +75,7 @@ Known inputs that move an audited figure, to be varied one at a time:
 | input | effect |
 |---|---|
 | processor escaping the loop method | **4.3× on native**, nothing on JIT |
-| `-H:-SpawnIsolates` | −24 ns audited |
+| `-H:-SpawnIsolates` | −24 ns audited on GraalVM 25.0; the flag is refused from 25.3, where no penalty was measured without it |
 | record format, text vs binary | 3.2× sparse, **9.5× dense** |
 | audit density | the variable behind most of the spread |
 | GC epsilon vs serial | 0–14 ns |

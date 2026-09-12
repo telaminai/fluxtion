@@ -88,8 +88,9 @@ end
 
 ## What you get
 
-* ⚡ **Low and predictable latency**: Compiled dispatch eliminates runtime interpretation overhead (tens of nanoseconds
-  for typical in-process pipelines).
+* ⚡ **Low and predictable latency**: Compiled dispatch eliminates runtime interpretation overhead — measured at
+  **4.5 ns per event under native AOT and under 10 ns on the JIT** for a four-node graph, within 4% of
+  hand-written Java (see [Performance](reference/performance.md)).
 * 🧠 **Deterministic execution**: Events are processed in a fixed, topological order — no glitches, no surprises.
 * ♻️ **Zero-allocation hot path**: Performs no framework allocation during dispatch, ensuring stable tail latency.
 * 📉 **Stable tail latency**: Fewer GC pauses and flatter p99/p99.9 behavior.

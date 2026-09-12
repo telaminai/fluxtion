@@ -97,6 +97,14 @@ Same graph, same work, same result, both toolchains:
 | `LOW_LATENCY_AUDIT` + `TEXT` | yes | 42.3 | 50.6 |
 | `AUDITED` + tracing | yes | **112.3** | 200.8 |
 
+!!! note "Provenance"
+    Measured 2026-09-09: JIT is OpenJDK 25.0.2, native is GraalVM 25.0.4 with PGO. The two audited rows
+    were taken under that day's development defaults — a projected clock and no `endTime` — and the
+    shipped `LOW_LATENCY_AUDIT` keeps the accurate clock, so expect them a few nanoseconds higher on
+    what ships. The measurement taken on the shipped defaults and the current GraalVM (25.3.4, whose
+    new inliner is worth 38% on dispatch) is on the [performance page](performance.md#newer-toolchains-graalvm-2534-and-its-priority-inliner-2026-09-12):
+    7.5 ns unaudited, 23.8 audited on the six-node quote engine.
+
 **Configuring nothing costs 3.3× the tuned configuration** on native. Nothing about the default is
 wrong; all of it is optional, and none of it announces itself. Per event it is a clock read, three
 dirty-flag stores, three guard checks and three resets on this four-node graph:
@@ -134,10 +142,14 @@ Worth **4.3× under native AOT** and nothing at all on JIT. If the processor esc
 drives it, escape analysis cannot scalar-replace the node graph and every field access becomes a real
 load. Nothing warns you.
 
-### 2 · `-H:-SpawnIsolates` on the native build
+### 2 · `-H:-SpawnIsolates` on the native build — gone in GraalVM 25.3
 
-Worth **~24 ns/event** on an audited path. It is a build flag, not a config setting, and it was the
-single largest win found in a round of work that also rewrote three data structures.
+Worth **~24 ns/event** on an audited path when it was measured (round 63, GraalVM 25.0). It is a build
+flag, not a config setting, and it was the single largest win found in a round of work that also
+rewrote three data structures. **GraalVM 25.3 refuses it** — "isolate support can no longer be
+disabled" — and the quote-engine measurement of 2026-09-12, built without it on 25.3.4, shows no such
+penalty: 13.2 ns unaudited against 12.7 recorded with the flag on 25.0.4, and 23.1 audited, level with
+the JITs. Treat the −24 ns as a fact about 25.0, not a flag to look for.
 
 ### 3 · Node-name lookup
 
@@ -270,7 +282,7 @@ it for you.
 
 ```java
 config.performanceProfile(LOWEST_LATENCY);
-// build native with --gc=epsilon -H:-SpawnIsolates and a PGO profile
+// build native with --gc=epsilon and a PGO profile (-H:-SpawnIsolates is refused from GraalVM 25.3)
 // construct the processor inside the method that drives it
 ```
 
