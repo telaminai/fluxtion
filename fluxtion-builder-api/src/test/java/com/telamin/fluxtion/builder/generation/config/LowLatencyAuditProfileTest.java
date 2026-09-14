@@ -1,0 +1,278 @@
+/*
+ * Copyright: © 2025. Gregory Higgins <greg.higgins@v12technology.com>
+ * SPDX-License-Identifier: AGPL-3.0-only OR SSPL-1.0
+ */
+package com.telamin.fluxtion.builder.generation.config;
+
+import com.telamin.fluxtion.builder.generation.config.EventProcessorConfig.PerformanceProfile;
+import com.telamin.fluxtion.runtime.audit.EventLogManager;
+import org.junit.Test;
+
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.fail;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+
+/**
+ * {@link PerformanceProfile#LOW_LATENCY_AUDIT} — pinned in both directions.
+ *
+ * <p>A profile is a promise about a set of settings, and the failure mode when one drifts is silent:
+ * the processor stays correct and simply runs slower, or — worse for the two this profile deliberately
+ * does <b>not</b> touch — quietly computes something different. So what it must set and what it must
+ * leave alone are equally load-bearing, and both are asserted here.
+ *
+ * <p>The measured value of this profile over {@link PerformanceProfile#AUDITED} is 5.4 ns/event on JIT
+ * and ~12 ns on native, on a 30-node 5-event-type converging-tail graph — see round 63 in the analyser
+ * repo. That comes from removing the per-event buffer-and-trigger branch and the subscription publish.
+ */
+public class LowLatencyAuditProfileTest {
+
+    @Test
+    public void dropsTheThingsThatCostAndCannotChangeAResult() {
+        EventProcessorConfig config = new EventProcessorConfig();
+        config.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
+
+        assertFalse("buffer-and-trigger is a branch on every event",
+                config.isSupportBufferAndTrigger());
+        assertFalse("the subscription publish is constructor work nobody in this profile uses",
+                config.isSupportSubscriptions());
+    }
+
+    /**
+     * <b>The regression this profile actually shipped with, and the reason the test suite grew.</b>
+     *
+     * <p>{@code setSupportNodeNameLookup(false)} reads like it drops a lookup map. It does not: it stops
+     * <b>node registration</b>, and node registration is how {@link EventLogManager#nodeRegistered} gives
+     * every node its {@code EventLogger}. Turn it off and every node's {@code auditLog} is the null
+     * logger — the processor runs, looks correct, and publishes nothing.
+     *
+     * <p>The first version of {@code LOW_LATENCY_AUDIT} set it. The generated processor emitted zero
+     * {@code nodeRegistered} calls against 33 for {@code AUDITED}, and a benchmark measuring "the cost
+     * of auditing" was measuring a graph with no audit — and reported the missing work as a speed-up.
+     *
+     * <p>An audit profile that disables auditing is the worst failure this API can have, because
+     * nothing reports it. This test exists so it cannot happen twice.
+     */
+    @Test
+    public void mustNotDisableNodeRegistrationBecauseThatSilentlyKillsTheAuditLog() {
+        EventProcessorConfig config = new EventProcessorConfig();
+        config.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
+
+        assertTrue("node registration is how every node gets its EventLogger — without it the audit "
+                        + "log this profile exists to keep is silently dead",
+                config.isSupportNodeNameLookup());
+    }
+
+    /**
+     * Re-entrancy is the one setting this profile must not touch: turning it off converts queued
+     * re-entrant dispatch into an {@link IllegalStateException}, which can break a working graph. That
+     * is not a trade a profile gets to make on the author's behalf — the same reasoning
+     * {@code LOWEST_LATENCY} documents for it at length.
+     */
+    @Test
+    public void leavesReentrancyAlone() {
+        EventProcessorConfig config = new EventProcessorConfig();
+        config.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
+
+        assertTrue("re-entrancy is the author's call, not the profile's",
+                config.isSupportReentrancy());
+    }
+
+    /**
+     * Guards off. Measured with the harness version held equal across both arms — 7.6 ns/event better
+     * with no audit, indistinguishable with it. An earlier measurement said the opposite because it
+     * compared a pre-h3 binary against an h3 one: two variables, not one. The audit output was
+     * identical throughout, which is what said the difference had to be an artifact.
+     */
+    @Test
+    public void turnsGuardsOffBecauseTheyAreFreeToRemoveOnTheAuditedPath() {
+        EventProcessorConfig config = new EventProcessorConfig();
+        config.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
+
+        assertFalse("guards cost 7.6 ns/event with no audit and are indistinguishable with it "
+                        + "(144.11 vs 142.83 native, inside the lottery); on this shape they also "
+                        + "skip nothing, verified by tracing",
+                config.isSupportDirtyFiltering());
+    }
+
+    /** And the author can still put them back — a profile is a starting point, not a lock. */
+    @Test
+    public void theAuthorCanPutGuardsBack() {
+        EventProcessorConfig config = new EventProcessorConfig();
+        config.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
+        config.setSupportDirtyFiltering(true);
+
+        assertTrue(config.isSupportDirtyFiltering());
+        assertNotNull("and doing so must not disturb the audit log",
+                config.addLowLatencyEventLog(com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel.INFO)
+                        .getAuditorMap().get(EventLogManager.NODE_NAME));
+    }
+
+    /** The whole point of the profile: unlike LOWEST_LATENCY, the audit log survives it. */
+    @Test
+    public void keepsTheAuditLog() {
+        EventProcessorConfig config = new EventProcessorConfig();
+        config.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
+        config.addLowLatencyEventLog(com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel.INFO);
+
+        assertNotNull("the audit log is the point of this profile",
+                config.getAuditorMap().get(EventLogManager.NODE_NAME));
+    }
+
+    /**
+     * The distinction from {@link PerformanceProfile#AUDITED}: tracing off, and neither of the two
+     * defaults that allocate. Tracing is the expensive half — measured at ~184 ns/event on the
+     * reference graph, on top of the record itself.
+     */
+    @Test
+    public void theAuditLogItInstallsHasTracingOffAndNeitherAllocatingDefault() {
+        EventProcessorConfig config = new EventProcessorConfig();
+        config.addLowLatencyEventLog(com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel.INFO);
+
+        EventLogManager manager = (EventLogManager) config.getAuditorMap().get(EventLogManager.NODE_NAME);
+        assertNotNull(manager);
+        assertFalse("method tracing is the expensive half", manager.trace);
+        assertFalse("the event's toString allocates", manager.printEventToString);
+        assertFalse("the thread name allocates", manager.printThreadName);
+    }
+
+    /** LOWEST_LATENCY still drops the audit log — the two profiles must not converge. */
+    @Test
+    public void lowestLatencyStillDropsTheAuditLogSoTheProfilesRemainDistinct() {
+        EventProcessorConfig audited = new EventProcessorConfig();
+        audited.addLowLatencyEventLog(com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel.INFO);
+        audited.performanceProfile(PerformanceProfile.LOWEST_LATENCY);
+
+        assertFalse("LOWEST_LATENCY gives up the audit log; that is its documented trade",
+                audited.getAuditorMap().containsKey(EventLogManager.NODE_NAME));
+    }
+
+    /**
+     * With guards off in both, the two profiles now differ by the audit log alone. Pinned because that
+     * is what makes an audit measurement meaningful: a baseline that also differs in dirty filtering
+     * produced a delta 32% larger than the real audit cost, and nothing reported the confound.
+     */
+    @Test
+    public void differsFromLowestLatencyOnTheAuditLogNotTheGuards() {
+        EventProcessorConfig lowLatencyAudit = new EventProcessorConfig();
+        lowLatencyAudit.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
+
+        EventProcessorConfig lowestLatency = new EventProcessorConfig();
+        lowestLatency.performanceProfile(PerformanceProfile.LOWEST_LATENCY);
+
+        assertFalse("both give up conditional propagation", lowLatencyAudit.isSupportDirtyFiltering());
+        assertFalse("both give up conditional propagation", lowestLatency.isSupportDirtyFiltering());
+        // the difference between them is the audit log, not the guards
+        lowLatencyAudit.addLowLatencyEventLog(
+                com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel.INFO);
+        assertNotNull("LOW_LATENCY_AUDIT keeps the audit log",
+                lowLatencyAudit.getAuditorMap().get(EventLogManager.NODE_NAME));
+    }
+
+    /**
+     * The record format is a <b>build input</b> selected through the profile, not something swapped in
+     * at runtime. Default stays TEXT because it needs no extra step: the binary form IS readable -
+     * BinaryLogReader and the AuditLogTool CLI both open it - but it requires a sink to be installed
+     * and a reader to open it, so it is chosen rather than defaulted. The analyser opens
+     * it through its BinaryAuditReader.
+     */
+    @Test
+    public void defaultRecordFormatIsTextBecauseNothingCanReadBinaryYet() {
+        EventProcessorConfig config = new EventProcessorConfig();
+        config.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
+        config.addLowLatencyEventLog(com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel.INFO);
+
+        EventLogManager manager = (EventLogManager) config.getAuditorMap().get(EventLogManager.NODE_NAME);
+        assertFalse("binary requires an installed sink, so it is not a safe default", manager.binaryRecord);
+    }
+
+    /**
+     * Selecting BINARY and installing no sink must let the build FINISH, then refuse at publish.
+     *
+     * <p>This asserted an init-time refusal until round-2 review: generated processors call
+     * {@code EventLogManager.init()} from their own CONSTRUCTOR, so refusing there fired before any
+     * caller could retrieve the auditor and install a sink — 22 errors in the compiler suite, every one
+     * from a generated constructor. The documented sequence is construct, retrieve the auditor, install
+     * the writer, then {@code processor.init()}; the refusal has to leave that window open.
+     */
+    @Test
+    public void binaryWithNoSinkBuildsThenRefusesAtPublish() {
+        EventProcessorConfig config = new EventProcessorConfig();
+        config.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
+        config.addLowLatencyEventLog(com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel.INFO,
+                EventProcessorConfig.AuditRecordFormat.BINARY);
+        EventLogManager manager = (EventLogManager) config.getAuditorMap().get(EventLogManager.NODE_NAME);
+        manager.clock = new com.telamin.fluxtion.runtime.time.Clock();
+        manager.clock.init();
+
+        manager.init();     // MUST NOT throw - this is what a generated constructor does
+        manager.nodeRegistered(new Object(), "node");
+        manager.eventReceived(new Object());
+        try {
+            manager.publishLastRecord();
+            fail("a binary record reaching the default text sink must be refused");
+        } catch (IllegalStateException refused) {
+            assertTrue("the refusal must name what to install, got: " + refused.getMessage(),
+                    refused.getMessage().contains("BinaryLogWriter"));
+        }
+    }
+
+    @Test
+    public void binaryRecordIsSelectableThroughTheProfileAndBuildsAtInit() {
+        EventProcessorConfig config = new EventProcessorConfig();
+        config.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
+        config.addLowLatencyEventLog(com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel.INFO,
+                EventProcessorConfig.AuditRecordFormat.BINARY);
+
+        EventLogManager manager = (EventLogManager) config.getAuditorMap().get(EventLogManager.NODE_NAME);
+        assertTrue("the profile must carry the format", manager.binaryRecord);
+
+        manager.clock = new com.telamin.fluxtion.runtime.time.Clock();
+        manager.clock.init();
+        // Install the sink the format requires, as an application must.
+        java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+        manager.setLogSink(new com.telamin.fluxtion.runtime.audit.BinaryLogWriter(bytes));
+        manager.init();
+        assertTrue("and init must build the binary record, not swap one in later",
+                manager.lastRecordIsBinaryForTest());
+
+        // AND PUBLISH. Stopping at init is what let a sink incompatible with the chosen format sit
+        // undetected behind a green test.
+        manager.nodeRegistered(new Object(), "node");
+        manager.eventReceived(new Object());
+        manager.processingComplete();
+        assertTrue("a record must actually reach the sink", bytes.size() > 0);
+    }
+
+    /**
+     * The profile's audit log takes no second clock reading, by either registration route - the
+     * low-latency helper applies it itself, and the profile block applies it to a manager registered
+     * before the profile through the ordinary helper; an ordinary audit log without the profile still
+     * records it. Not an order-independence claim for every route: later setting wins, as documented.
+     * Measured 2026-09-12: endTime is 13.6 ns of a 37.5 ns audited event.
+     */
+    @Test
+    public void lowLatencyAuditTakesNoEndTimeReading_byEitherRegistrationRoute() {
+        EventProcessorConfig profileFirst = new EventProcessorConfig();
+        profileFirst.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
+        profileFirst.addLowLatencyEventLog(com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel.INFO,
+                EventProcessorConfig.AuditRecordFormat.BINARY);
+        assertFalse(managerOf(profileFirst).recordEndTime);
+
+        EventProcessorConfig logFirst = new EventProcessorConfig();
+        logFirst.addEventAudit();                      // the ordinary audit log, added first
+        assertTrue("an ordinary audit log records endTime, as every release has", managerOf(logFirst).recordEndTime);
+        logFirst.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT);
+        assertFalse("the profile applies to an audit log added before it", managerOf(logFirst).recordEndTime);
+
+        EventProcessorConfig plain = new EventProcessorConfig();
+        plain.addEventAudit();
+        assertTrue(managerOf(plain).recordEndTime);
+    }
+
+    private static EventLogManager managerOf(EventProcessorConfig cfg) {
+        Object m = cfg.getAuditorMap().get(EventLogManager.NODE_NAME);
+        assertNotNull("the audit log is registered", m);
+        return (EventLogManager) m;
+    }
+}

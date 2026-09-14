@@ -35,6 +35,16 @@ public class NodeNameAuditor implements Auditor, NodeNameLookup, NamedNode {
         return node;
     }
 
+    /**
+     * This auditor does all its work in {@link #nodeRegistered(Object, String)}; it inherits the
+     * no-op {@code eventReceived} and {@code processingComplete} defaults. Opting out keeps the
+     * calls out of the generated source rather than emitting two inherited virtual no-ops per event.
+     */
+    @Override
+    public boolean auditEventReceipt() {
+        return false;
+    }
+
     @Override
     public void init() {
         node2NameMap.clear();

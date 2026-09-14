@@ -20,7 +20,24 @@ public class FieldContext<T> {
     @Getter(AccessLevel.NONE)
     private final MapFieldToJavaSource mapFieldToJavaSource;
 
+    /**
+     * The name of the field being serialised, or null where the caller did not supply one.
+     *
+     * <p>Java's serialisers never needed it: they return an EXPRESSION and the generator writes
+     * {@code name = expression}. A target whose serialiser must produce a whole member DECLARATION
+     * does need it — a C++ mapping for {@code Duration} emits
+     * {@code std::chrono::nanoseconds horizon{...}}, and a serialiser handed only the value cannot
+     * know the field is called {@code horizon}. Without it a serialiser had to invent a name, and two
+     * fields of the same type in one node then collided.
+     */
+    private final String fieldName;
+
     public FieldContext(T instanceToMap, List<Field> nodeFields, Set<Class<?>> importList, MapFieldToJavaSource mapFieldToJavaSource) {
+        this(instanceToMap, nodeFields, importList, mapFieldToJavaSource, null);
+    }
+
+    public FieldContext(T instanceToMap, List<Field> nodeFields, Set<Class<?>> importList, MapFieldToJavaSource mapFieldToJavaSource, String fieldName) {
+        this.fieldName = fieldName;
         this.instanceToMap = instanceToMap;
         this.nodeFields = nodeFields;
         this.importList = importList;

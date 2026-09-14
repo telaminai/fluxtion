@@ -56,6 +56,27 @@ public class LogRecord {
     protected final StringBuilder sb;
     protected String sourceId;
     protected boolean firstProp;
+    /**
+     * Whether to take a second clock reading for {@code endTime}. <b>On by default.</b>
+     *
+     * <p>{@code endTime} exists so {@code endTime - logTime} gives the processing duration, and it has
+     * to be a live reading to do that — a cached one reports every event as taking zero time. But that
+     * costs a clock read on every event, and on any event faster than the clock's resolution the answer
+     * is zero anyway. An audited event path reads a clock twice per event; this is the second one, and
+     * most deployments do not need it.
+     *
+     * <p><b>Default TRUE, because 1.0.13 and every release before it emitted {@code endTime} on every
+     * record.</b> This flag is new; defaulting it off silently removed a field from the default text
+     * output, which is a changed output contract rather than the additive change this release claims.
+     * A consumer parsing the record for {@code endTime} would have found it gone. The saving is real
+     * and is still available - set this false - but it is opted into
+     * rather than imposed.
+     *
+     * <p>Turn it off when you do not consume the duration. Leave it on, and pair it with a clock that
+     * can resolve the interval, when you do:
+     * {@link com.telamin.fluxtion.runtime.time.ClockStrategy#nanoEpochClock()}.
+     */
+    protected boolean recordEndTime = true;
     @Setter
     protected Clock clock;
     protected boolean printEventToString = false;
@@ -63,6 +84,30 @@ public class LogRecord {
     protected boolean printThreadName = false;
     @Setter
     protected ObjLongConsumer<StringBuilder> timeFormatter = StringBuilder::append;
+
+    /**
+     * Writes this record's ENCODED form, so a sink can persist it without knowing its class.
+     *
+     * <p>M52.3, spec-binary-audit-encoding §6.1(2). Before this, {@code asCharSequence()} was the only
+     * expression channel: a binary record had to throw from it, and every sink that wanted the bytes
+     * had to downcast to a vendor class to reach them. A sink shipping records to a queue or a socket
+     * has no business knowing whether the graph was built with a text or a binary log.
+     *
+     * <p>The default is the text answer the spec names — the characters, as UTF-8 — so every existing
+     * {@code LogRecord} subclass satisfies the contract without changing. A binary record overrides it
+     * with its own framing.
+     *
+     * <p><b>Stream-level framing is NOT a record's business.</b> A binary log file also carries a
+     * header and dictionary frames, and which names a stream has already described is state belonging
+     * to the writer, not to any one record. {@link BinaryLogWriter} still owns that;
+     * this is the record's own bytes.
+     */
+    public void encodeTo(java.io.OutputStream out) throws java.io.IOException {
+        CharSequence text = asCharSequence();
+        if (text != null) {
+            out.write(text.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+    }
 
     public LogRecord(Clock clock) {
         this(clock, EventLogControlEvent.LogLevel.INFO);
@@ -82,9 +127,74 @@ public class LogRecord {
         }
     }
 
+    /** @see #recordEndTime */
+    public void setRecordEndTime(boolean recordEndTime) {
+        this.recordEndTime = recordEndTime;
+    }
+
+    public boolean isRecordEndTime() {
+        return recordEndTime;
+    }
+
     public void replaceBuffer(CharSequence newBuffer) {
         sb.setLength(0);
         sb.append(newBuffer);
+    }
+
+    /**
+     * Resolve a node name or property key to a small integer this record can use in place of the
+     * string, or return {@link #NO_ID} to say it does not work that way.
+     *
+     * <p><b>Why this exists.</b> Every name reaching {@code addRecord} is a compile-time constant: the
+     * node name comes from the generated processor, the property key is a literal in the node's own
+     * source. A record that encodes names as integers must therefore resolve the same handful of
+     * strings on every event forever. Measured on a 30-node graph logging 11.75 entries per event, that
+     * is 23.5 lookups and <b>26 ns/event on JIT, 27 on native</b> — about a third of a binary audit
+     * record, and an open-addressed identity table recovered only 7% of it, because the cost is doing a
+     * lookup at all rather than which lookup.
+     *
+     * <p>{@link EventLogger} is created per node and holds its node name in a final field, so it can
+     * resolve once and reuse. This hook is what lets it. <b>Node code does not change</b> —
+     * {@code auditLog.info("v", v)} is unaffected.
+     *
+     * @param name a node name or property key, always a constant in practice
+     * @return a non-negative id, or {@link #NO_ID} if this record encodes names directly
+     */
+    public int internName(String name) {
+        return NO_ID;
+    }
+
+    /** Returned by {@link #internName} when a record does not use integer ids. */
+    public static final int NO_ID = -1;
+
+    /**
+     * The id-carrying counterparts of the {@code addRecord} overloads. A record that returns real ids
+     * from {@link #internName} MUST override the ones it can receive; the defaults delegate nowhere and
+     * exist so that adding this to the API breaks no existing subclass.
+     */
+    public void addRecord(int sourceRef, int keyRef, double value) {
+        throw new UnsupportedOperationException("record returned ids from internName but did not "
+                + "override addRecord(int, int, double)");
+    }
+
+    public void addRecord(int sourceRef, int keyRef, long value) {
+        throw new UnsupportedOperationException("record returned ids from internName but did not "
+                + "override addRecord(int, int, long)");
+    }
+
+    public void addRecord(int sourceRef, int keyRef, int value) {
+        throw new UnsupportedOperationException("record returned ids from internName but did not "
+                + "override addRecord(int, int, int)");
+    }
+
+    public void addRecord(int sourceRef, int keyRef, boolean value) {
+        throw new UnsupportedOperationException("record returned ids from internName but did not "
+                + "override addRecord(int, int, boolean)");
+    }
+
+    public void addRecord(int sourceRef, int keyRef, char value) {
+        throw new UnsupportedOperationException("record returned ids from internName but did not "
+                + "override addRecord(int, int, char)");
     }
 
     public void addRecord(String sourceId, String propertyKey, double value) {
@@ -114,7 +224,12 @@ public class LogRecord {
 
     public void addRecord(String sourceId, String propertyKey, Object value) {
         addSourceId(sourceId, propertyKey);
-        sb.append(value == null ? "NULL" : value);
+        // "null", not "NULL". The analyser's format spec reads the lowercase literal as a null value and
+        // anything else as a String, so the uppercase spelling reached it as the string "NULL" - and the
+        // CharSequence overload already wrote lowercase, so the two null paths disagreed with each other
+        // as well as with the reader. Existing logs carrying "NULL" are unchanged and still parse as the
+        // String they always parsed as; only new output moves.
+        sb.append(value == null ? "null" : value);
     }
 
     public void addRecord(String sourceId, String propertyKey, boolean value) {
@@ -155,6 +270,35 @@ public class LogRecord {
         }
     }
 
+    /**
+     * The time event processing began, for the {@code logTime} field.
+     *
+     * <p><b>This is {@link Clock#getProcessTime()}, not a fresh wall-clock reading, and that is a
+     * correctness fix as much as a performance one.</b> {@code logTime} is defined as "the time the
+     * log record is created i.e. when the event processing began". {@link Clock#eventReceived} has
+     * <em>already</em> taken exactly that reading for this event and cached it. Taking a second,
+     * later reading here reported a {@code logTime} some nanoseconds after processing actually began,
+     * and paid for a {@code System.currentTimeMillis()} call on every record to be less accurate.
+     *
+     * <p>Measured on a 30-node graph, 5 event types, minimal audit profile: <b>13.7 ns/event</b> on
+     * the text record under JIT, ~0 on the same record under native AOT, and 10.4 ns (JIT) /
+     * 12.5 ns (native) on a binary record subclass. A wall-clock read is 12.3 ns in isolation on that
+     * machine, so the marginal cost is roughly half the isolated cost.
+     *
+     * <p><b>Ordering requirement.</b> This is correct only while {@link Clock#eventReceived} runs
+     * before {@code EventLogManager.eventReceived} for the same event. The generated processor emits
+     * {@code clock.eventReceived(...)} first today, but that follows auditor registration order and is
+     * not yet enforced by the generator — see the binary-audit-encoding spec, which makes it normative.
+     *
+     * <p>{@code endTime} deliberately keeps a live reading: {@code endTime - logTime} is the
+     * processing duration, and a cached value would report it as zero.
+     *
+     * @return the wall-clock time at which processing of the current event began
+     */
+    protected long logTime() {
+        return clock.getProcessTime();
+    }
+
     public void clear() {
         firstProp = true;
         sourceId = null;
@@ -173,7 +317,7 @@ public class LogRecord {
             timeFormatter.accept(sb, clock.getEventTime());
 
             sb.append("\n    logTime: ");
-            timeFormatter.accept(sb, clock.getWallClockTime());
+            timeFormatter.accept(sb, logTime());
 
             sb.append("\n    groupingId: ").append(groupingId);
             sb.append("\n    event: ").append(aClass.getSimpleName());
@@ -201,7 +345,7 @@ public class LogRecord {
                 timeFormatter.accept(sb, clock.getEventTime());
 
                 sb.append("\n    logTime: ");
-                timeFormatter.accept(sb, clock.getWallClockTime());
+                timeFormatter.accept(sb, logTime());
 
                 sb.append("\n    groupingId: ").append(groupingId);
 
@@ -229,8 +373,10 @@ public class LogRecord {
             if (this.sourceId != null) {
                 sb.append("}");
             }
-            sb.append("\n    endTime: ");
-            timeFormatter.accept(sb, clock.getWallClockTime());
+            if (recordEndTime) {
+                sb.append("\n    endTime: ");
+                timeFormatter.accept(sb, clock.getWallClockTime());
+            }
         }
         firstProp = true;
         sourceId = null;

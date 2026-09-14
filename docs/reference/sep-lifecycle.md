@@ -132,7 +132,7 @@ public class MyNode implements DataFlowContextListener {
 | API | Returns | Safe to call from |
 |-----|---------|--------------------|
 | `dataFlow.getNodeById(id)` | The named node instance (throws if missing) | After `init()` |
-| `dataFlow.getAuditorById(id)` | The named auditor (throws if missing) | After `init()` |
+| `dataFlow.getAuditorById(id)` | The named auditor (throws if missing) | After **construction** — the auditors exist before `init()`, and configuring one (installing a `BinaryLogWriter` sink, for instance) has to happen in that window, before the first event |
 | `dataFlow.getServiceById(id, type)` | `Optional<T>` — node OR auditor, cast to type | After `init()` |
 | `dataFlow.serviceRegistryQuery()` | `Optional<ServiceRegistryQuery>` | After `init()` |
 | `ctx.serviceRegistryQuery()` (from inside a node) | `Optional<ServiceRegistryQuery>` | `@Initialise` onwards (NOT in `currentContext`) |

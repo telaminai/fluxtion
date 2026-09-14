@@ -1,0 +1,571 @@
+/*
+ * Copyright: © 2025. Gregory Higgins <greg.higgins@v12technology.com>
+ * SPDX-License-Identifier: AGPL-3.0-only OR SSPL-1.0
+ */
+package com.telamin.fluxtion.runtime.audit;
+
+import com.telamin.fluxtion.runtime.event.Event;
+import com.telamin.fluxtion.runtime.time.Clock;
+
+import java.util.IdentityHashMap;
+
+/**
+ * A {@link LogRecord} that writes <b>bits, not characters</b>.
+ *
+ * <p>Installed through the seam that already exists — {@code new EventLogControlEvent(record)} — so no
+ * core change is needed to measure it. Every one of the seven {@code addRecord} overloads is
+ * overridden; none of them touches the inherited {@code StringBuilder}.
+ *
+ * <h2>Wire shape</h2>
+ * Names are not written. A node name or property key is interned once to a {@code short} id, and only
+ * the id goes on the wire; the id table is written out separately (it is fixed after warm-up, being
+ * generated code passing String constants). A value is a 1-byte type tag plus its raw bits.
+ *
+ * <pre>
+ *   record  := header, entry*, terminator
+ *   header  := 0x01, eventTime:long, logTime:long, eventTypeId:short
+ *   entry   := nodeId:short, keyId:short, tag:byte, bits
+ *   term    := 0x00, endTime:long
+ * </pre>
+ *
+ * <p>The dictionary is what buys the compression: a 17-character double becomes 8 bytes, and
+ * {@code "        - notional: { value: "} becomes 4.
+ */
+public final class BinaryLogRecord extends LogRecord {
+
+    private static final byte TAG_DOUBLE = 1, TAG_LONG = 2, TAG_INT = 3, TAG_CHAR = 4,
+            TAG_CHARSEQ = 5, TAG_OBJECT = 6, TAG_BOOL = 7, TAG_TRACE = 8;
+
+    /**
+     * Retained only so existing harnesses that set {@code -Dclock=...} still start. It no longer selects
+     * anything: this record now takes its times the way {@link LogRecord} documents them, which is the
+     * only correct behaviour and was never one of the three modes this switch offered.
+     *
+     * @deprecated the clock mode was a benchmark switch that reached production code. It will be
+     *             removed; nothing should read it.
+     */
+    @Deprecated
+    public static String clockMode = "fixed";
+
+
+
+
+    /**
+     * Open-addressed identity table — the fix for interning, Round 63 §19.5.
+     *
+     * <p>The map version cost 30.7 ns/event on JIT and 27.5 on native, because a one-slot-per-role
+     * cache misses whenever two nodes alternate and every miss falls through to
+     * {@code IdentityHashMap.get}. Generated code passes interned String constants, so identity is the
+     * right comparison and a power-of-two table with linear probing resolves a name in one array read
+     * and one reference compare on the hit path — no hashing of characters, no Map call.
+     *
+     * <p>Sized generously and never resized: the name set is fixed after warm-up because it comes from
+     * constants in generated source. A full table falls back to the map rather than looping.
+     */
+    private static final int TBL = 256, MASK = TBL - 1;
+    private final String[] tblKey = new String[TBL];
+    private final short[] tblVal = new short[TBL];
+
+    private short tableId(String name) {
+        int i = System.identityHashCode(name) & MASK;
+        for (int probe = 0; probe < 8; probe++) {
+            String k = tblKey[i];
+            if (k == name) { cacheHits++; return tblVal[i]; }
+            if (k == null) {
+                cacheMisses++;
+                short id = intern(name);
+                tblKey[i] = name;
+                tblVal[i] = id;
+                return id;
+            }
+            i = (i + 1) & MASK;
+        }
+        cacheMisses++;
+        return intern(name);
+    }
+
+    /**
+     * Entries are written as <b>two aligned {@code long} stores</b>, not thirteen bounds-checked byte
+     * stores: the header packs {@code nodeId | keyId | tag} into one slot and the value occupies the
+     * next.
+     *
+     * <p>Measured on a 30-node converging graph, 11.75 entries per event, against the byte loop this
+     * replaces: <b>native −51.4 ns</b>, JIT unchanged. It also beats a {@code VarHandle} byte-array
+     * view by 19.7 ns on native — and unlike {@code VarHandle} it is <b>pure Java 8</b>, so it ships
+     * here rather than needing a multi-release jar or a generated writer.
+     *
+     * <p>Two aligned array stores are the simplest thing either compiler can emit: no unaligned access,
+     * no byte assembly, nothing that has to be recognised and folded. HotSpot folds the byte loop
+     * already, which is why it gains nothing; native-image does not, which is why it gains 51 ns.
+     */
+    private final long[] slots;
+    private int slot;
+
+    /**
+     * The record header. Held as fields rather than written into the slot array so that entries stay
+     * uniformly two slots each — the property a reader relies on to skip an entry without decoding it.
+     *
+     * <p>An earlier version wrote the header into the byte buffer while entries went to slots, and
+     * {@link #length()} reported only the slots. The header was therefore built and then silently
+     * discarded: no sink could see the event time, the log time, the event type or the end time.
+     */
+    private long eventTime;
+    private long logTime;
+    private long endTime;
+    private int eventTypeId;
+
+    private final byte[] buf;
+    private int pos;
+    private boolean overflow;
+
+    /** Interning: the fallback map, plus a one-entry identity cache that generated code should always hit. */
+    private final IdentityHashMap<String, Short> ids = new IdentityHashMap<>();
+    private short nextId = 1;
+    /** Two slots, not one: {@code head()} alternates node then key, so a single slot never hits. */
+    private long cacheHits, cacheMisses;
+
+    /** Default capacity — 8 KB holds ~600 entries, well beyond any single event's record. */
+    public BinaryLogRecord(Clock clock) {
+        this(clock, 8192);
+    }
+
+    public BinaryLogRecord(Clock clock, int capacity) {
+        super(clock);
+        this.buf = new byte[capacity];
+        this.slots = new long[capacity / 4];
+    }
+
+    private short nodeId(String name) {
+        return tableId(name);
+        /*        if (name == lastNode) {          // reference equality — generated code passes constants
+            cacheHits++;
+            return lastNodeId;
+        }
+        cacheMisses++;
+        lastNode = name;
+        return lastNodeId = intern(name);
+        */
+    }
+
+    private short keyId(String name) {
+        return tableId(name);
+        /*        if (name == lastKey) {
+            cacheHits++;
+            return lastKeyId;
+        }
+        cacheMisses++;
+        lastKey = name;
+        return lastKeyId = intern(name);
+        */
+    }
+
+    /**
+     * Interns a name to a dictionary id, and REFUSES when the id space is exhausted.
+     *
+     * <p>Ids are a signed {@code short} because that is what the record format writes. Without this
+     * check {@code nextId++} wrapped at 32767 to -32768, and the next {@link #dictionary()} call then
+     * did {@code new String[-32768]} and threw {@code NegativeArraySizeException} from inside the
+     * publish path. Reachable without an enormous graph: String and Object audit VALUES are interned
+     * here too, so a node logging distinct strings consumes the space dynamically.
+     *
+     * <p>Refused rather than silently reused or wrapped: a reused id relabels every earlier entry that
+     * held it, which corrupts a log in a way no reader can detect.
+     */
+    private short intern(String name) {
+        Short existing = ids.get(name);
+        if (existing != null) {
+            return existing;
+        }
+        if (nextId == Short.MAX_VALUE) {
+            throw new IllegalStateException(
+                    "binary audit dictionary is full: " + Short.MAX_VALUE + " distinct names. "
+                            + "Ids are a signed short in the record format, so there is no id left for '"
+                            + name + "'.\n"
+                            + "Names are interned BY IDENTITY, because generated node source passes string "
+                            + "literals and the same reference arrives every call. A key built at runtime "
+                            + "- \"k\" + i, a concatenation, a substring - is a new instance each time and "
+                            + "takes a new id each time, so a handful of distinct key NAMES can still "
+                            + "exhaust the space. Use literals for keys.\n"
+                            + "Otherwise: node names and keys are bounded by the graph, so an exhausted "
+                            + "dictionary means unbounded distinct STRING VALUES are being logged - log an "
+                            + "identifier instead, or at a level that excludes them.");
+        }
+        short id = nextId++;
+        ids.put(name, id);
+        return id;
+    }
+
+    private void u8(int v) {
+        if (pos < buf.length) { buf[pos++] = (byte) v; } else { overflow = true; }
+    }
+
+    private void u16(int v) {
+        if (pos + 2 <= buf.length) {
+            buf[pos++] = (byte) (v >>> 8); buf[pos++] = (byte) v;
+        } else { overflow = true; }
+    }
+
+    /**
+     * Written a byte at a time because {@code fluxtion-runtime} targets <b>Java 8</b> and
+     * animal-sniffer enforces it, so {@code VarHandle} byte-array views are unavailable here.
+     *
+     * <p>That is not purely a loss. Measured on a 30-node graph logging 11.75 entries per event, a
+     * single unaligned {@code VarHandle} store against this loop: <b>native 115.8 → 81.3 ns</b> but
+     * <b>JIT 54.6 → 63.2</b>. HotSpot already folds this loop and pays for the {@code VarHandle}
+     * indirection; native-image does not fold it and gains 34 ns. So the byte loop is the better choice
+     * on a JIT and the worse one on native, and a native deployment wanting the 34 ns needs a
+     * multi-release jar or a separate module — recorded as a known gap, not a defect.
+     */
+    private void i64(long v) {
+        if (pos + 8 <= buf.length) {
+            buf[pos++] = (byte) (v >>> 56); buf[pos++] = (byte) (v >>> 48);
+            buf[pos++] = (byte) (v >>> 40); buf[pos++] = (byte) (v >>> 32);
+            buf[pos++] = (byte) (v >>> 24); buf[pos++] = (byte) (v >>> 16);
+            buf[pos++] = (byte) (v >>> 8);  buf[pos++] = (byte) v;
+        } else { overflow = true; }
+    }
+
+    private void i32(int v) {
+        if (pos + 4 <= buf.length) {
+            buf[pos++] = (byte) (v >>> 24); buf[pos++] = (byte) (v >>> 16);
+            buf[pos++] = (byte) (v >>> 8);  buf[pos++] = (byte) v;
+        } else { overflow = true; }
+    }
+
+    /**
+     * The time processing BEGAN — {@link Clock#getProcessTime()}, the reading {@code Clock.eventReceived}
+     * already took for this event. Not a fresh wall-clock call: {@link LogRecord#logTime()} documents
+     * why, and this subclass previously ignored it.
+     */
+    private long logTimeNow() {
+        return clock.getProcessTime();
+    }
+
+    /**
+     * The time processing COMPLETED — deliberately a live reading, because {@code endTime - logTime} is
+     * the processing duration and a cached value would report every event as taking zero time.
+     *
+     * <p>Only called when {@link #recordEndTime} is set. It is ON by default: it is the second clock
+     * read on an audited event path, and a deployment that does not consume the duration is paying for
+     * a field nothing looks at.
+     */
+    private long endTimeNow() {
+        return clock.getWallClockTime();
+    }
+
+    // ---- the id path: EventLogger resolved these once per node, so nothing is looked up here ----
+
+
+    @Override
+    public int internName(String name) {
+        return intern(name);
+    }
+
+    private void headById(int sourceRef, int keyRef) {
+        u16(sourceRef);
+        u16(keyRef);
+    }
+
+    @Override
+    public void addRecord(int sourceRef, int keyRef, double value) {
+        writeSlots(sourceRef, keyRef, TAG_DOUBLE, Double.doubleToRawLongBits(value));
+    }
+
+    /** Two aligned stores: the packed header, then the raw value bits. */
+    private void writeSlots(int sourceRef, int keyRef, byte tag, long bits) {
+        if (slot + 2 <= slots.length) {
+            slots[slot] = ((long) sourceRef << 48) | ((long) (keyRef & 0xFFFF) << 32) | (tag & 0xFFL);
+            slots[slot + 1] = bits;
+            slot += 2;
+            // firstProp is deliberately NOT written here. It exists so terminateRecord can answer
+            // "did anything get logged", and on this path `slot` already answers it — so the store
+            // was pure repetition, 11.75 times per event on the measured graph.
+        } else {
+            overflow = true;
+        }
+    }
+
+    @Override
+    public void addRecord(int sourceRef, int keyRef, long value) {
+        writeSlots(sourceRef, keyRef, TAG_LONG, value);
+    }
+
+    @Override
+    public void addRecord(int sourceRef, int keyRef, int value) {
+        writeSlots(sourceRef, keyRef, TAG_INT, value);
+    }
+
+    @Override
+    public void addRecord(int sourceRef, int keyRef, boolean value) {
+        writeSlots(sourceRef, keyRef, TAG_BOOL, value ? 1L : 0L);
+    }
+
+    /**
+     * char was the one primitive with no id/slot path, so it went to the byte buffer this record
+     * abandons: {@code length()} describes only the slot array, so the record reported itself
+     * publishable while the file declared zero entries and the value was gone with nothing said.
+     */
+    @Override
+    public void addRecord(int sourceRef, int keyRef, char value) {
+        writeSlots(sourceRef, keyRef, TAG_CHAR, value);
+    }
+
+    private void head(String sourceId, String propertyKey) {
+        u16(nodeId(sourceId));
+        u16(propertyKey == null ? 0 : keyId(propertyKey));
+    }
+
+    /**
+     * The STRING-KEY overloads, routed to slots like their indexed twins.
+     *
+     * <p>These wrote node id, key id, tag and value into {@code buf} — the byte buffer this record
+     * does not publish. {@code length()} reports {@code slots * 8} and the writer reads only slots, so
+     * {@code addRecord("node", "price", 1.25)} produced a record that called itself publishable and a
+     * file declaring zero entries. Every primitive on this family was affected, not just char: the
+     * indexed path was fixed for char and this one was left behind.
+     *
+     * <p>Interning the names here costs a map lookup that the indexed path avoids by caching ids in
+     * the logger. That is the correct trade: this overload exists for callers who have names rather
+     * than ids, and a slower entry is worth more than a silently discarded one.
+     */
+    @Override
+    public void addRecord(String sourceId, String propertyKey, double value) {
+        writeSlots(nodeId(sourceId), keyRefOf(propertyKey), TAG_DOUBLE,
+                Double.doubleToRawLongBits(value));
+        firstProp = false;
+    }
+
+    @Override
+    public void addRecord(String sourceId, String propertyKey, long value) {
+        writeSlots(nodeId(sourceId), keyRefOf(propertyKey), TAG_LONG, value);
+        firstProp = false;
+    }
+
+    @Override
+    public void addRecord(String sourceId, String propertyKey, int value) {
+        writeSlots(nodeId(sourceId), keyRefOf(propertyKey), TAG_INT, value);
+        firstProp = false;
+    }
+
+    @Override
+    public void addRecord(String sourceId, String propertyKey, char value) {
+        writeSlots(nodeId(sourceId), keyRefOf(propertyKey), TAG_CHAR, value);
+        firstProp = false;
+    }
+
+    @Override
+    public void addRecord(String sourceId, String propertyKey, boolean value) {
+        writeSlots(nodeId(sourceId), keyRefOf(propertyKey), TAG_BOOL, value ? 1L : 0L);
+        firstProp = false;
+    }
+
+    /** A null key keeps id 0, as {@link #head} did, rather than interning the string "null". */
+    private int keyRefOf(String propertyKey) {
+        return propertyKey == null ? 0 : keyId(propertyKey);
+    }
+
+    /**
+     * A string value, written as a normal two-slot entry with the value INTERNED.
+     *
+     * <p>It used to write a length and then the characters into the byte buffer, and that buffer is
+     * not the structure {@code length()} describes — so every string-valued entry was silently dropped
+     * from the record. Not a rendering problem: the reader parses two-slot entries and there was no
+     * entry to parse, so {@code auditLog.info("mapFunction", auditInfo)} produced nothing at all. This
+     * is the same defect that hid {@code addTrace}, in the one overload family it was not fixed for.
+     *
+     * <p>Found by comparing the audit log a Java data flow writes against the log the C++ target writes
+     * for the same graph: the C++ side had six entries per event the Java side did not, and all six
+     * were the string-valued ones naming WHICH function ran.
+     *
+     * <p>Interning rather than inlining the characters is what makes it fit: a value slot is 64 bits,
+     * and an audit string is nearly always a constant — a method reference's audit name, an event type
+     * — so the dictionary already holds it and the id costs nothing to repeat.
+     */
+    @Override
+    public void addRecord(String sourceId, String propertyKey, CharSequence value) {
+        writeSlots(tableId(sourceId), propertyKey == null ? 0 : keyId(propertyKey),
+                TAG_CHARSEQ, value == null ? 0 : tableId(value.toString()));
+    }
+
+    /**
+     * An arbitrary object, rendered once and interned. Same fix, same reason as the CharSequence
+     * overload above: the byte-buffer form was invisible to every reader.
+     *
+     * <p>A deployment aiming at the latency profile should not be logging Objects — {@code toString()}
+     * allocates. It is here so the record is complete, not because it is fast.
+     */
+    @Override
+    public void addRecord(String sourceId, String propertyKey, Object value) {
+        writeSlots(tableId(sourceId), propertyKey == null ? 0 : keyId(propertyKey),
+                // Id 0 for null, as the CharSequence path does - rather than interning the literal
+                // "NULL", which burned a dictionary id. The text record's Object path wrote "NULL" too
+                // until both were aligned to the lowercase literal the analyser reads as a null value.
+                TAG_OBJECT, value == null ? 0 : tableId(value.toString()));
+    }
+
+    /**
+     * A node invocation, written as a normal two-slot entry with {@link #TAG_TRACE}: node id, no key,
+     * no value.
+     *
+     * <p>It previously went to the byte buffer via {@code head()}, which {@link #length()} does not
+     * describe — {@code length()} sizes the slot region — so a trace produced no visible bytes and,
+     * because nothing marked the record as having content, a trace-only record was never published at
+     * all. Tracing is off under {@code LOW_LATENCY_AUDIT}, which is why it went unnoticed.
+     *
+     * <p>{@code tableId} rather than {@code intern}: the caller passes its own {@code logSourceId},
+     * a stable reference, so the identity table resolves it in one probe.
+     */
+    @Override
+    public void addTrace(String sourceId) {
+        writeSlots(tableId(sourceId), 0, TAG_TRACE, 0L);
+    }
+
+    @Override
+    public void triggerEvent(Event event) { header(event.getClass()); }
+
+    @Override
+    public void triggerObject(Object event) { header(event.getClass()); }
+
+    private void header(Class<?> type) {
+        pos = 0;
+        slot = 0;
+        overflow = false;
+        eventTime = clock.getEventTime();
+        logTime = logTimeNow();
+        endTime = 0;
+        // tableId, NOT intern. intern() is an IdentityHashMap lookup, and this line runs once per
+        // EVENT — a profile of the audited graph put IdentityHashMap.get at 19% of samples, reached
+        // only from here. Class.getName() returns the same cached String reference every call, so the
+        // identity table that already exists for node and key names resolves it in one probe.
+        eventTypeId = tableId(type.getName());
+    }
+
+    /** Time the event was created. */
+    public long eventTime() { return eventTime; }
+
+    /** Time processing began — {@code Clock.getProcessTime()}, see {@link LogRecord#logTime()}. */
+    public long logTime() { return logTime; }
+
+    /**
+     * This record's own RECORD frame, so a sink can take the bytes without downcasting (M52.3).
+     *
+     * <p>Deliberately NOT the dictionary or the file header. Which names a stream has already
+     * described is the WRITER's state - two sinks reading the same records need their own answers - so
+     * {@link BinaryLogWriter} still owns that framing. This is the record.
+     */
+    @Override
+    public void encodeTo(java.io.OutputStream out) throws java.io.IOException {
+        // The SAME check the writer runs. This path skipped it: an overflowed record wrote a
+        // well-formed but silently short frame, and 65,536 entries wrote a count of 0 followed by a
+        // megabyte of slots. Two emission paths, one representability rule, before any RECORD byte.
+        checkEncodable();
+        final int entries = length() / 16;
+        out.write(BinaryLogFile.FRAME_RECORD);
+        writeShort(out, entries);
+        writeShort(out, eventTypeId());
+        writeLong(out, eventTime());
+        writeLong(out, logTime());
+        writeLong(out, endTime());
+        long[] slotArray = slots();
+        for (int i = 0; i < entries * 2; i++) {
+            writeLong(out, slotArray[i]);
+        }
+    }
+
+    private static void writeShort(java.io.OutputStream out, int value) throws java.io.IOException {
+        out.write((value >>> 8) & 0xFF);
+        out.write(value & 0xFF);
+    }
+
+    private static void writeLong(java.io.OutputStream out, long value) throws java.io.IOException {
+        for (int shift = 56; shift >= 0; shift -= 8) {
+            out.write((int) ((value >>> shift) & 0xFF));
+        }
+    }
+
+    /**
+     * Refuses a record the wire format cannot carry faithfully. Every emission path — {@link
+     * BinaryLogWriter} and {@link #encodeTo} — runs this before writing a RECORD byte, so there is
+     * one rule and no path around it.
+     *
+     * <p>A record that overflowed is not a record: {@code writeSlots} drops the entries it cannot fit,
+     * and writing the prefix produces a file that looks complete and is not. A record whose entry
+     * count exceeds the u16 count field would wrap the count and corrupt every frame after it.
+     *
+     * @throws IllegalStateException when the record cannot be written faithfully
+     */
+    public void checkEncodable() {
+        if (overflow) {
+            throw new IllegalStateException(
+                    "audit record overflowed its buffer - " + (length() / 16)
+                            + " entries fit and the rest were dropped. Writing it would produce a file "
+                            + "that looks complete and is not. Reduce entries logged per event, or raise "
+                            + "the record buffer, and re-run.");
+        }
+        int entries = length() / 16;
+        if (entries > BinaryLogFile.MAX_ENTRIES_PER_RECORD) {
+            throw new IllegalStateException(
+                    "audit record holds " + entries + " entries; the record format's count field "
+                            + "holds at most " + BinaryLogFile.MAX_ENTRIES_PER_RECORD
+                            + ". Writing it would corrupt the file. Log fewer entries per event.");
+        }
+    }
+
+    /** Time processing completed; 0 until {@link #terminateRecord()} has run. */
+    public long endTime() { return endTime; }
+
+    /** Interned id of the event type. Resolve through {@link #dictionary()}. */
+    public int eventTypeId() { return eventTypeId; }
+
+    @Override
+    public boolean terminateRecord() {
+        // slot > 0 covers the id path, where writeSlots no longer touches firstProp; !firstProp
+        // covers the String and trace paths, which still do.
+        boolean logged = slot > 0 || !firstProp;
+        endTime = recordEndTime ? endTimeNow() : 0L;
+        firstProp = true;
+        sourceId = null;
+        return logged;
+    }
+
+    @Override
+    public void clear() {
+        firstProp = true;
+        sourceId = null;
+        pos = 0;
+        slot = 0;
+    }
+
+    /**
+     * The byte buffer used by the {@code String}-key and trace paths only. On the id path — the one the
+     * latency profile takes — nothing is written here, and {@link #length()} describes {@link #slots()}
+     * rather than this array. {@code BinaryLogWriter} reads the slots; so should any other sink.
+     */
+    public byte[] buffer() { return buf; }
+
+    /** Size of the entry region, in bytes. A sink reads {@link #slots()}, not {@link #buffer()}. */
+    public int length() { return slot * 8; }
+
+    /** The entry slots. A reader consumes {@code slots()[0 .. length()/8)}. */
+    public long[] slots() { return slots; }
+
+    public boolean overflowed() { return overflow; }
+
+    public long cacheHits() { return cacheHits; }
+
+    public long cacheMisses() { return cacheMisses; }
+
+    public int dictionarySize() { return ids.size(); }
+
+    /** The id table, so a reader can resolve ids back to names. Index 0 is unused. */
+    public String[] dictionary() {
+        String[] out = new String[nextId];
+        ids.forEach((name, id) -> out[id] = name);
+        return out;
+    }
+
+    @Override
+    public CharSequence asCharSequence() {
+        throw new UnsupportedOperationException("binary record - use buffer()/length()");
+    }
+}

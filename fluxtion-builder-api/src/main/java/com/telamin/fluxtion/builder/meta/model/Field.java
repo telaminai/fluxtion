@@ -24,7 +24,16 @@ public class Field implements SourceField, Serializable {
     private final String fieldClassName;
     private boolean auditor;
     private boolean auditInvocations;
+    private boolean auditEventReceipt = true;
     private final boolean generic;
+    /**
+     * Captured at construction, because {@link #instance} is transient and will not survive the wire.
+     *
+     * <p>Not final and defaulted: the constructors delegate to one another, so a final field assigned
+     * in each would be assigned twice on some paths and not at all on others. One assignment point,
+     * in the only constructor that is handed an instance.
+     */
+    private java.util.List<FieldValue> fieldValues = java.util.Collections.emptyList();
 
     public Field(String fqn, String name, Object instance, boolean publicAccess) {
         this.fqn = fqn;
@@ -36,11 +45,14 @@ public class Field implements SourceField, Serializable {
         if (instance instanceof Auditor) {
             auditor = true;
             auditInvocations = ((Auditor) instance).auditInvocations();
+            auditEventReceipt = ((Auditor) instance).auditEventReceipt();
         } else {
             auditor = false;
             auditInvocations = false;
+            auditEventReceipt = true;
         }
         this.generic = instance != null && instance.getClass().getTypeParameters().length > 0;
+        this.fieldValues = FieldValueCapture.capture(instance);
     }
 
     /**
@@ -51,6 +63,15 @@ public class Field implements SourceField, Serializable {
      * and silently disable per-node {@code nodeInvoked} emission.
      */
     public Field(String fqn, String name, boolean publicAccess, boolean isAuditor, boolean auditInvocations) {
+        this(fqn, name, publicAccess, isAuditor, auditInvocations, true);
+    }
+
+    /**
+     * As above, carrying the event-path flag as well. Both booleans are read from the live
+     * {@link Auditor} on the client side and cannot be re-derived here, so both have to travel.
+     */
+    public Field(String fqn, String name, boolean publicAccess, boolean isAuditor,
+                 boolean auditInvocations, boolean auditEventReceipt) {
         this.fqn = fqn;
         this.name = name;
         this.instance = null;
@@ -58,6 +79,7 @@ public class Field implements SourceField, Serializable {
         this.fieldClassName = null;
         this.auditor = isAuditor;
         this.auditInvocations = auditInvocations;
+        this.auditEventReceipt = auditEventReceipt;
         this.generic = false;
     }
 
@@ -102,6 +124,7 @@ public class Field implements SourceField, Serializable {
         if (instance instanceof Auditor) {
             auditor = true;
             auditInvocations = ((Auditor) instance).auditInvocations();
+            auditEventReceipt = ((Auditor) instance).auditEventReceipt();
         }
     }
 
@@ -110,7 +133,16 @@ public class Field implements SourceField, Serializable {
         return fieldClassName;
     }
 
+    /** Attached by the model when the values were captured before the instance was dropped. */
+    public void setFieldValues(java.util.List<FieldValue> fieldValues) {
+        this.fieldValues = fieldValues == null ? java.util.Collections.emptyList() : fieldValues;
+    }
+
     @Override
+    public java.util.List<FieldValue> getFieldValues() {
+        return fieldValues == null ? java.util.Collections.emptyList() : fieldValues;
+    }
+
     public boolean isAuditor() {
         return auditor;
     }
@@ -118,6 +150,11 @@ public class Field implements SourceField, Serializable {
     @Override
     public boolean isAuditInvocations() {
         return auditInvocations;
+    }
+
+    @Override
+    public boolean isAuditEventReceipt() {
+        return auditEventReceipt;
     }
 
     public static class MappedField extends Field {

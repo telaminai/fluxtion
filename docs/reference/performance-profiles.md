@@ -1,0 +1,311 @@
+# Reference: Performance profiles
+
+A profile is a named bundle of settings. This page states the whole bundle, what each setting costs, and
+what you give up — so the trade is visible before you pick one.
+
+Every figure is from the [performance benchmark](performance.md): a four-node market-data graph, one
+thread, Apple M4, ns/event.
+
+## Setting a profile in your build
+
+A profile is a **generation-time** decision: it changes the source the compiler emits, so it is set where
+you define the graph, not on the running processor. If you arrived from the
+[AOT quickstart](../home/quickstart-aot.md), that quickstart's `Fluxtion.compileAot(node1, node2)` form
+takes node instances and gives you nowhere to put one. Use the **config-builder** overload instead — the
+lambda receives the `EventProcessorConfig` every snippet on this page calls `config`:
+
+```java
+var dataFlow = Fluxtion.compileAot(c -> {
+    c.performanceProfile(PerformanceProfile.LOWEST_LATENCY);   // the profile
+    c.addNode(new MyNode(...), "myNode");                      // then the graph, as usual
+});
+```
+
+For a real build you normally want to name the output rather than have it derived from the enclosing
+class and method:
+
+```java
+Fluxtion.compileAot(c -> {
+    c.performanceProfile(PerformanceProfile.LOW_LATENCY_AUDIT)
+     .addLowLatencyEventLog(LogLevel.INFO, AuditRecordFormat.BINARY);
+    c.addNode(new MyNode(...), "myNode");
+}, "com.example.trading", "PricingProcessor");
+```
+
+**Order matters when you override.** The profile sets a bundle; a per-setting call after it wins. So
+`c.performanceProfile(LOWEST_LATENCY); c.setSupportReentrancy(true);` keeps everything the profile did
+except re-entrancy. Reverse those two lines and the profile overwrites your override.
+
+!!! warning "Not every profile suits every graph, and the build says so"
+    `LOWEST_LATENCY` turns off node-name lookup, which the functional DSL requires. Applying it to a DSL
+    graph is **refused at build time**, naming the flag (`setSupportNodeNameLookup(false)`) and a node it
+    affects — rather than failing later as a `NullPointerException` inside the runtime. If you get that
+    refusal, either build the graph imperatively or use `LOW_LATENCY_AUDIT`, which keeps the lookup.
+
+Because the profile is baked into the emitted source, **a committed generated processor carries the
+profile it was generated under**. Changing profile means regenerating; there is no runtime switch.
+
+## The four profiles
+
+```java
+config.performanceProfile(EventProcessorConfig.PerformanceProfile.LOWEST_LATENCY);
+```
+
+| capability | `DEFAULT` | `AUDITED` | `LOW_LATENCY_AUDIT` | `LOWEST_LATENCY` |
+|---|:---:|:---:|:---:|:---:|
+| **Audit log** — *available*, still needs enabling | ✋ | ✋ | ✋ | ❌ |
+| **Binary record** (`AuditRecordFormat.BINARY`) | ❌ | ❌ | **✋** | — |
+| **Per-node method tracing** | ✅ | ✅ | ❌ | ❌ |
+| Event `toString()` in each record | ✅ | ❌ | ❌ | — |
+| Thread name in each record | ✅ | ❌ | ❌ | — |
+| **`Clock`** — a system clock read per event | ✅ | ✅ | ✅ | ❌ |
+| `endTime` — a SECOND clock read per audited event | ✅ | ✅ | ❌ | — |
+| Which clock STRATEGY that read uses | ✋ | ✋ | ✋ | — |
+| **Node registration** — supplies each node its `EventLogger` | ✅ | ✅ | ✅ | ❌ |
+| Runtime node-name map (`getNodeById`) | ✅ | ✅ | ✅ | ❌ |
+| **Dirty filtering** — conditional propagation | ✅ | ✅ | ❌ | ❌ |
+| Buffer-and-trigger | ✅ | ✅ | ❌ | ❌ |
+| Subscriptions | ✅ | ✅ | ❌ | ❌ |
+| **Re-entrancy** | ✅ | ✅ | ✋ | ✋ |
+| Void triggers | ✋ | ✋ | ✋ | ✋ |
+
+✅ on · ❌ off · ✋ your call, never the profile's · — not applicable
+
+!!! danger "No profile turns the audit log on for you — including `DEFAULT` and `AUDITED`"
+    The audit row is ✋, not ✅, and the distinction is easy to get wrong. A profile decides whether
+    auditing is *possible*; you still have to ask for it:
+
+    ```java
+    config.performanceProfile(AUDITED).addAuditedEventLog(LogLevel.INFO);
+    config.performanceProfile(LOW_LATENCY_AUDIT).addLowLatencyEventLog(LogLevel.INFO, BINARY);
+    ```
+
+    Generate under `DEFAULT` without that second call and the processor contains **no `EventLogManager`
+    at all** — asking for one throws. If you are wondering why your audit log is empty, this is the first
+    thing to check.
+
+## What each profile costs
+
+Same graph, same work, same result, both toolchains:
+
+| configuration | audit | JIT ns | native ns |
+|---|:---:|---:|---:|
+| hand-written Java, no framework | no | 6.4 | 4.3 |
+| `LOWEST_LATENCY` | no | 9.4 | **4.5** |
+| no configuration at all | no | 15.1 | 14.7 |
+| `LOW_LATENCY_AUDIT` + `BINARY` | yes | 20.4 | **18.2** |
+| `LOW_LATENCY_AUDIT` + `TEXT` | yes | 42.3 | 50.6 |
+| `AUDITED` + tracing | yes | **112.3** | 200.8 |
+
+!!! note "Provenance"
+    Measured 2026-09-09: JIT is OpenJDK 25.0.2, native is GraalVM 25.0.4 with PGO. The two audited rows
+    were taken under that day's development defaults — a projected clock and no `endTime` — and the
+    shipped `LOW_LATENCY_AUDIT` keeps the accurate clock, so expect them a few nanoseconds higher on
+    what ships. The measurement taken on the shipped defaults and the current GraalVM (25.3.4, whose
+    new inliner is worth 38% on dispatch) is on the [performance page](performance.md#newer-toolchains-graalvm-2534-and-its-priority-inliner-2026-09-12):
+    7.5 ns unaudited, 23.8 audited on the six-node quote engine.
+
+**Configuring nothing costs 3.3× the tuned configuration** on native. Nothing about the default is
+wrong; all of it is optional, and none of it announces itself. Per event it is a clock read, three
+dirty-flag stores, three guard checks and three resets on this four-node graph:
+
+```java
+// no configuration                            // LOWEST_LATENCY
+clock.eventReceived(typedEvent);               // (empty method)
+isDirty_mid = mid.newPriceLadder(arg0);        mid.newPriceLadder(arg0);
+if (guardCheck_skew())   isDirty_skew   = …;   skew.calculateSkewedLadder();
+if (guardCheck_levels()) isDirty_levels = …;   levels.calculateLevelsForLadder();
+if (guardCheck_publish())                 …;   publisher.publishPriceLadder();
+clock.processingComplete();                    // (empty method)
+isDirty_… = false;  ×3                         // nothing to reset
+```
+
+## Choosing a toolchain: it depends on the profile
+
+This is the least obvious result on this page.
+
+- **Lean path → native AOT, decisively.** 4.5 ns against 9.4, with a spread across independent builds of
+  0.1 ns. Native is also *closer to hand-written Java* than the JIT manages — 4% against 47%.
+- **Text-heavy audit path → JIT, decisively.** At `AUDITED` the JIT wins by 1.8× (112.3 against 200.8),
+  and on a text record by 1.2×. Closed-world compilation cannot speculate its way through string
+  formatting the way HotSpot does.
+- **Binary audit → native.** 18.2 against 20.4.
+
+So the toolchain follows the profile. A native image is not uniformly faster, and choosing it for a
+tracing-heavy configuration makes things worse.
+
+## The settings that matter most, individually
+
+### 1 · Code shape beats every flag — construct the processor inside the hot method
+
+Worth **4.3× under native AOT** and nothing at all on JIT. If the processor escapes the method that
+drives it, escape analysis cannot scalar-replace the node graph and every field access becomes a real
+load. Nothing warns you.
+
+### 2 · `-H:-SpawnIsolates` on the native build — gone in GraalVM 25.3
+
+Worth **~24 ns/event** on an audited path when it was measured (round 63, GraalVM 25.0). It is a build
+flag, not a config setting, and it was the single largest win found in a round of work that also
+rewrote three data structures. **GraalVM 25.3 refuses it** — "isolate support can no longer be
+disabled" — and the quote-engine measurement of 2026-09-12, built without it on 25.3.4, shows no such
+penalty: 13.2 ns unaudited against 12.7 recorded with the flag on 25.0.4, and 23.1 audited, level with
+the JITs. Treat the −24 ns as a fact about 25.0, not a flag to look for.
+
+### 3 · Node-name lookup
+
+`setSupportNodeNameLookup(false)` — the largest single config cost. It is what `LOWEST_LATENCY` turns off
+that the audit profiles cannot: node registration is how each node receives its `EventLogger`, so
+**turning it off turns the audit log off**. A profile that did both once benchmarked extremely well by
+recording nothing.
+
+### 4 · The clock
+
+Every profile except `LOWEST_LATENCY` reads a system clock per event, and an audited record reads one
+again for `endTime`.
+
+**No profile selects a clock strategy — that row is ✋, your call.** Not because a build input could
+never carry one: a generated processor holds its own `Clock`, and build inputs routinely produce runtime
+setup. It is that **no such policy exists today**, and that changing the graph's clock changes what every
+time-windowed node believes the time is — so it is not a dial a latency profile should quietly turn.
+Choosing `LOW_LATENCY_AUDIT` reads the default clock unless you say otherwise.
+
+!!! note "Giving the audit record its own clock does not help, and was tried"
+    The obvious shortcut — a private fast clock for the record, leaving the graph's alone — makes the
+    path **slower**. `ClockFactory` registers the graph `Clock` as an auditor unconditionally and
+    `Clock.eventReceived` reads the wall clock on every event, so a private clock is a *second* read,
+    not a cheaper one. It also misses `shareReading`, which the generated processor calls on the graph
+    clock so a re-entrant wave reuses one timestamp, and it never receives `ClockStrategyEvent`, so a
+    replay that makes graph time deterministic would leave audit timestamps on machine time.
+
+    Avoiding the graph clock read entirely — when no node actually uses time — needs the compiler to
+    know that, and is a generator change rather than a runtime one.
+
+**The default is `System::currentTimeMillis`** — epoch milliseconds, read fresh every time. Two cheaper
+strategies exist and both are **opt-in**, because both trade away something the default promises:
+
+| clock source | cost/call | resolution | tracks wall-clock corrections? |
+|---|---:|---|---|
+| **`System::currentTimeMillis` — the default** | 12.9 ns | 1 ms | **yes** |
+| `ClockStrategy.fastEpochMillisClock()` | 8.0 ns | 1 ms | no |
+| `ClockStrategy.nanoEpochClock()` | 8.0 ns | 1 ns | no |
+
+The two fast strategies sample the wall clock **once**, at construction, and advance from
+`System.nanoTime()` thereafter. That makes them monotonic — they will not step backwards over an NTP
+correction, which `currentTimeMillis` can — but it also means they never step *forwards* over one. A
+correction from NTP, an operator or a VM resume is invisible to them, and a long-lived process keeps
+stamping a pre-correction timeline with drift that is never reconciled.
+
+That matters because the runtime is itself an absolute-time consumer: `Clock.eventReceived` stores the
+reading and every audit record emits it as `logTime`. Good for durations, wrong for timestamps anyone
+correlates with something outside the JVM — so the accurate clock is the default and the fast ones are
+chosen deliberately.
+
+```java
+// cheaper, same unit, will not track a wall-clock correction.
+// Worth pairing with LOW_LATENCY_AUDIT, which reads the clock on every event.
+processor.onEvent(ClockStrategy.registerClockEvent(ClockStrategy.fastEpochMillisClock()));
+```
+
+Decide it against the log's readers, not the latency alone: under a projected clock the `logTime` on
+every record drifts from wall-clock for the life of the process. If nothing correlates those timestamps
+with anything outside the JVM, take the saving.
+
+!!! warning "`nanoEpochClock()` changes the unit, and time-windowed nodes name theirs"
+    `getWallClockTime()` returns nanoseconds under it where the default returns milliseconds, and
+    `FixedRateTrigger.atMillis()` means milliseconds by construction. Installing it on a graph with a
+    tumbling or sliding window stops the window rolling — silently, with the arithmetic out by a factor
+    of a million. Use it when sub-millisecond timestamps matter and the graph has no time-windowed nodes.
+    A binary audit file then needs its writer constructed with `BinaryLogFile.TIME_UNIT_EPOCH_NANOS`, and
+    an `Event`'s own `eventTime` stays in the producer's milliseconds — see
+    [Binary audit logging](../how-to/binary-audit-logging.md).
+
+**`endTime` is on by default**, as it has been in every release, **and `LOW_LATENCY_AUDIT` elects
+not to collect it.** It is the *second* clock read on an audited event path and it exists only for
+`endTime - logTime`: the duration evidence this profile elects not to collect. Measured 2026-09-12 on
+the six-node quote engine, GraalVM 25.3.4 JIT, accurate default clock: the audited event is 37.5 ns
+with it and 23.9 ns without — the second reading is a third of the event. The profile keeps the
+accurate clock (a projected clock changes what `logTime` means). On the wire an unrecorded `endTime`
+is `0`, which the binary format defines as *not recorded* and the analyser reads as absent.
+
+**Precedence, and when each setting takes effect.** `EventLogManager.recordEndTime` governs the
+records the manager *builds* — at generation time it is written into the processor as a field
+assignment, and at runtime the setter is live, changing the record the manager currently holds. A
+record you *supply* through `EventLogControlEvent` keeps its own `setRecordEndTime`: an explicit
+record is an explicit choice, and a supplied record's default is true. Later setting wins, on
+whichever object you set it.
+
+```java
+// BUILD TIME - the profile's default, and how to put endTime back before generation
+config.performanceProfile(LOW_LATENCY_AUDIT)
+      .addLowLatencyEventLog(LogLevel.INFO, AuditRecordFormat.BINARY);      // endTime off
+((EventLogManager) config.getAuditorMap().get(EventLogManager.NODE_NAME))
+        .recordEndTime(true);                                                // back on, generated that way
+
+// RUNTIME (Java targets) - on a generated processor, any time after construction; the setter is live
+// and applies to the record the manager holds. getAuditorById infers its return type from the target.
+EventLogManager manager = processor.getAuditorById(EventLogManager.NODE_NAME);
+manager.recordEndTime(true);
+
+// RUNTIME - a record you supply keeps its own setting, under any profile
+BinaryLogRecord mine = new BinaryLogRecord(clock);
+mine.setRecordEndTime(false);
+processor.onEvent(new EventLogControlEvent(mine));
+```
+
+Taking both savings — the fast clock and no `endTime` — is worth **14.2 ns on JIT and 11.2 on native**
+on the audited binary arm, measured when both were briefly defaults during development. The two ship
+differently. `endTime` off **is** the profile's default: `LOW_LATENCY_AUDIT` and `addLowLatencyEventLog`
+take no second clock reading, and the examples above put it back. The projected clock stays opt-in under
+every profile because it changes the meaning of `logTime` (a nanoTime projection, never re-anchored);
+`LOW_LATENCY_AUDIT` keeps the accurate default clock, and the fast clock is a separate choice.
+
+The runtime precedence — a supplied record keeps its own setting, the live setter governs the record the
+manager holds — is **Java runtime** behaviour. The C++ target has no runtime record swap and no live
+setter: its `recordEndTime` is fixed at generation from the captured field, and `false` under the profile.
+
+!!! note "A nanosecond timestamp costs more to format in a text record"
+    Nineteen decimal digits instead of thirteen. A binary record stores the raw `long` and pays nothing
+    for the extra digits; a text record formats them on the event path. It is one more reason the binary
+    record is the right choice for a latency profile.
+
+### 5 · Dirty filtering and re-entrancy carry semantic consequences
+
+`LOW_LATENCY_AUDIT` deliberately **keeps** both, because an audit profile must not change what the graph
+computes. `LOWEST_LATENCY` gives up dirty filtering: an `@OnTrigger` method then runs whenever the wave
+reaches it, not only when a parent is dirty. Invisible for pure recomputation; **not** invisible for a
+node that accumulates or has side effects.
+
+`setSupportReentrancy(false)` is never set by a profile. It is the one setting that can turn a working
+graph into an `IllegalStateException` — re-entrant dispatch stops being queued and throws instead.
+Measured at approximately zero benefit. Set it only if your graph provably never re-enters.
+
+### 6 · Void triggers
+
+`@OnTrigger(failBuildIfMissingBooleanReturn = false)` lives on your node classes, so no profile can set
+it for you.
+
+## A recommended starting point
+
+**No audit trail, lowest latency:**
+
+```java
+config.performanceProfile(LOWEST_LATENCY);
+// build native with --gc=epsilon and a PGO profile (-H:-SpawnIsolates is refused from GraalVM 25.3)
+// construct the processor inside the method that drives it
+```
+
+**Audit trail, lowest latency:**
+
+```java
+config.performanceProfile(LOW_LATENCY_AUDIT)
+      .addLowLatencyEventLog(LogLevel.INFO, AuditRecordFormat.BINARY);
+processor.onEvent(new ClockStrategy.ClockStrategyEvent(ClockStrategy.nanoEpochClock()));
+```
+
+…and note that `BINARY` needs a `BinaryLogWriter` sink installed after construction and before the
+first event, or the first record refuses — the analyser and the command-line reader
+can. See [Binary audit logging](../how-to/binary-audit-logging.md).
+
+**Developing, and you do not yet know what you are looking for:** `AUDITED` with tracing. It is 30× the
+cost of the tuned configuration and it tells you which node did what, which is worth far more than
+nanoseconds while you are still finding out.

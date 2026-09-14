@@ -19,6 +19,7 @@ import com.telamin.fluxtion.runtime.annotations.OnEventHandler;
 import com.telamin.fluxtion.runtime.annotations.builder.Inject;
 import com.telamin.fluxtion.runtime.audit.Auditor;
 import com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel;
+import com.telamin.fluxtion.runtime.audit.BinaryLogRecord;
 import com.telamin.fluxtion.runtime.audit.EventLogManager;
 import com.telamin.fluxtion.runtime.node.EventHandlerNode;
 import com.telamin.fluxtion.runtime.service.ServiceRegistryNode;
@@ -60,6 +61,57 @@ public class EventProcessorConfig {
     @Getter
     @Setter
     private boolean supportBufferAndTrigger = true;
+
+    /**
+     * M50/W4 — whether the generated processor keeps the re-entrancy wrapper on the event path.
+     *
+     * <p>{@code processEvent} runs on EVERY event and, with support on, tests a {@code processing}
+     * flag, queues re-entrant events and drains the callback queue. When no node in the graph can
+     * raise a re-entrant event the queue is provably always empty and all of that is dead code.
+     * Round 58 measured the wrapper at <b>-26% on native-image</b> and -7% on a JIT.
+     *
+     * <p><b>Default true.</b> Turning it off trades a capability for throughput, so the safe default
+     * is current behaviour. With it off the generated processor retains a guard that <b>throws</b>
+     * rather than silently dropping a re-entrant event: build-time detection cannot be complete,
+     * because a node can reach the dispatcher through a service or reflectively.
+     */
+    @Getter
+    @Setter
+    private boolean supportReentrancy = true;
+
+    /**
+     * M50/W4 — whether the generated processor registers itself with the subscription manager.
+     *
+     * <p>{@code subscriptionManager.setSubscribingEventProcessor(this)} runs in the CONSTRUCTOR, so
+     * the processor escapes before it has handled an event and can never be scalar-replaced. Round 58
+     * found the escape chain worth more under AOT than PGO: 1.55 ns vs 3+ ns for the same source.
+     *
+     * <p><b>Default true.</b> Set false only when the processor is driven directly through
+     * {@code onEvent} and never subscribes to an event feed.
+     */
+    @Getter
+    @Setter
+    private boolean supportSubscriptions = true;
+
+    /**
+     * M50/W4 — whether every node is registered with each auditor at construction.
+     *
+     * <p>{@code initialiseAuditor} calls {@code auditor.nodeRegistered(node, name)} for EVERY node,
+     * and {@code NodeNameAuditor} stores them in two {@code HashMap}s. That publishes every node into
+     * a live heap structure, so no node can be scalar-replaced and the whole graph materialises.
+     *
+     * <p>It is the single largest cost in a generated processor and it is invisible without a profile,
+     * because an unprofiled image is already slow for other reasons. Measured on a real generated
+     * processor under accurate PGO: <b>5.07 ns with registration, 1.57 ns without</b> — the latter
+     * matching hand-written flat code at 1.54.
+     *
+     * <p><b>Default true.</b> Set false only when nothing needs to resolve a node by name:
+     * {@code getNodeById}, {@code DataFlow.getServiceById} and any auditor that uses
+     * {@code nodeRegistered} (an audit log naming its nodes, for instance) all depend on it.
+     */
+    @Getter
+    @Setter
+    private boolean supportNodeNameLookup = true;
     private DISPATCH_STRATEGY dispatchStrategy = DISPATCH_STRATEGY.INSTANCE_OF;
     private List<String> compilerOptions = new ArrayList<>();
 
@@ -198,6 +250,330 @@ public class EventProcessorConfig {
      * version only ever added, so replacing the clock left the author's own node published as
      * framework plumbing — the opposite of what this method promises.
      */
+    /**
+     * M50/W4 — a named bundle of the settings that decide dispatch cost.
+     *
+     * <p>These settings are individually documented, individually measured, and individually silent
+     * when omitted: a processor missing one is still correct and simply runs 3-5x slower with no
+     * diagnostic. Round 59 spent most of its time discovering that a figure which looked like
+     * compiler instability was a missing setting. A named profile removes the possibility.
+     *
+     * <p>Each profile states what it GIVES UP, because none of them is free.
+     */
+    public enum PerformanceProfile {
+        /**
+         * Framework defaults. Every capability on. Nothing is given up and nothing is tuned.
+         */
+        DEFAULT,
+        /**
+         * The audit log is the product: keep auditors, but stop the two defaults that allocate.
+         *
+         * <p>Gives up: the event's {@code toString()} and the thread name in each record.
+         * Keeps: everything else, including a fully populated node-name map.
+         * Measured: 885 -> 550 ns/event with node tracing on, and 208 bytes/event -> zero, which is
+         * what lets an audited processor run under a non-collecting GC.
+         */
+        AUDITED,
+        /**
+         * Lowest dispatch cost. <b>Gives up the audit log and conditional propagation.</b>
+         *
+         * <p>Drops the framework auditors — so no {@code Clock} reading the system clock on every
+         * event, and no {@code NodeNameLookup} map — turns off dirty filtering, and stops node
+         * registration. Node lookup still works: the generator emits it as code.
+         *
+         * <p><b>It also gives up buffer-and-trigger and subscriptions</b>, which removes the buffer
+         * branch from every event and stops the constructor publishing the processor to the
+         * subscription manager. <b>Measured, that is worth nothing on a 10-node graph</b> — five
+         * interleaved JIT reps with output verified identical read 5.124 ns before and 5.143 after,
+         * and a landed native build reads 1.7176 against a 1.54–1.69 band. They are set because the
+         * generated code is smaller and because neither can change a result, not because they are
+         * faster.
+         *
+         * <p><b>Re-entrancy is deliberately left alone.</b> {@code setSupportReentrancy(false)} is the
+         * one setting in this family that can break a working graph — re-entrant dispatch stops being
+         * queued and throws {@link IllegalStateException} instead — and it was measured at the same
+         * time and bought nothing either. Build-time detection cannot be complete, because a node can
+         * reach the dispatcher through a service or reflectively. Set it yourself if your graph
+         * provably never re-enters; a profile should not spend that capability for you.
+         *
+         * <p><b>What giving up re-entrancy means, precisely.</b> A node that dispatches back into the
+         * processor while an event is in flight is no longer queued — the generated code keeps a guard
+         * and throws {@link IllegalStateException} naming the event. It fails loudly; it does not
+         * silently drop or reorder. Build-time detection cannot be complete, because a node can reach
+         * the dispatcher through a service or reflectively, which is why the runtime guard is retained.
+         * If your graph re-enters, call {@code setSupportReentrancy(true)} after the profile.
+         *
+         * <p>Requires void triggers on the nodes themselves
+         * ({@code failBuildIfMissingBooleanReturn = false}), which this profile cannot set for you.
+         * Measured on a 10-node graph: ~4.9 ns on any JIT, ~1.6 ns native with PGO and the generated
+         * inlining directive.
+         */
+        LOWEST_LATENCY,
+        /**
+         * <b>The audit log, at the lowest cost that keeps it.</b> M52.2.
+         *
+         * <p>{@link #AUDITED} keeps every capability; {@link #LOWEST_LATENCY} drops the audit log
+         * entirely. Neither is the deployed case, which is "I want the audit log and I want it cheap".
+         *
+         * <p>Keeps: the {@link EventLogManager} auditor — the audit log is the point — the
+         * {@link Clock}, which every timestamp in the record depends on, and node registration, which
+         * is how every node gets its {@code EventLogger}. Re-entrancy is kept for the reason
+         * {@link #LOWEST_LATENCY} documents at length.
+         *
+         * <p><b>Unconditional propagation is given up where it decides nothing.</b> Measured with the
+         * harness version held equal
+         * across both arms: guards cost <b>7.6 ns/event on a graph with no auditing</b> and are
+         * <b>indistinguishable once auditing</b> (144.11 against 142.83 on native, inside the build
+         * lottery). On this graph they also decide nothing — tracing shows guards-on and guards-off
+         * invoking identical nodes, because each event reaches its chain by topology.
+         *
+         * <p><b>What you give up:</b> a {@code void} {@code @OnTrigger} method now runs whenever the
+         * wave reaches it, not only when a parent is dirty. Invisible for pure recomputation; not
+         * invisible for a node that accumulates or has side effects. If your graph has heavy nodes
+         * behind a sometimes-cold join, call {@code setSupportDirtyFiltering(true)} after the profile —
+         * a guard breaks even at about a 4% skip rate for a node doing real work.
+         *
+         * <p><b>What you do NOT give up:</b> a {@code boolean} {@code @OnTrigger} return. That is not a
+         * hint the profile may discard — it is the node's own propagation decision, and every DSL node
+         * has one. Those guards are kept, so a graph the DSL built still computes the right answer
+         * under this profile. It did not always: until this was fixed, a {@code map -> filter ->
+         * aggregate} chain silently accumulated values the filter had rejected. See
+         * {@code DslProfileCorrectnessTest} in the compiler.
+         *
+         * <p>Gives up: per-node method tracing, the event's {@code toString()}, the thread name in each
+         * record, buffer-and-trigger and subscriptions. <b>It does not give up node-name lookup</b>,
+         * because node registration is what supplies every node's {@code EventLogger} — dropping it
+         * silently disables the audit log rather than making it cheaper. The first three are
+         * what make a record readable when you do not know what you are looking for — the right trade
+         * for a production hot path and the wrong one for a development run, where {@link #AUDITED}
+         * remains the profile to use.
+         *
+         * <p><b>What keeping dirty filtering costs, measured.</b> On a 30-node, 5-event-type converging
+         * graph where every node on the path logs, JIT, minimum of 6 interleaved reps:
+         *
+         * <pre>
+         *   LOWEST_LATENCY, no auditors, dirty filtering OFF   12.05 ns
+         *   LOW_LATENCY_AUDIT, no auditor installed            29.08 ns   <- +17.0 ns
+         *   LOW_LATENCY_AUDIT with the auditor and a record    84.41 ns   <- +55.3 ns of audit
+         * </pre>
+         *
+         * The middle row was measured before this profile turned guards off, and is what they cost:
+         * <b>~17 ns on JIT and ~23 on native</b> for a ~12-node path on which they skipped nothing.
+         * Turning them off is what closes that row against the {@code LOWEST_LATENCY} line.
+         *
+         * <p>Stating the split matters because the two were conflated: an earlier measurement compared
+         * this profile against a {@code LOWEST_LATENCY} baseline and reported the whole 72 ns gap as
+         * "audit cost". <b>It was 55 ns of audit and 17 ns of dirty filtering</b>, and the only way to
+         * see that was to build a baseline whose sole difference from the audited processor was the
+         * auditor itself — 172 {@code isDirty_} references on both sides instead of 172 against zero.
+         *
+         * <p>Measured on a 30-node, 5-event-type graph with a converging tail — see
+         * {@code docs/experience/runs/round-63} in the analyser repo.
+         */
+        LOW_LATENCY_AUDIT
+    }
+
+    /**
+     * Applies a {@link PerformanceProfile}. Call it FIRST, then override individual settings if you
+     * need to — a profile is a starting point, not a lock.
+     *
+     * @return this config, for chaining
+     */
+    public EventProcessorConfig performanceProfile(PerformanceProfile profile) {
+        if (profile == null || profile == PerformanceProfile.DEFAULT) {
+            return this;
+        }
+        if (profile == PerformanceProfile.LOWEST_LATENCY) {
+            setSupportDirtyFiltering(false);
+            setSupportNodeNameLookup(false);
+            // Added 2026-09-07. Both remove work from the generated event path — the buffer branch,
+            // and the constructor publishing the processor to the subscription manager — and neither
+            // can change a result: you either use the capability or you do not.
+            //
+            // Measured, and the measurement is the point: on a 10-node graph this is worth NOTHING.
+            // Five interleaved JIT reps read 5.124 before and 5.143 after; a landed native build reads
+            // 1.7176 against a 1.54-1.69 band. They are here because the generated code is smaller and
+            // the profile's own documentation already lists them as baseline configuration, not
+            // because they are faster.
+            //
+            // setSupportReentrancy(false) is deliberately NOT set here. It is the one of the three
+            // that can break a working graph: re-entrant dispatch stops queueing and throws instead.
+            // It was measured at the same time and bought nothing either, so the profile does not
+            // spend a capability on it. Set it yourself if your graph provably never re-enters.
+            setSupportBufferAndTrigger(false);
+            setSupportSubscriptions(false);
+            if (getAuditorMap() != null) {
+                getAuditorMap().keySet().removeAll(new HashSet<>(getFrameworkAuditorNames()));
+            }
+        }
+        if (profile == PerformanceProfile.LOW_LATENCY_AUDIT) {
+            // Keep the audit log and the clock, and the two capabilities LOWEST_LATENCY drops purely
+            // for generated-code size.
+            //
+            // setSupportNodeNameLookup(false) is deliberately NOT set, and the reason is the whole
+            // point of this profile. That flag does not merely drop a name map: it stops NODE
+            // REGISTRATION, and node registration is how EventLogManager.nodeRegistered() hands each
+            // node its EventLogger. Without it every node's auditLog is the null logger, no node ever
+            // records anything, and the audit log this profile exists to keep is silently dead — the
+            // processor still runs, still looks right, and simply publishes nothing.
+            //
+            // An earlier version of this profile did set it. The generated processor emitted ZERO
+            // nodeRegistered calls against 33 for AUDITED, and the benchmark that was supposed to be
+            // measuring the cost of auditing was measuring a graph with no audit at all - and duly
+            // reported it as a speed-up. Found only because the harness was made to assert that the
+            // sink actually saw records. LowLatencyAuditProfileTest now pins this both ways.
+            setSupportBufferAndTrigger(false);
+            setSupportSubscriptions(false);
+            // Guards OFF, on measurements that took three attempts to get right.
+            //
+            // Interleaved, minimum of 5-8, both arms built from the SAME harness version:
+            //
+            //                            guards ON   guards OFF    delta
+            //   no audit,     JIT            27.99        20.33    -7.66
+            //   no audit,     native         25.66        18.02    -7.63
+            //   AUDITED,      native        144.11       142.83    -1.28   (inside the lottery)
+            //
+            // So: clearly better with no audit, and indistinguishable once auditing. Free on the path
+            // this profile serves, worth 7.6 ns on the path it does not - an easy call.
+            //
+            // On this graph the guards also decide nothing, and that is a measured fact rather than an
+            // assumption: with tracing on, guards-on and guards-off invoke IDENTICAL nodes (13/10/11),
+            // because each event reaches its chain by topology.
+            //
+            // The sentence that used to end this paragraph - "guards only decide anything where a node
+            // has several parents and only some are dirty" - was WRONG, and wrong in the way that
+            // matters: it generalised a property of the hand-written graph under test into a property
+            // of graphs. It does not hold for anything the DSL builds. Every DSL node's @OnTrigger
+            // returns a boolean and that boolean IS its propagation decision - MapFlowFunction.map(),
+            // FilterFlowFunction.filter() and every window's triggered() return
+            // fireEventUpdateNotification() directly - so a plain SINGLE-parent chain
+            // map -> filter -> aggregate is decided entirely by guards. Discarding them there does not
+            // make the graph faster, it makes it wrong: the filter runs and its answer is ignored.
+            //
+            // The compiler no longer allows that. setSupportDirtyFiltering(false) drops the flags that
+            // decide nothing (a void @OnTrigger always propagates - the measured win above) and keeps
+            // the ones that decide something: a boolean @OnTrigger return, and any parent whose child
+            // declares failBuildOnUnguardedTrigger. So this profile is safe on a DSL graph, and the
+            // numbers above still describe what it removes from an imperative one.
+            // Pinned by DslProfileCorrectnessTest in the compiler.
+            //
+            // An intermediate measurement said guards-off was 23% SLOWER on the audited native path.
+            // It compared a guards-on binary built from a pre-h3 harness against a guards-off binary
+            // built from h3 - two variables, not one. Rebuilt with the harness held equal, and two
+            // builds per configuration to bound the lottery, the difference vanished. The audit output
+            // was identical throughout (recPerEvent 1.000, 180.8 B/record, same checksum), which is
+            // what said the timing difference had to be an artifact.
+            //
+            // WHAT THIS GIVES UP: an @OnTrigger method now runs whenever the wave reaches it, not only
+            // when a parent is dirty. Invisible for pure recomputation; NOT invisible for a node that
+            // accumulates or has side effects. An author with heavy nodes behind a sometimes-cold join
+            // calls setSupportDirtyFiltering(true) after the profile - it breaks even at about a 4%
+            // skip rate for a node doing real work.
+            setSupportDirtyFiltering(false);
+            // NOT setSupportReentrancy(false): see LOWEST_LATENCY. It is the one setting here that can
+            // turn a working graph into an exception, and a profile should not spend that.
+            // The EventLogManager's other settings are applied by addLowLatencyEventLog() below.
+            // And no second clock reading, whether the audit log was added before or after the
+            // profile: 13.6 ns of the audited event on the accurate clock, for a duration field.
+            if (getAuditorMap() != null) {
+                for (Object auditor : getAuditorMap().values()) {
+                    if (auditor instanceof EventLogManager) {
+                        ((EventLogManager) auditor).recordEndTime(false);
+                    }
+                }
+            }
+            return this;
+        }
+        // AUDITED intentionally changes nothing here: its two settings live on the EventLogManager
+        // and are applied by addEventAudit(level, printEventToString, printThreadName). Naming the
+        // profile still documents the choice, and auditedEventLogConfig() below applies it.
+        return this;
+    }
+
+    /**
+     * The audit configuration {@link PerformanceProfile#AUDITED} means: records, node tracing, and
+     * neither of the two defaults that allocate.
+     */
+    public EventProcessorConfig addAuditedEventLog(LogLevel tracingLogLevel) {
+        return addEventAudit(tracingLogLevel, false, false);
+    }
+
+    /**
+     * The audit configuration {@link PerformanceProfile#LOW_LATENCY_AUDIT} means: records on, method
+     * tracing <b>off</b>, and neither of the two defaults that allocate.
+     *
+     * <p>Tracing is the expensive half. Measured on a 30-node converging-tail graph: tracing on costs
+     * ~184 ns/event more than tracing off, on top of the record itself.
+     *
+     * @param entryLevel threshold for {@code EventLogger} entries the nodes themselves write
+     */
+    /**
+     * Which record the audit log builds. Selected as part of
+     * {@link PerformanceProfile#LOW_LATENCY_AUDIT} rather than swapped at runtime, so the choice is a
+     * build input like every other setting in a profile.
+     */
+    public enum AuditRecordFormat {
+        /**
+         * The YAML text record — what every Fluxtion processor has always produced, and what the
+         * analyser and every existing reader can open.
+         */
+        TEXT,
+        /**
+         * {@link BinaryLogRecord} — ids and raw bits instead of characters. <b>3.2× faster at one
+         * logging node and 5.1× when every node on the path logs</b>, and 54 bytes per record against
+         * 193.
+         *
+         * <p><b>Readable by BinaryLogReader, the AuditLogTool CLI, and the analyser's BinaryAuditReader.</b>
+         * It is not the default because it needs a sink installed - a BinaryLogWriter - after the
+         * processor is constructed and before it processes events; the text record needs nothing. A
+         * default that adds a required step to every existing build is not a safe default, which is
+         * why {@link PerformanceProfile#LOW_LATENCY_AUDIT} does not select it for you.
+         */
+        BINARY
+    }
+
+    public EventProcessorConfig addLowLatencyEventLog(LogLevel entryLevel) {
+        return addLowLatencyEventLog(entryLevel, AuditRecordFormat.TEXT);
+    }
+
+    /**
+     * The low-latency audit log, with the record format chosen explicitly.
+     *
+     * <p>Measured on a 30-node, 5-event-type converging graph where every node on the path logs
+     * (11.75 entries per record), minimum of interleaved reps:
+     *
+     * <pre>
+     *                       JIT        native
+     *   TEXT            403.0 ns      698.6 ns
+     *   BINARY           54.6 ns      115.8 ns
+     * </pre>
+     *
+     * <p>The gap widens with audit density — 3.2× when one node logs, 5.1× when every node does —
+     * because the text record formats a node name, a key and a double <em>inside the event cycle</em>
+     * at about 26 ns per entry, against 3.4 for bits.
+     *
+     * @param entryLevel threshold for the entries nodes themselves write
+     * @param format     {@link AuditRecordFormat#TEXT} the binary form needs a sink installed and is read by BinaryLogReader or the AuditLogTool CLI
+     */
+    public EventProcessorConfig addLowLatencyEventLog(LogLevel entryLevel, AuditRecordFormat format) {
+        EventLogManager manager = new EventLogManager()
+                .tracingOff()
+                .logLevel(entryLevel == null ? LogLevel.INFO : entryLevel)
+                .printEventToString(false)
+                .printThreadName(false)
+                // No second clock reading. Measured 2026-09-12 on the quote engine, GraalVM 25.3.4
+                // JIT: endTime alone is 13.6 ns of a 37.5 ns audited event on the accurate default
+                // clock. The clock itself stays accurate (a projected clock changes what logTime
+                // means); endTime only ever served endTime - logTime. Restore it with
+                // EventLogManager.recordEndTime(true) or logRecord.setRecordEndTime(true).
+                .recordEndTime(false);
+        if (format == AuditRecordFormat.BINARY) {
+            manager.binaryRecord(true);
+        }
+        addFrameworkAuditor(manager, EventLogManager.NODE_NAME);
+        return this;
+    }
+
     public Set<String> getFrameworkAuditorNames() {
         return Collections.unmodifiableSet(frameworkAuditorNames);
     }

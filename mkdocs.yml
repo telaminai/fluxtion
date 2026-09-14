@@ -59,8 +59,11 @@ extra:
       link: https://github.com/telaminai
   # Define variables here
   fluxtion_src_runtime: https://github.com/telaminai/fluxtion/tree/main/fluxtion-runtime/src/main/java/com/telamin/fluxtion/runtime
+  # The builder API is public and lives in this repository; the compiler that consumes it is not,
+  # which is why there is no fluxtion_src_compiler - the six links that used it pointed nowhere.
+  fluxtion_src_builder: https://github.com/telaminai/fluxtion/tree/main/fluxtion-builder-api/src/main/java/com/telamin/fluxtion/builder
   fluxtion_example_src: https://github.com/telaminai/fluxtion-examples/tree/main
-  fluxtion_version: 1.0.8
+  fluxtion_version: 1.0.15
   fluxtion_javadoc: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-runtime/${fluxtion_version}/index.html
   release_date: "2026-06-16"
 
@@ -102,6 +105,10 @@ nav:
       - "FAQ: Common questions and tradeoffs": reference/faq.md
       - Alternative comparisons: reference/alternative-comparisons.md
       - Performance results: reference/performance.md
+      - Performance profiles: reference/performance-profiles.md
+      - FLXA binary audit format: reference/flxa-format.md
+      - Tuning for lowest latency: reference/performance-tuning.md
+      - Audit latency harness: reference/audit-latency-harness.md
 
   - Reference guide:
       - Quick reference: reference/reference-documentation.md
@@ -153,6 +160,8 @@ nav:
           - Embedding ML models: how-to/ml-inference-how-to.md
           - Monitoring and metrics: how-to/monitoring-dataflow-runtime.md
           - Audit logging in DataFlow: how-to/audit-logging-dataflow.md
+          - Binary audit logging: how-to/binary-audit-logging.md
+          - Reading a binary audit log: how-to/read-a-binary-audit-log.md
           - Log4j2 setup: how-to/logging-setup.md
       - Integrations:
         - DataFlow connector: integration/dataflow-connector.md
