@@ -102,6 +102,13 @@ public class TumblingWindow<T, R, S extends FlowFunction<T>, F extends Aggregate
 
         private int value;
 
+        // This field SHADOWS TumblingWindow.value, deliberately: the specialisation exists to hold the
+        // window result without boxing. The base class clears its own `value` in resetOperation(), which
+        // does nothing for this one - so without the override below a reset left the PRE-RESET aggregate
+        // readable through the primitive accessor, and the next window opened reporting the old window's
+        // total. TimedSlidingWindow's primitive specialisations already carry this override;
+        // TumblingWindow's did not.
+
         public TumblingIntWindowStream(IntFlowFunction inputEventStream,
                                        SerializableSupplier<F> windowFunctionSupplier,
                                        int windowSizeMillis) {
@@ -131,6 +138,16 @@ public class TumblingWindow<T, R, S extends FlowFunction<T>, F extends Aggregate
         protected void aggregateInputValue(IntFlowFunction inputEventStream) {
             windowFunction.aggregateInt(inputEventStream.getAsInt());
         }
+
+        @Override
+        protected void resetOperation() {
+            // super clears windowFunction, rollTrigger and the base's shadowed `value`.
+            super.resetOperation();
+            // Back to the CONSTRUCTED state, which is what reset means here. Deliberately not a sentinel:
+            // this 0 is the same 0 a freshly built window reports, and whether a primitive window should
+            // be able to say "no window has closed yet" at all is a separate, unsettled question.
+            value = 0;
+        }
     }
 
 
@@ -139,6 +156,13 @@ public class TumblingWindow<T, R, S extends FlowFunction<T>, F extends Aggregate
             implements DoubleFlowFunction {
 
         private double value;
+
+        // This field SHADOWS TumblingWindow.value, deliberately: the specialisation exists to hold the
+        // window result without boxing. The base class clears its own `value` in resetOperation(), which
+        // does nothing for this one - so without the override below a reset left the PRE-RESET aggregate
+        // readable through the primitive accessor, and the next window opened reporting the old window's
+        // total. TimedSlidingWindow's primitive specialisations already carry this override;
+        // TumblingWindow's did not.
 
         public TumblingDoubleWindowStream(DoubleFlowFunction inputEventStream,
                                           SerializableSupplier<F> windowFunctionSupplier,
@@ -168,6 +192,16 @@ public class TumblingWindow<T, R, S extends FlowFunction<T>, F extends Aggregate
         protected void aggregateInputValue(DoubleFlowFunction inputEventStream) {
             windowFunction.aggregateDouble(inputEventStream.getAsDouble());
         }
+
+        @Override
+        protected void resetOperation() {
+            // super clears windowFunction, rollTrigger and the base's shadowed `value`.
+            super.resetOperation();
+            // Back to the CONSTRUCTED state, which is what reset means here. Deliberately not a sentinel:
+            // this 0 is the same 0 a freshly built window reports, and whether a primitive window should
+            // be able to say "no window has closed yet" at all is a separate, unsettled question.
+            value = 0;
+        }
     }
 
 
@@ -176,6 +210,13 @@ public class TumblingWindow<T, R, S extends FlowFunction<T>, F extends Aggregate
             implements LongFlowFunction {
 
         private long value;
+
+        // This field SHADOWS TumblingWindow.value, deliberately: the specialisation exists to hold the
+        // window result without boxing. The base class clears its own `value` in resetOperation(), which
+        // does nothing for this one - so without the override below a reset left the PRE-RESET aggregate
+        // readable through the primitive accessor, and the next window opened reporting the old window's
+        // total. TimedSlidingWindow's primitive specialisations already carry this override;
+        // TumblingWindow's did not.
 
         public TumblingLongWindowStream(LongFlowFunction inputEventStream,
                                         SerializableSupplier<F> windowFunctionSupplier,
@@ -204,6 +245,16 @@ public class TumblingWindow<T, R, S extends FlowFunction<T>, F extends Aggregate
 
         protected void aggregateInputValue(LongFlowFunction inputEventStream) {
             windowFunction.aggregateLong(inputEventStream.getAsLong());
+        }
+
+        @Override
+        protected void resetOperation() {
+            // super clears windowFunction, rollTrigger and the base's shadowed `value`.
+            super.resetOperation();
+            // Back to the CONSTRUCTED state, which is what reset means here. Deliberately not a sentinel:
+            // this 0 is the same 0 a freshly built window reports, and whether a primitive window should
+            // be able to say "no window has closed yet" at all is a separate, unsettled question.
+            value = 0;
         }
 
     }

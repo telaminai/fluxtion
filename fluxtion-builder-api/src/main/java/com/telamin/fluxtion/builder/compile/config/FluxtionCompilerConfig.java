@@ -22,6 +22,23 @@ import java.io.Writer;
 @Getter
 public class FluxtionCompilerConfig implements Serializable {
 
+    /**
+     * PINNED to the value 1.0.13 computed, so instances serialized by a released client still read.
+     *
+     * <p>This class is public and {@code Serializable} and had no declared UID, so the JVM computed one
+     * from its shape — and adding fields changed it. A {@code FluxtionCompilerConfig} written by 1.0.13
+     * (UID {@code 8518484796223925653}) failed to load here with {@code InvalidClassException}; the
+     * value below is that released UID, recovered with {@code serialver} against the 1.0.13 artifact.
+     *
+     * <p>Not the same thing as the remote graph DTO's compatibility, which has its own goldens and was
+     * already fine. This is the config object itself, which callers may persist or transport.
+     *
+     * <p><b>Do not change this.</b> Adding a field is compatible under a fixed UID; changing the UID
+     * breaks every previously written instance. {@code FluxtionCompilerConfigSerialCompatibilityTest}
+     * fails if it moves.
+     */
+    private static final long serialVersionUID = 8518484796223925653L;
+
     private static final String DEFAULT_JAVA_SOURCE_DIRECTORY =
             "target/generated-sources/fluxtion/";
     private static final String DEFAULT_RESOURCE_DIRECTORY =
@@ -96,6 +113,40 @@ public class FluxtionCompilerConfig implements Serializable {
      * <p>
      * not required, default = true.
      */
+    /**
+     * Which {@code SourceGenerator} to use for THIS compile — {@code "cpp"}, {@code "local"},
+     * {@code "remote-http"}. Null or empty falls back to the process-wide setting.
+     *
+     * <p>M59.1. The selector already existed, but only process-wide: `FluxtionConfig.sourceGeneratorId()`
+     * reads a system property or a config file, so every caller in a JVM got the same answer. That is
+     * fine for a build and wrong for a SERVICE — two concurrent requests asking for different targets
+     * would race on a global, which is what blocked offering C++ generation over HTTP.
+     *
+     * <p>Precedence is per-call, then the process-wide setting, then the default. Setting it here
+     * changes nothing for anyone who does not.
+     *
+     * <p>not required, default = unset.
+     */
+    @Setter
+    private String sourceGeneratorId;
+
+    /**
+     * Which LANGUAGE to emit for this compile — {@code "cpp"}, or null for Java (M59.3).
+     *
+     * <p>Separate from {@link #sourceGeneratorId} because that field answers a different question and
+     * cannot answer both. {@code sourceGeneratorId} selects the ROUTE: the generator resolves
+     * {@code useRemote = "remote-http".equals(id)}, so setting it to {@code "cpp"} means <i>generate
+     * C++ locally</i> and there is no value that means <i>generate C++ on the remote server</i>.
+     *
+     * <p>So: route with {@code sourceGeneratorId}, language with this. Setting only this one still
+     * works and means "emit that language, wherever generation happens to run" — which is what a
+     * caller usually means.
+     *
+     * <p>not required, default = unset (Java).
+     */
+    @Setter
+    private String targetId;
+
     @Setter
     private boolean generateDescription;
 

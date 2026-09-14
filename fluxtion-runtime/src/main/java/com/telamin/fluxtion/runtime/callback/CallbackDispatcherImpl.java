@@ -9,32 +9,48 @@ import com.telamin.fluxtion.runtime.node.NamedNode;
 import lombok.ToString;
 
 import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.Iterator;
 import java.util.function.BooleanSupplier;
-import java.util.function.Supplier;
 
 @ToString
 public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, NamedNode, DirtyStateMonitor {
 
     public InternalEventProcessor eventProcessor;
-    Deque<Supplier<Boolean>> myStack = new ArrayDeque<>();
+    // W2: declared as the concrete type — an interface-typed field on this path is not
+    // devirtualised by closed-world AOT without profiles (M50 §3.3).
+    // W3: BooleanSupplier, not Supplier<Boolean> — every wrapper's dispatch() already
+    // returns primitive boolean, so the generic queue boxed on every callback.
+    ArrayDeque<BooleanSupplier> myStack = new ArrayDeque<>();
     private boolean dispatching = false;
+
+    /**
+     * M50/W1 — every queueing path funnels through here so the processor's flag cannot drift from the
+     * queue. Adding a queueing method without calling this is the one way to break the optimisation,
+     * and {@code CallbackDispatcherPendingTest} fails if a public queueing method does not mark.
+     */
+    private void markPending() {
+        if (eventProcessor != null) {
+            eventProcessor.callbacksPending(true);
+        }
+    }
 
     @Override
     public void dispatchQueuedCallbacks() {
-        if (eventProcessor == null) {
-            //System.out.println("no event processor registered cannot publish callback");
-        } else {
-            while (!myStack.isEmpty()) {
-                dispatching = true;
-                Supplier<Boolean> callBackItem = myStack.peekFirst();
-                if (!callBackItem.get()) {
-                    myStack.remove(callBackItem);
-                }
+        // W2: the common case is an empty queue on every event. Return before touching
+        // `dispatching`, which can only be true while the loop below is running, so the
+        // unconditional store it replaces was always redundant here.
+        if (eventProcessor == null || myStack.isEmpty()) {
+            return;
+        }
+        while (!myStack.isEmpty()) {
+            dispatching = true;
+            BooleanSupplier callBackItem = myStack.peekFirst();
+            if (!callBackItem.getAsBoolean()) {
+                myStack.remove(callBackItem);
             }
         }
         dispatching = false;
+        eventProcessor.callbacksPending(false);
     }
 
     @Override
@@ -42,6 +58,7 @@ public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, N
         SingleCallBackWrapper<Object> callBackWrapper = new SingleCallBackWrapper<>();
         callBackWrapper.setFilterId(id);
         myStack.add(callBackWrapper::dispatch);
+        markPending();
     }
 
     @Override
@@ -51,6 +68,7 @@ public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, N
         callBackWrapper.setFilterId(id);
         callBackWrapper.setData(item);
         myStack.add(callBackWrapper::dispatch);
+        markPending();
     }
 
     @Override
@@ -65,6 +83,7 @@ public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, N
             //System.out.println("adding iterator to BACK of callback queue id:" + callbackId);
             myStack.add(callBackWrapper::dispatch);
         }
+        markPending();
     }
 
     @Override
@@ -72,6 +91,7 @@ public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, N
         SingleEventPublishWrapper<Object> callBackWrapper = new SingleEventPublishWrapper<>();
         callBackWrapper.data = event;
         myStack.addFirst(callBackWrapper::dispatch);
+        markPending();
     }
 
     @Override
@@ -79,6 +99,7 @@ public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, N
         IteratingEventPublishWrapper publishingWrapper = new IteratingEventPublishWrapper();
         publishingWrapper.dataIterator = iterable.iterator();
         myStack.addFirst(publishingWrapper::dispatch);
+        markPending();
     }
 
     @Override
@@ -86,6 +107,7 @@ public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, N
         SingleEventPublishWrapper<Object> callBackWrapper = new SingleEventPublishWrapper<>();
         callBackWrapper.data = event;
         myStack.add(callBackWrapper::dispatch);
+        markPending();
     }
 
     @Override

@@ -196,3 +196,15 @@ A short checklist of common issues and how to fix them when building and running
 ## Still stuck?
 - Check the Examples page and Reference guide for a code snippet matching your use case.
 - Open an issue with a minimal reproducer on GitHub if the behavior still surprises you.
+
+## When the build itself fails
+
+Everything above is about a DataFlow that is **running**. If the compiler refused your graph, or
+built it and reported something, that is a different problem:
+
+**[When the compiler refuses your graph →](compiler-diagnostics.md)** — how to read a finding from the
+build log, the machine-readable sidecar, or programmatically; why an AOT build can refuse what
+interpreting accepted; and the one warning nearly every project sees.
+
+**[Browse the diagnostic codes →](errors/index.md)** — one page per code, each stating the rule, what
+the compiler concluded, how to fix it, and which builds raise it.

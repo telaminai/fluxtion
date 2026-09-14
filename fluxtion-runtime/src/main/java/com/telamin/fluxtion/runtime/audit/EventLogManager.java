@@ -49,12 +49,63 @@ public class EventLogManager implements Auditor {
     @Inject
     public Clock clock;
     private boolean canTrace = false;
+    /**
+     * Build the binary record at {@link #init()} rather than swapping one in at runtime.
+     *
+     * <p>Selected by {@code EventProcessorConfig.addLowLatencyEventLog(level, BINARY)}, so it is a
+     * build input. The runtime swap through {@code EventLogControlEvent} still works and is still the
+     * way to change format on a running processor; this is the way to start in the right one.
+     */
+    public boolean binaryRecord = false;
+    /**
+     * Whether the record takes a second clock reading for {@code endTime}. Default true - every
+     * release has emitted {@code endTime}. {@code LOW_LATENCY_AUDIT} sets it false: that second
+     * reading is 13.6 ns of a 37 ns audited event on the accurate default clock, and it exists only for
+     * {@code endTime - logTime}. A generated processor carries this as a field assignment, so the
+     * profile decision made at build time is the one the record runs under.
+     *
+     * <p><b>Precedence.</b> This setting governs the records the manager BUILDS (at {@link #init()}) and
+     * the record it currently holds when the setter is called; a record the caller SUPPLIES through
+     * {@link EventLogControlEvent} keeps its own {@code setRecordEndTime}, because an explicit record
+     * is an explicit choice and a supplied record's default is true, as every release wrote it. On the wire an unrecorded
+     * {@code endTime} is 0, which the format defines as "not recorded" and the analyser reads as absent.
+     */
+    public boolean recordEndTime = true;
     private LogLevel logLevel = LogLevel.INFO;
 
 
     public EventLogManager() {
-        this(System.out::println);
+        this(DEFAULT_SINK);
     }
+
+    /**
+     * The implicit sink: prints text records, and REFUSES a binary one by name.
+     *
+     * <p>Printing a {@link BinaryLogRecord} used to call {@code toString()} ->
+     * {@code asCharSequence()}, which throws {@code UnsupportedOperationException} by design because a
+     * binary record has no character form. That named neither the sink nor the format that chose it.
+     *
+     * <p><b>The check lives here rather than in {@link #init()}.</b> An earlier fix refused at init and
+     * broke every generated processor: generated code calls {@code EventLogManager.init()} from the
+     * PROCESSOR'S CONSTRUCTOR, so the guard fired while the processor was still being built — before
+     * any caller could retrieve the auditor and install a sink. The documented sequence is construct,
+     * retrieve the auditor, install the writer, then {@code processor.init()}; refusing at auditor init
+     * closed that window. Refusing at first publish keeps it open and still names the fix.
+     */
+    private static final LogRecordListener DEFAULT_SINK = logRecord -> {
+        if (logRecord instanceof BinaryLogRecord) {
+            throw new IllegalStateException(
+                    "binary audit records were selected but no sink was installed to receive them.\n"
+                            + "The default sink prints records as text, and a binary record has no text "
+                            + "form.\n"
+                            + "Install a sink that takes bytes, after the processor is constructed and "
+                            + "before it processes events, for example:\n"
+                            + "    EventLogManager m = processor.getAuditorById(EventLogManager.NODE_NAME);\n"
+                            + "    m.setLogSink(new BinaryLogWriter(Files.newOutputStream(path)));\n"
+                            + "Use AuditRecordFormat.TEXT if you want records on the default sink.");
+        }
+        System.out.println(logRecord);
+    };
 
     public EventLogManager(LogRecordListener sink) {
         if (sink == null) {
@@ -105,7 +156,7 @@ public class EventLogManager implements Auditor {
 
     @Override
     public void nodeRegistered(Object node, String nodeName) {
-        EventLogger logger = new EventLogger(logRecord, nodeName);
+        EventLogger logger = newLogger(nodeName);
         logger.setLevel(logLevel);
         if (node instanceof EventLogSource) {
             EventLogSource calcSource = (EventLogSource) node;
@@ -116,11 +167,22 @@ public class EventLogManager implements Auditor {
         canTrace = trace && node2Logger.values().stream().filter(e -> e.canLog(traceLevel)).findAny().isPresent();
     }
 
+    /**
+     * The logger every node receives. A {@link BinaryLogRecord} gets a {@link BinaryEventLogger}, which
+     * holds the record as a concrete type so the per-entry write is a direct call. No generation is
+     * needed for this: nothing about the logger varies per processor.
+     */
+    private EventLogger newLogger(String nodeName) {
+        return logRecord instanceof BinaryLogRecord
+                ? new BinaryEventLogger((BinaryLogRecord) logRecord, nodeName)
+                : new EventLogger(logRecord, nodeName);
+    }
+
     private void updateLogRecord() {
         for (Map.Entry<String, EventLogSource> stringEventLogSourceEntry : name2LogSourceMap.entrySet()) {
             String nodeName = stringEventLogSourceEntry.getKey();
             EventLogSource calcSource = stringEventLogSourceEntry.getValue();
-            EventLogger logger = new EventLogger(logRecord, nodeName);
+            EventLogger logger = newLogger(nodeName);
             logger.setLevel(logLevel);
             calcSource.setLogger(logger);
             name2LogSourceMap.put(nodeName, calcSource);
@@ -160,6 +222,12 @@ public class EventLogManager implements Auditor {
             newLogRecord.replaceBuffer(logRecord.sb);
             this.logRecord = newLogRecord;
             this.logRecord.setClock(clock);
+            // PRECEDENCE: the manager's recordEndTime governs the records the MANAGER builds; a record
+            // the caller supplies keeps its own setting. An earlier version overwrote it, so a caller
+            // who had chosen setRecordEndTime(false) on a replacement record - the route the docs
+            // recommend for any other profile - had the choice silently undone (review, round 9).
+            // A supplied record's default is true, as every release wrote endTime; a caller under
+            // LOW_LATENCY_AUDIT who swaps in a record and wants it off sets it on that record.
             updateLogRecord();
         }
 
@@ -184,6 +252,11 @@ public class EventLogManager implements Auditor {
         }
 
         canTrace = trace && node2Logger.values().stream().filter(e -> e.canLog(traceLevel)).findAny().isPresent();
+    }
+
+    /** Visible for tests: confirms {@link #init()} built the format the profile asked for. */
+    public boolean lastRecordIsBinaryForTest() {
+        return logRecord instanceof BinaryLogRecord;
     }
 
     public void setLogSink(LogRecordListener sink) {
@@ -228,11 +301,37 @@ public class EventLogManager implements Auditor {
         }
     }
 
+    /**
+     * Build a {@link BinaryLogRecord} at {@link #init()} instead of the text record. Set by
+     * {@code EventProcessorConfig.addLowLatencyEventLog(level, BINARY)} so the format is a build input.
+     */
+    public EventLogManager binaryRecord(boolean binaryRecord) {
+        this.binaryRecord = binaryRecord;
+        return this;
+    }
+
+    /**
+     * @see #recordEndTime
+     * <p>LIVE: applies to the record this manager currently holds as well as to the ones it will
+     * build. A generated processor constructs its manager and record before any user code runs, so
+     * a setter that updated only the field left the active record unchanged until the next swap
+     * (review, round 9). Precedence: this setting governs the records the manager builds; a record
+     * the caller supplies through {@link EventLogControlEvent} keeps its own.
+     */
+    public EventLogManager recordEndTime(boolean recordEndTime) {
+        this.recordEndTime = recordEndTime;
+        if (logRecord != null) {
+            logRecord.setRecordEndTime(recordEndTime);
+        }
+        return this;
+    }
+
     @Override
     public void init() {
-        logRecord = new LogRecord(clock);
+        logRecord = binaryRecord ? new BinaryLogRecord(clock) : new LogRecord(clock);
         logRecord.printEventToString(printEventToString);
         logRecord.setPrintThreadName(printThreadName);
+        logRecord.setRecordEndTime(recordEndTime);
         node2Logger = new HashMap<>();
         name2LogSourceMap = new HashMap<>();
         clearAfterPublish = true;
