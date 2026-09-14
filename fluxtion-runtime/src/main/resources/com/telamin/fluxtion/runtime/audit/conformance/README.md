@@ -10,3 +10,20 @@ disagree. A diff here is a change to the FORMAT and belongs in the specification
 
 They ship in the runtime jar so that a consumer in another repository or language reads the same
 bytes: `FlxaConformanceCorpus.committed(name)`.
+
+## Why they ship in the runtime jar, and what that costs
+
+The corpus is **108K of a ~700K `fluxtion-runtime` jar — about 15%**, and that jar is not an ordinary
+dependency: every generated processor carries it, and it is one of the artifacts loaded into the browser
+under CheerpJ, where size is a page-load cost rather than a disk cost.
+
+It ships anyway, deliberately. The fixtures are the format's only executable definition, and the
+consumers that most need them are in another repository and another language — the C++ target reads
+these exact bytes to prove its writer agrees with Java's. A conformance corpus that a cross-language
+consumer has to acquire separately is a corpus that gets skipped, and the whole point of `FLXA` is that
+two independent writers can be held to the same bytes.
+
+If the browser payload ever needs the 108K back, the move is a `conformance` classifier artifact built
+from this same directory — **not** deleting fixtures, and not trimming the corpus to the cases that
+happen to be cheap to encode. Whoever does that must repoint `FlxaConformanceCorpus.committed(name)` and
+every cross-repo consumer at the new artifact in the same change.

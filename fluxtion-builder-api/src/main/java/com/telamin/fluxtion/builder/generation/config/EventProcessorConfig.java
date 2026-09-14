@@ -526,8 +526,8 @@ public class EventProcessorConfig {
          * <p><b>Readable by BinaryLogReader, the AuditLogTool CLI, and the analyser's BinaryAuditReader.</b>
          * It is not the default because it needs a sink installed - a BinaryLogWriter - after the
          * processor is constructed and before it processes events; the text record needs nothing. A
-         * default that adds a required step to every existing build is not a safe default.
-         * can open. That is why {@link PerformanceProfile#LOW_LATENCY_AUDIT} does not select it for you.
+         * default that adds a required step to every existing build is not a safe default, which is
+         * why {@link PerformanceProfile#LOW_LATENCY_AUDIT} does not select it for you.
          */
         BINARY
     }
