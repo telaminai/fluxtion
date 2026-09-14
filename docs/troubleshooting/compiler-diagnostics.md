@@ -48,7 +48,7 @@ It is written **atomically** — a consumer watching the directory never sees a 
 because it cannot tell truncation from a compiler that found nothing.
 
 The document conforms to a published schema:
-[`fluxtion-diagnostics-1.0.schema.json`](fluxtion-diagnostics-1.0.schema.json).
+[`fluxtion-diagnostics-1.0.schema.json`](errors/fluxtion-diagnostics-1.0.schema.json).
 
 ### 3. As objects, from a programmatic build
 
