@@ -4,7 +4,7 @@
 
     <groupId>com.telamin.fluxtion</groupId>
     <artifactId>fluxtion-parent</artifactId>
-    <version>1.0.16-SNAPSHOT</version>
+    <version>1.0.17-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>telamin :: fluxtion</name>
 
@@ -58,6 +58,23 @@
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.2</version>
+                <configuration>
+                    <archive>
+                        <!-- Implementation-Title/-Version/-Vendor in every module manifest: what
+                             Package.getImplementationVersion() reads. The compiler stamps the runtime's
+                             version into a generated processor's javadoc header as "api version"; it said
+                             "unknown api version" for every release until now because nothing wrote this.
+                             Additive — no consumer reads it yet. -->
+                        <manifest>
+                            <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
