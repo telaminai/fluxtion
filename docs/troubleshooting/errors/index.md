@@ -14,6 +14,8 @@ Every diagnostic the compiler emits carries a stable code and a `documentationUr
 | [`SPRING_BEAN_NOT_SELECTED`](SPRING_BEAN_NOT_SELECTED.md) | WARN | With a nodeBeans allowlist in force, a bean that is neither listed nor ignored is excluded from the graph. |
 | [`SPRING_CONFIG_LOG_LEVEL_CONFLICT`](SPRING_CONFIG_LOG_LEVEL_CONFLICT.md) | ERROR | Every FluxtionSpringConfig that declares a non-null logLevel must declare the same one. |
 | [`SPRING_HANDLER_MISMATCH`](SPRING_HANDLER_MISMATCH.md) | ERROR | An event-handler binding must name a node whose handler surface accepts the declared event type. |
+| [`SPRING_RECONCILE_CONFLICT`](SPRING_RECONCILE_CONFLICT.md) | ERROR | Reconciliation must preserve developer-owned source and refuse conflicting edits. |
+| [`SPRING_RECONCILE_WRONG_CONSTRUCT`](SPRING_RECONCILE_WRONG_CONSTRUCT.md) | ERROR | @ExportService annotates an implemented interface use, not the class declaration. |
 | [`SPRING_UNDECLARED_SERVICE_CALLBACK`](SPRING_UNDECLARED_SERVICE_CALLBACK.md) | ERROR | Under strictServiceBindings every service callback a selected node registers must be declared in the Spring configuration. |
 
 ## Scope, and the "it worked yesterday" report
