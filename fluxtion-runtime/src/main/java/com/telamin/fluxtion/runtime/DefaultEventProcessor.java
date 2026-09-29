@@ -128,10 +128,13 @@ public class DefaultEventProcessor
     }
     processing = true;
     auditEvent(LifecycleEvent.Start);
-    allEventHandler.start();
-    afterEvent();
-    callbackDispatcher.dispatchQueuedCallbacks();
-    processing = false;
+    try {
+      allEventHandler.start();
+      afterEvent();
+      callbackDispatcher.dispatchQueuedCallbacks();
+    } finally {
+      processing = false;
+    }
   }
 
   @Override
@@ -141,10 +144,12 @@ public class DefaultEventProcessor
     }
     processing = true;
     auditEvent(LifecycleEvent.StartComplete);
-
-    afterEvent();
-    callbackDispatcher.dispatchQueuedCallbacks();
-    processing = false;
+    try {
+      afterEvent();
+      callbackDispatcher.dispatchQueuedCallbacks();
+    } finally {
+      processing = false;
+    }
   }
 
   @Override
@@ -154,10 +159,13 @@ public class DefaultEventProcessor
     }
     processing = true;
     auditEvent(LifecycleEvent.Stop);
-    allEventHandler.stop();
-    afterEvent();
-    callbackDispatcher.dispatchQueuedCallbacks();
-    processing = false;
+    try {
+      allEventHandler.stop();
+      afterEvent();
+      callbackDispatcher.dispatchQueuedCallbacks();
+    } finally {
+      processing = false;
+    }
   }
 
   @Override
@@ -193,9 +201,14 @@ public class DefaultEventProcessor
       callbackDispatcher.queueReentrantEvent(event);
     } else {
       processing = true;
-      onEventInternal(event);
-      callbackDispatcher.dispatchQueuedCallbacks();
-      processing = false;
+      // the wedge: a node that throws must not leave processing set, or every later event is
+      // queued behind a cycle that never ends
+      try {
+        onEventInternal(event);
+        callbackDispatcher.dispatchQueuedCallbacks();
+      } finally {
+        processing = false;
+      }
     }
   }
 
@@ -346,20 +359,24 @@ public class DefaultEventProcessor
   public void batchPause() {
     auditEvent(LifecycleEvent.BatchPause);
     processing = true;
-
-    afterEvent();
-    callbackDispatcher.dispatchQueuedCallbacks();
-    processing = false;
+    try {
+      afterEvent();
+      callbackDispatcher.dispatchQueuedCallbacks();
+    } finally {
+      processing = false;
+    }
   }
 
   @Override
   public void batchEnd() {
     auditEvent(LifecycleEvent.BatchEnd);
     processing = true;
-
-    afterEvent();
-    callbackDispatcher.dispatchQueuedCallbacks();
-    processing = false;
+    try {
+      afterEvent();
+      callbackDispatcher.dispatchQueuedCallbacks();
+    } finally {
+      processing = false;
+    }
   }
 
   @Override
