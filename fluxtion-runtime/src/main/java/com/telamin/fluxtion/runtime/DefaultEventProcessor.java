@@ -305,6 +305,29 @@ public class DefaultEventProcessor
     processing = true;
   }
 
+  /**
+   * {@link DataFlow#runInEventCycle}: the exported-service boundary ({@code beforeServiceCall} / {@code afterServiceCall})
+   * with the caller's event as the audit context, closed in a {@code finally}.
+   */
+  @Override
+  public void runInEventCycle(Object auditEvent, Runnable action) {
+    if (processing) {
+      throw new IllegalStateException("runInEventCycle is not re-entrant: it was called inside an event cycle");
+    }
+    auditEvent(auditEvent);
+    if (buffering) {
+      triggerCalculation();
+    }
+    processing = true;
+    try {
+      action.run();
+    } finally {
+      afterEvent();
+      callbackDispatcher.dispatchQueuedCallbacks();
+      processing = false;
+    }
+  }
+
   private void afterServiceCall() {
     afterEvent();
     callbackDispatcher.dispatchQueuedCallbacks();

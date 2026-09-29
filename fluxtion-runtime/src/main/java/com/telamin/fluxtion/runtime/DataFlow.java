@@ -440,6 +440,41 @@ public interface DataFlow extends ServiceRegistry, NodeDiscovery, Lifecycle {
     }
 
     /**
+     * Run {@code action} as an event cycle of this processor, with {@code auditEvent} as the cycle's audit context.
+     * For a host that must run code in a processor's context which is not an event the graph handles, such as an
+     * operator's command, and have it audited like one.
+     *
+     * <p>In a processor that implements it (generated processors, {@link DefaultEventProcessor}):
+     * <ol>
+     *   <li>every auditor is told {@code auditEvent} was received, so the clock takes the cycle's instant and the
+     *   audit log opens a record naming it; node {@code auditLog} writes inside {@code action} land in that record;</li>
+     *   <li>the processor is marked as processing, so an event {@code action} raises is queued, as a re-entrant event
+     *   is, and dispatched after it as its own cycle;</li>
+     *   <li>{@code action} runs;</li>
+     *   <li>the cycle is closed (the auditors' {@code processingComplete}, dirty flags reset), the queued events are
+     *   dispatched, and the processing mark is cleared, in a {@code finally}, so an {@code action} that throws leaves
+     *   the processor as it found it.</li>
+     * </ol>
+     * {@code auditEvent} is NOT dispatched to any node, and nothing is marked dirty by it: an action that needs the
+     * graph to react raises an event.
+     *
+     * <p>It is not re-entrant: called while this processor is processing (from a node), it is refused. It is not
+     * thread-safe, like {@code onEvent}: the caller runs it on the thread that drives this processor. It grants no
+     * capability a holder of this processor lacks: such a holder can already call {@code onEvent}, its exported
+     * services and its nodes.
+     *
+     * <p>The default runs {@code action} with no cycle, as a processor that predates this method would. A generated
+     * processor may override it to throw, where the path is disabled.
+     *
+     * @param auditEvent what the cycle's audit record names; its {@code toString} is written to the audit log
+     * @param action     the work to run in the cycle
+     * @throws IllegalStateException when called inside an event cycle of this processor
+     */
+    default void runInEventCycle(Object auditEvent, Runnable action) {
+        action.run();
+    }
+
+    /**
      * Returns an instance of the event processor cast to an interface type. The implemented interfaces of an event processor
      * are specified using the com.fluxtion.compiler.EventProcessorConfig#addInterfaceImplementation during the
      * building phase of the processor or using the @ExportService annotation.
