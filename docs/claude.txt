@@ -123,7 +123,7 @@ These will save you 80% of cold-start iterations.
 3. **Source-gen IS serialisation.** Fluxtion reflects over every node's fields and emits a generated processor that reconstructs them via constructor calls and field assignments. Once you grok this, every gotcha below is obvious — they're all "this field doesn't render as a Java literal" or "this constructor binding is ambiguous."
 4. **Single-threaded by design.** Do not introduce executors, threads, or async APIs inside nodes. Concurrency breaks the determinism guarantee.
 5. **Mutate state through events, not from outside.** External mutation breaks audit/replay.
-6. **A node that throws does not wedge the processor.** The exception reaches the caller unchanged; the in-cycle flag is cleared in a `finally` at every boundary (`onEvent`, typed entry points, exported services, lifecycle, `runInEventCycle`), so the next call dispatches normally. The rest of the failed cycle is not completed. Catch inside the node if the cycle must go on.
+6. **A node that throws does not wedge the processor.** The exception reaches the caller unchanged (the interpreter may wrap it, with the node's exception as the cause); the in-cycle flag is cleared in a `finally` at every boundary (`onEvent`, typed entry points, exported services, lifecycle, `runInEventCycle`), so the next call dispatches normally. The rest of the failed cycle is not completed. Catch inside the node if the cycle must go on.
 
 ## Source-gen annotation triage
 

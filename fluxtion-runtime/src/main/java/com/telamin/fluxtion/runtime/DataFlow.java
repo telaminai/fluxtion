@@ -160,7 +160,8 @@ public interface DataFlow extends ServiceRegistry, NodeDiscovery, Lifecycle {
      * Called when a new event e is ready to be processed. Calls a {@link #triggerCalculation()} first if any events
      * have been buffered.
      * <p>
-     * <b>A node that throws.</b> The exception propagates to the caller unchanged, and the processor stays usable:
+     * <b>A node that throws.</b> The exception propagates to the caller unchanged (the interpreted processor may wrap
+     * it, with the node's exception as the cause), and the processor stays usable:
      * every event, lifecycle and exported-service boundary clears its in-cycle flag in a {@code finally}, so the next
      * call dispatches normally. Nothing else of the failed cycle is completed: its remaining nodes, event-end methods
      * and queued re-entrant events do not run as part of it. Handle the exception where you want the cycle to go on;
