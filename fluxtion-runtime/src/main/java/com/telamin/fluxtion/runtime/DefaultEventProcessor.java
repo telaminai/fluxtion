@@ -305,6 +305,40 @@ public class DefaultEventProcessor
     processing = true;
   }
 
+  /**
+   * {@link DataFlow#runInEventCycle}. A buffered calculation runs first, because it closes its own cycle's record;
+   * then the cycle opens with the caller's event and runs the action; a finally closes it and dispatches what the
+   * action queued, and an inner finally clears the processing mark, so a throw cannot wedge the processor.
+   */
+  @Override
+  public void runInEventCycle(Object auditEvent, Runnable action) {
+    if (processing) {
+      throw new IllegalStateException("runInEventCycle is not re-entrant: it was called inside an event cycle");
+    }
+    if (buffering) {
+      triggerCalculation();
+    }
+    processing = true;
+    try {
+      // an Event supplies its own event time, as on the event path: the static type selects the auditors' overload
+      if (auditEvent instanceof Event) {
+        auditEvent((Event) auditEvent);
+      } else {
+        auditEvent(auditEvent);
+      }
+      action.run();
+    } finally {
+      // closed even when the action throws, as a host's own audit bracket closes its record; processing is cleared
+      // innermost, so a throw from the close cannot wedge the processor either
+      try {
+        afterEvent();
+        callbackDispatcher.dispatchQueuedCallbacks();
+      } finally {
+        processing = false;
+      }
+    }
+  }
+
   private void afterServiceCall() {
     afterEvent();
     callbackDispatcher.dispatchQueuedCallbacks();
