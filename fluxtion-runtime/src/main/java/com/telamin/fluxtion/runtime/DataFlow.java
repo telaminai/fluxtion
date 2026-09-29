@@ -452,11 +452,12 @@ public interface DataFlow extends ServiceRegistry, NodeDiscovery, Lifecycle {
      *   <li>every auditor is told {@code auditEvent} was received, so the clock takes the cycle's instant and the
      *   audit log opens a record naming it; node {@code auditLog} writes inside {@code action} land in that record;</li>
      *   <li>{@code action} runs;</li>
-     *   <li>the cycle is closed (event-end methods, the auditors' {@code processingComplete}, dirty flags reset) and
-     *   the events the action queued are dispatched;</li>
-     *   <li>the processing mark is cleared in a {@code finally}, so a throw cannot leave the processor refusing
-     *   later events. A failed cycle's other state is handled as for any event that throws.</li>
+     *   <li>in a {@code finally}, so also when the action throws: the cycle is closed (event-end methods, the
+     *   auditors' {@code processingComplete}, dirty flags reset), so its audit record is complete, the events the
+     *   action queued are dispatched, and the processing mark is cleared, innermost.</li>
      * </ol>
+     * A throw from a queued event, or from closing the cycle, is handled as for any event that throws: this method
+     * adds no failure handling of its own beyond closing the cycle and clearing the processing mark.
      * {@code auditEvent} is NOT dispatched to any node, and nothing is marked dirty by it: an action that needs the
      * graph to react raises an event.
      *

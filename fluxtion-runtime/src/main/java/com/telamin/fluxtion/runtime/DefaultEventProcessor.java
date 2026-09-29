@@ -307,9 +307,8 @@ public class DefaultEventProcessor
 
   /**
    * {@link DataFlow#runInEventCycle}. A buffered calculation runs first, because it closes its own cycle's record;
-   * then the cycle opens with the caller's event, runs the action, closes, and dispatches what the action queued.
-   * The finally clears only the processing mark, so a throwing action cannot wedge the processor; the handling of a
-   * failed cycle's state is otherwise as for any event.
+   * then the cycle opens with the caller's event and runs the action; a finally closes it and dispatches what the
+   * action queued, and an inner finally clears the processing mark, so a throw cannot wedge the processor.
    */
   @Override
   public void runInEventCycle(Object auditEvent, Runnable action) {
@@ -323,10 +322,15 @@ public class DefaultEventProcessor
     try {
       auditEvent(auditEvent);
       action.run();
-      afterEvent();
-      callbackDispatcher.dispatchQueuedCallbacks();
     } finally {
-      processing = false;
+      // closed even when the action throws, as a host's own audit bracket closes its record; processing is cleared
+      // innermost, so a throw from the close cannot wedge the processor either
+      try {
+        afterEvent();
+        callbackDispatcher.dispatchQueuedCallbacks();
+      } finally {
+        processing = false;
+      }
     }
   }
 
