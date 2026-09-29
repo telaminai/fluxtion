@@ -13,8 +13,8 @@ import static org.junit.Assert.assertTrue;
 
 /**
  * DataFlow.runInEventCycle on the hand-written DefaultEventProcessor: the action runs inside a cycle, an event it
- * raises is queued and dispatched after it, a throwing action leaves the processor as it found it, and a call inside a
- * cycle is refused. (The audit record is shown on generated processors, which have an EventLogManager.)
+ * raises is queued and dispatched after it, a throw from the action or from a queued event fails the cycle without
+ * wedging it, a call inside a cycle is refused, and the interface default refuses. (The audit record is shown on generated processors, which have an EventLogManager.)
  */
 public class RunInEventCycleTest {
 
@@ -107,7 +107,27 @@ public class RunInEventCycleTest {
     }
 
     @Test
-    public void theDefaultRunsTheActionAsAnOlderProcessorWould() {
+    public void aQueuedEventThatThrowsDuringTheCyclesDrain_doesNotWedge() {
+        Recorder node = new Recorder() {
+            @Override
+            protected boolean handleEvent(Object event) {
+                if ("DEMO-boom".equals(event)) {
+                    throw new IllegalStateException("DEMO failure in a queued event");
+                }
+                return super.handleEvent(event);
+            }
+        };
+        DefaultEventProcessor p = processor(node);
+        IllegalStateException thrown = assertThrows(IllegalStateException.class,
+                () -> p.runInEventCycle("DEMO-command", () -> p.onEvent("DEMO-boom")));
+        assertEquals("the queued event's own exception", "DEMO failure in a queued event", thrown.getMessage());
+        p.onEvent("DEMO-after");
+        assertEquals("not wedged", List.of("DEMO-after"), node.seen);
+        p.runInEventCycle("DEMO-command-2", () -> { });                // and a later cycle is not refused
+    }
+
+    @Test
+    public void theDefaultRefuses_soAHostLearnsTheProcessorPredatesIt() {
         List<String> ran = new ArrayList<>();
         DataFlow old = new DataFlow() {
             @Override
@@ -122,8 +142,9 @@ public class RunInEventCycleTest {
             public void tearDown() {
             }
         };
-        old.runInEventCycle("DEMO-command", () -> ran.add("ran"));
-        assertEquals(List.of("ran"), ran);
-        assertFalse(ran.isEmpty());
+        UnsupportedOperationException refused = assertThrows(UnsupportedOperationException.class,
+                () -> old.runInEventCycle("DEMO-command", () -> ran.add("ran")));
+        assertTrue(refused.getMessage(), refused.getMessage().contains("predates"));
+        assertTrue("the action never ran", ran.isEmpty());
     }
 }
