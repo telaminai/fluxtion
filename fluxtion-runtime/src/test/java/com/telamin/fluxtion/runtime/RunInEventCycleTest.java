@@ -79,6 +79,18 @@ public class RunInEventCycleTest {
     }
 
     @Test
+    public void anEventAThrowingActionRaisedIsDiscarded() {
+        Recorder node = new Recorder();
+        DefaultEventProcessor p = processor(node);
+        assertThrows(IllegalStateException.class, () -> p.runInEventCycle("DEMO-command", () -> {
+            p.onEvent("DEMO-raised-by-failed-action");      // queued
+            throw new IllegalStateException("DEMO failure");
+        }));
+        p.onEvent("DEMO-after");
+        assertEquals("a failed action's queued event is discarded, not dispatched", List.of("DEMO-after"), node.seen);
+    }
+
+    @Test
     public void aCallInsideACycleIsRefused() {
         Recorder node = new Recorder();
         DefaultEventProcessor p = processor(node);

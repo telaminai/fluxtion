@@ -163,9 +163,9 @@ public interface DataFlow extends ServiceRegistry, NodeDiscovery, Lifecycle {
      * <b>A node that throws.</b> The exception propagates to the caller unchanged (the interpreted processor may wrap
      * it, with the node's exception as the cause), and the processor stays usable:
      * every event, lifecycle and exported-service boundary clears its in-cycle flag in a {@code finally}, so the next
-     * call dispatches normally. Nothing else of the failed cycle is completed: its remaining nodes, event-end methods
-     * and queued re-entrant events do not run as part of it. Handle the exception where you want the cycle to go on;
-     * the processor only guarantees it is not wedged.
+     * call dispatches normally. Nothing else of the failed cycle is completed: its remaining nodes and event-end methods
+     * do not run, and what it queued (re-entrant events and callbacks) is discarded, never dispatched later. Handle the
+     * exception where you want the cycle to go on; the processor only guarantees it is not wedged.
      *
      * @param e the {@link Event Event} to process.
      */
@@ -460,7 +460,8 @@ public interface DataFlow extends ServiceRegistry, NodeDiscovery, Lifecycle {
      *   <li>{@code action} runs;</li>
      *   <li>the cycle is closed (the auditors' {@code processingComplete}, dirty flags reset), the queued events are
      *   dispatched, and the processing mark is cleared, in a {@code finally}, so an {@code action} that throws leaves
-     *   the processor as it found it.</li>
+     *   the processor as it found it. When {@code action} throws, what it queued is discarded, not dispatched, as for
+     *   any failed cycle (see {@link #onEvent(Object)}); the cycle is still closed, so its audit record is complete.</li>
      * </ol>
      * {@code auditEvent} is NOT dispatched to any node, and nothing is marked dirty by it: an action that needs the
      * graph to react raises an event.

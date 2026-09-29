@@ -132,6 +132,9 @@ public class DefaultEventProcessor
       allEventHandler.start();
       afterEvent();
       callbackDispatcher.dispatchQueuedCallbacks();
+    } catch (Throwable t) {
+      callbackDispatcher.discardQueuedCallbacks();
+      throw t;
     } finally {
       processing = false;
     }
@@ -147,6 +150,9 @@ public class DefaultEventProcessor
     try {
       afterEvent();
       callbackDispatcher.dispatchQueuedCallbacks();
+    } catch (Throwable t) {
+      callbackDispatcher.discardQueuedCallbacks();
+      throw t;
     } finally {
       processing = false;
     }
@@ -163,6 +169,9 @@ public class DefaultEventProcessor
       allEventHandler.stop();
       afterEvent();
       callbackDispatcher.dispatchQueuedCallbacks();
+    } catch (Throwable t) {
+      callbackDispatcher.discardQueuedCallbacks();
+      throw t;
     } finally {
       processing = false;
     }
@@ -202,10 +211,13 @@ public class DefaultEventProcessor
     } else {
       processing = true;
       // the wedge: a node that throws must not leave processing set, or every later event is
-      // queued behind a cycle that never ends
+      // queued behind a cycle that never ends; and the failed cycle's queued work is discarded
       try {
         onEventInternal(event);
         callbackDispatcher.dispatchQueuedCallbacks();
+      } catch (Throwable t) {
+        callbackDispatcher.discardQueuedCallbacks();
+        throw t;
       } finally {
         processing = false;
       }
@@ -334,6 +346,9 @@ public class DefaultEventProcessor
     processing = true;
     try {
       action.run();
+    } catch (Throwable t) {
+      callbackDispatcher.discardQueuedCallbacks();
+      throw t;
     } finally {
       afterEvent();
       callbackDispatcher.dispatchQueuedCallbacks();
@@ -362,6 +377,9 @@ public class DefaultEventProcessor
     try {
       afterEvent();
       callbackDispatcher.dispatchQueuedCallbacks();
+    } catch (Throwable t) {
+      callbackDispatcher.discardQueuedCallbacks();
+      throw t;
     } finally {
       processing = false;
     }
@@ -374,6 +392,9 @@ public class DefaultEventProcessor
     try {
       afterEvent();
       callbackDispatcher.dispatchQueuedCallbacks();
+    } catch (Throwable t) {
+      callbackDispatcher.discardQueuedCallbacks();
+      throw t;
     } finally {
       processing = false;
     }
