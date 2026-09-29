@@ -14,7 +14,8 @@ import static org.junit.Assert.assertThrows;
  * The wedge: a node that throws must not leave the processor believing it is mid-cycle. Before the fix,
  * {@code processing} was set without a finally, so after one exception every later event was queued behind a cycle
  * that never ended — silently dropped. Now each boundary clears the flag in a finally: the exception reaches the
- * caller unchanged, and the next call dispatches normally. Nothing else of the failed cycle is completed.
+ * caller unchanged, and the next call dispatches normally. Nothing else of the failed cycle is completed, and what it
+ * queued is discarded.
  */
 public class ThrowingNodeDoesNotWedgeTest {
 
@@ -24,10 +25,15 @@ public class ThrowingNodeDoesNotWedgeTest {
     static class Fragile extends ObjectEventHandlerNode {
         final List<Object> seen = new ArrayList<>();
         boolean failOnStop;
+        DataFlow processor;
 
         @Override
         protected boolean handleEvent(Object event) {
             if ("DEMO-boom".equals(event)) {
+                throw BOOM;
+            }
+            if ("DEMO-queue-then-boom".equals(event)) {
+                processor.onEvent("DEMO-queued-by-failed-cycle");   // queued: the processor is processing
                 throw BOOM;
             }
             seen.add(event);
@@ -44,6 +50,7 @@ public class ThrowingNodeDoesNotWedgeTest {
 
     static DefaultEventProcessor processor(Fragile node) {
         DefaultEventProcessor p = new DefaultEventProcessor(node);
+        node.processor = p;
         p.init();
         p.start();
         return p;
@@ -65,6 +72,17 @@ public class ThrowingNodeDoesNotWedgeTest {
         p.onEvent("DEMO-later");
         assertEquals("not wedged: both later events were dispatched, not queued",
                 List.of("DEMO-after", "DEMO-later"), node.seen);
+    }
+
+    @Test
+    public void anEventQueuedByTheFailedCycleIsDiscarded_notDispatchedLater() {
+        Fragile node = new Fragile();
+        DefaultEventProcessor p = processor(node);
+        assertThrows(RuntimeException.class, () -> p.onEvent("DEMO-queue-then-boom"));
+        p.onEvent("DEMO-next");
+        p.onEvent("DEMO-later");
+        assertEquals("the failed cycle's queued event never runs, before or after the next event",
+                List.of("DEMO-next", "DEMO-later"), node.seen);
     }
 
     @Test

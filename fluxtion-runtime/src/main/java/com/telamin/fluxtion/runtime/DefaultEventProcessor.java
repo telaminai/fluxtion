@@ -132,6 +132,9 @@ public class DefaultEventProcessor
       allEventHandler.start();
       afterEvent();
       callbackDispatcher.dispatchQueuedCallbacks();
+    } catch (Throwable t) {
+      callbackDispatcher.discardQueuedCallbacks();
+      throw t;
     } finally {
       processing = false;
     }
@@ -147,6 +150,9 @@ public class DefaultEventProcessor
     try {
       afterEvent();
       callbackDispatcher.dispatchQueuedCallbacks();
+    } catch (Throwable t) {
+      callbackDispatcher.discardQueuedCallbacks();
+      throw t;
     } finally {
       processing = false;
     }
@@ -163,6 +169,9 @@ public class DefaultEventProcessor
       allEventHandler.stop();
       afterEvent();
       callbackDispatcher.dispatchQueuedCallbacks();
+    } catch (Throwable t) {
+      callbackDispatcher.discardQueuedCallbacks();
+      throw t;
     } finally {
       processing = false;
     }
@@ -202,10 +211,13 @@ public class DefaultEventProcessor
     } else {
       processing = true;
       // the wedge: a node that throws must not leave processing set, or every later event is
-      // queued behind a cycle that never ends
+      // queued behind a cycle that never ends; and the failed cycle's queued work is discarded
       try {
         onEventInternal(event);
         callbackDispatcher.dispatchQueuedCallbacks();
+      } catch (Throwable t) {
+        callbackDispatcher.discardQueuedCallbacks();
+        throw t;
       } finally {
         processing = false;
       }
@@ -340,6 +352,9 @@ public class DefaultEventProcessor
         auditEvent(auditEvent);
       }
       action.run();
+    } catch (Throwable t) {
+      callbackDispatcher.discardQueuedCallbacks();
+      throw t;
     } finally {
       // closed even when the action throws, as a host's own audit bracket closes its record; processing is cleared
       // innermost, so a throw from the close cannot wedge the processor either
@@ -373,6 +388,9 @@ public class DefaultEventProcessor
     try {
       afterEvent();
       callbackDispatcher.dispatchQueuedCallbacks();
+    } catch (Throwable t) {
+      callbackDispatcher.discardQueuedCallbacks();
+      throw t;
     } finally {
       processing = false;
     }
@@ -385,6 +403,9 @@ public class DefaultEventProcessor
     try {
       afterEvent();
       callbackDispatcher.dispatchQueuedCallbacks();
+    } catch (Throwable t) {
+      callbackDispatcher.discardQueuedCallbacks();
+      throw t;
     } finally {
       processing = false;
     }

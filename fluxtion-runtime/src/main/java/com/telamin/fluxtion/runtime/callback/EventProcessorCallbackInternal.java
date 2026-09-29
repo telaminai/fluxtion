@@ -9,5 +9,11 @@ public interface EventProcessorCallbackInternal extends CallbackDispatcher, Dirt
 
     void dispatchQueuedCallbacks();
 
+    /**
+     * Discard everything queued by a cycle that failed, re-entrant events and callbacks alike, so none of the failed
+     * cycle's work runs as part of a later one. Called by the processor when a node throws.
+     */
+    void discardQueuedCallbacks();
+
     void setEventProcessor(InternalEventProcessor eventProcessor);
 }

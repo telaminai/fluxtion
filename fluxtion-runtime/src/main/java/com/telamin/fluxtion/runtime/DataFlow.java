@@ -163,9 +163,9 @@ public interface DataFlow extends ServiceRegistry, NodeDiscovery, Lifecycle {
      * <b>A node that throws.</b> The exception propagates to the caller unchanged (the interpreted processor may wrap
      * it, with the node's exception as the cause), and the processor stays usable:
      * every event, lifecycle and exported-service boundary clears its in-cycle flag in a {@code finally}, so the next
-     * call dispatches normally. Nothing else of the failed cycle is completed: its remaining nodes, event-end methods
-     * and queued re-entrant events do not run as part of it. Handle the exception where you want the cycle to go on;
-     * the processor only guarantees it is not wedged.
+     * call dispatches normally. Nothing else of the failed cycle is completed: its remaining nodes and event-end methods
+     * do not run, and what it queued (re-entrant events and callbacks) is discarded, never dispatched later. Handle the
+     * exception where you want the cycle to go on; the processor only guarantees it is not wedged.
      *
      * @param e the {@link Event Event} to process.
      */
@@ -465,7 +465,8 @@ public interface DataFlow extends ServiceRegistry, NodeDiscovery, Lifecycle {
      *   <li>{@code action} runs;</li>
      *   <li>in a {@code finally}, so also when the action throws: the cycle is closed (event-end methods, the
      *   auditors' {@code processingComplete}, dirty flags reset), so its audit record is complete, the events the
-     *   action queued are dispatched, and the processing mark is cleared, innermost.</li>
+     *   action queued are dispatched, and the processing mark is cleared, innermost. When {@code action} throws,
+     *   what it queued is discarded, not dispatched, as for any failed cycle (see {@link #onEvent(Object)}).</li>
      * </ol>
      * A throw from a queued event, or from closing the cycle, is handled as for any event that throws: this method
      * adds no failure handling of its own beyond closing the cycle and clearing the processing mark.
