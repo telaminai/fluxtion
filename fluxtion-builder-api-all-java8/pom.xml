@@ -17,7 +17,7 @@
     <properties>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
-        <asm.version>9.7</asm.version>
+        <asm.version>9.10.1</asm.version>
         <retrolambda.version>2.5.7</retrolambda.version>
         <jdk8.home>${user.home}/.sdkman/candidates/java/8.0.492-zulu</jdk8.home>
         <fluxtion.skipRetrolambda>false</fluxtion.skipRetrolambda>
