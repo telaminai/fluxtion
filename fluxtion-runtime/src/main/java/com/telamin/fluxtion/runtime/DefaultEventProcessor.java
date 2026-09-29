@@ -305,6 +305,31 @@ public class DefaultEventProcessor
     processing = true;
   }
 
+  /**
+   * {@link DataFlow#runInEventCycle}. A buffered calculation runs first, because it closes its own cycle's record;
+   * then the cycle opens with the caller's event, runs the action, closes, and dispatches what the action queued.
+   * The finally clears only the processing mark, so a throwing action cannot wedge the processor; the handling of a
+   * failed cycle's state is otherwise as for any event.
+   */
+  @Override
+  public void runInEventCycle(Object auditEvent, Runnable action) {
+    if (processing) {
+      throw new IllegalStateException("runInEventCycle is not re-entrant: it was called inside an event cycle");
+    }
+    if (buffering) {
+      triggerCalculation();
+    }
+    processing = true;
+    try {
+      auditEvent(auditEvent);
+      action.run();
+      afterEvent();
+      callbackDispatcher.dispatchQueuedCallbacks();
+    } finally {
+      processing = false;
+    }
+  }
+
   private void afterServiceCall() {
     afterEvent();
     callbackDispatcher.dispatchQueuedCallbacks();

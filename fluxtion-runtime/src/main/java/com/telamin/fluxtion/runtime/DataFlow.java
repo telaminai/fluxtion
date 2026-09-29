@@ -440,6 +440,46 @@ public interface DataFlow extends ServiceRegistry, NodeDiscovery, Lifecycle {
     }
 
     /**
+     * Run {@code action} as an event cycle of this processor, with {@code auditEvent} as the cycle's audit context.
+     * For a host that must run code in a processor's context which is not an event the graph handles, such as an
+     * operator's command, and have it audited like one.
+     *
+     * <p>In a processor that implements it (generated processors, {@link DefaultEventProcessor}):
+     * <ol>
+     *   <li>any buffered calculation runs first, as its own cycle;</li>
+     *   <li>the processor is marked as processing, so an event {@code action} raises is queued, as a re-entrant event
+     *   is, and dispatched after it as its own cycle;</li>
+     *   <li>every auditor is told {@code auditEvent} was received, so the clock takes the cycle's instant and the
+     *   audit log opens a record naming it; node {@code auditLog} writes inside {@code action} land in that record;</li>
+     *   <li>{@code action} runs;</li>
+     *   <li>the cycle is closed (event-end methods, the auditors' {@code processingComplete}, dirty flags reset) and
+     *   the events the action queued are dispatched;</li>
+     *   <li>the processing mark is cleared in a {@code finally}, so a throw cannot leave the processor refusing
+     *   later events. A failed cycle's other state is handled as for any event that throws.</li>
+     * </ol>
+     * {@code auditEvent} is NOT dispatched to any node, and nothing is marked dirty by it: an action that needs the
+     * graph to react raises an event.
+     *
+     * <p>It is not re-entrant: called while this processor is processing (from a node), it is refused. It is not
+     * thread-safe, like {@code onEvent}: the caller runs it on the thread that drives this processor. It grants no
+     * capability a holder of this processor lacks: such a holder can already call {@code onEvent}, its exported
+     * services and its nodes.
+     *
+     * <p>The default throws {@link UnsupportedOperationException}: a processor that predates this method cannot run
+     * an audited cycle, and a caller that needs one must learn that, not have the action run silently outside any
+     * cycle. A generated processor may also override it to throw, where the path is disabled.
+     *
+     * @param auditEvent what the cycle's audit record names; its {@code toString} is written to the audit log
+     * @param action     the work to run in the cycle
+     * @throws IllegalStateException         when called inside an event cycle of this processor
+     * @throws UnsupportedOperationException from a processor that does not implement it
+     */
+    default void runInEventCycle(Object auditEvent, Runnable action) {
+        throw new UnsupportedOperationException(
+                "runInEventCycle is not supported by " + getClass().getName() + ": it predates the method");
+    }
+
+    /**
      * Returns an instance of the event processor cast to an interface type. The implemented interfaces of an event processor
      * are specified using the com.fluxtion.compiler.EventProcessorConfig#addInterfaceImplementation during the
      * building phase of the processor or using the @ExportService annotation.
