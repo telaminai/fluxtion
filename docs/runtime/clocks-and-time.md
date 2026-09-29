@@ -78,3 +78,5 @@ Tips:
 - Use Clock.DEFAULT_CLOCK for real time, or supply a custom strategy for reproducible tests and simulations.
 - Any component can access the clock via injection or by holding a Clock reference as shown.
 - Feed different DateFormat instances (or other formatting logic) as events to control how timestamps are presented.
+- Host code run with `runInEventCycle` follows the same contract: an `Event` audit context supplies its own event
+  time, any other object takes the process time. See [Running host code in an event cycle](run-in-event-cycle.md).

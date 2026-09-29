@@ -122,7 +122,7 @@ These will save you 80% of cold-start iterations.
    - an explicit `reset()` method called after `init()` (clearest in tests).
 3. **Source-gen IS serialisation.** Fluxtion reflects over every node's fields and emits a generated processor that reconstructs them via constructor calls and field assignments. Once you grok this, every gotcha below is obvious — they're all "this field doesn't render as a Java literal" or "this constructor binding is ambiguous."
 4. **Single-threaded by design.** Do not introduce executors, threads, or async APIs inside nodes. Concurrency breaks the determinism guarantee.
-5. **Mutate state through events, not from outside.** External mutation breaks audit/replay.
+5. **Mutate state through events, not from outside.** External mutation breaks audit/replay. When host code must act on nodes directly (an operator/admin command), wrap it: `processor.runInEventCycle(auditContext, () -> ...)` (runtime 1.1.0+) runs it as one audited event cycle. Events the action raises are queued and dispatched after it as their own cycles, `auditContext` is dispatched to no node, and an `Event` context supplies its own event time. It is not re-entrant (it throws inside a cycle), it runs on the processor's thread, and the interface default throws `UnsupportedOperationException` on processors that predate it. See `runtime/run-in-event-cycle.md`.
 
 ## Source-gen annotation triage
 

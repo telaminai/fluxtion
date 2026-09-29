@@ -143,6 +143,7 @@ nav:
           - DataFlow context: runtime/dataflow-context.md
           - Clocks and time: runtime/clocks-and-time.md
           - Buffer and trigger: runtime/buffer-and-trigger.md
+          - Host code in an event cycle: runtime/run-in-event-cycle.md
           - Console sink formatting: reference/console-sink-format.md
       - API javadoc:
           - Fluxtion-runtime: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-runtime/latest/index.html
