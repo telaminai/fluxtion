@@ -1,0 +1,79 @@
+package com.telamin.fluxtion.runtime;
+
+import com.telamin.fluxtion.runtime.node.ObjectEventHandlerNode;
+import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
+
+/**
+ * The wedge: a node that throws must not leave the processor believing it is mid-cycle. Before the fix,
+ * {@code processing} was set without a finally, so after one exception every later event was queued behind a cycle
+ * that never ended — silently dropped. Now each boundary clears the flag in a finally: the exception reaches the
+ * caller unchanged, and the next call dispatches normally. Nothing else of the failed cycle is completed.
+ */
+public class ThrowingNodeDoesNotWedgeTest {
+
+    static final RuntimeException BOOM = new IllegalStateException("DEMO failure");
+
+    /** Throws on "DEMO-boom", and on stop() when asked; records everything else it handles. */
+    static class Fragile extends ObjectEventHandlerNode {
+        final List<Object> seen = new ArrayList<>();
+        boolean failOnStop;
+
+        @Override
+        protected boolean handleEvent(Object event) {
+            if ("DEMO-boom".equals(event)) {
+                throw BOOM;
+            }
+            seen.add(event);
+            return true;
+        }
+
+        @Override
+        public void stop() {
+            if (failOnStop) {
+                throw BOOM;
+            }
+        }
+    }
+
+    static DefaultEventProcessor processor(Fragile node) {
+        DefaultEventProcessor p = new DefaultEventProcessor(node);
+        p.init();
+        p.start();
+        return p;
+    }
+
+    @Test
+    public void theExceptionReachesTheCallerUnchanged() {
+        DefaultEventProcessor p = processor(new Fragile());
+        RuntimeException thrown = assertThrows(RuntimeException.class, () -> p.onEvent("DEMO-boom"));
+        assertSame("the node's own exception, not a wrapper", BOOM, thrown);
+    }
+
+    @Test
+    public void theNextEventAfterAThrowIsDispatched() {
+        Fragile node = new Fragile();
+        DefaultEventProcessor p = processor(node);
+        assertThrows(RuntimeException.class, () -> p.onEvent("DEMO-boom"));
+        p.onEvent("DEMO-after");
+        p.onEvent("DEMO-later");
+        assertEquals("not wedged: both later events were dispatched, not queued",
+                List.of("DEMO-after", "DEMO-later"), node.seen);
+    }
+
+    @Test
+    public void aLifecycleMethodThatThrowsDoesNotWedgeEither() {
+        Fragile node = new Fragile();
+        DefaultEventProcessor p = processor(node);
+        node.failOnStop = true;
+        assertThrows(RuntimeException.class, p::stop);
+        p.onEvent("DEMO-after-stop");
+        assertEquals(List.of("DEMO-after-stop"), node.seen);
+    }
+}
