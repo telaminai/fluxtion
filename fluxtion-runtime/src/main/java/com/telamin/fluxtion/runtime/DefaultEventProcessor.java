@@ -320,7 +320,12 @@ public class DefaultEventProcessor
     }
     processing = true;
     try {
-      auditEvent(auditEvent);
+      // an Event supplies its own event time, as on the event path: the static type selects the auditors' overload
+      if (auditEvent instanceof Event) {
+        auditEvent((Event) auditEvent);
+      } else {
+        auditEvent(auditEvent);
+      }
       action.run();
     } finally {
       // closed even when the action throws, as a host's own audit bracket closes its record; processing is cleared

@@ -450,7 +450,11 @@ public interface DataFlow extends ServiceRegistry, NodeDiscovery, Lifecycle {
      *   <li>the processor is marked as processing, so an event {@code action} raises is queued, as a re-entrant event
      *   is, and dispatched after it as its own cycle;</li>
      *   <li>every auditor is told {@code auditEvent} was received, so the clock takes the cycle's instant and the
-     *   audit log opens a record naming it; node {@code auditLog} writes inside {@code action} land in that record;</li>
+     *   audit log opens a record naming it; node {@code auditLog} writes inside {@code action} land in that record.
+     *   The clock follows the event path's contract: an {@code auditEvent} that is an {@link Event} reaches every
+     *   auditor through {@code eventReceived(Event)} and supplies its own event time ({@link Event#getEventTime()});
+     *   any other object reaches them through {@code eventReceived(Object)}, and the event time is the process time.
+     *   The process time is a reading of the clock strategy either way;</li>
      *   <li>{@code action} runs;</li>
      *   <li>in a {@code finally}, so also when the action throws: the cycle is closed (event-end methods, the
      *   auditors' {@code processingComplete}, dirty flags reset), so its audit record is complete, the events the
