@@ -54,6 +54,16 @@ public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, N
     }
 
     @Override
+    public void discardQueuedCallbacks() {
+        myStack.clear();
+        // a throw inside the drain above leaves dispatching set, which would put later iterator callbacks at the front
+        dispatching = false;
+        if (eventProcessor != null) {
+            eventProcessor.callbacksPending(false);
+        }
+    }
+
+    @Override
     public void fireCallback(int id) {
         SingleCallBackWrapper<Object> callBackWrapper = new SingleCallBackWrapper<>();
         callBackWrapper.setFilterId(id);

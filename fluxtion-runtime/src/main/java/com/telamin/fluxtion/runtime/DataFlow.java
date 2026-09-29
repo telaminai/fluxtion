@@ -159,6 +159,15 @@ public interface DataFlow extends ServiceRegistry, NodeDiscovery, Lifecycle {
     /**
      * Called when a new event e is ready to be processed. Calls a {@link #triggerCalculation()} first if any events
      * have been buffered.
+     * <p>
+     * <b>A node that throws.</b> The exception propagates to the caller unchanged (the interpreted processor may wrap
+     * it, with the node's exception as the cause), and the processor stays usable:
+     * every event, lifecycle and exported-service boundary clears its in-cycle flag in a {@code finally}, so the next
+     * call dispatches normally. The failed cycle is closed with framework state only, no user code: its remaining
+     * nodes and event-end methods do not run; dirty flags are reset, so nothing of it triggers a later cycle; the audit
+     * record is closed; and everything the call queued (re-entrant events and callbacks, including work queued by
+     * earlier cycles of the same call that completed) is discarded, never dispatched later. Handle the exception where
+     * you want the cycle to go on; the processor only guarantees it is not wedged and not contaminated.
      *
      * @param e the {@link Event Event} to process.
      */
@@ -437,6 +446,47 @@ public interface DataFlow extends ServiceRegistry, NodeDiscovery, Lifecycle {
 
     default void setClockStrategy(ClockStrategy clockStrategy) {
         onEvent(ClockStrategy.registerClockEvent(clockStrategy));
+    }
+
+    /**
+     * Run {@code action} as an event cycle of this processor, with {@code auditEvent} as the cycle's audit context.
+     * For a host that must run code in a processor's context which is not an event the graph handles, such as an
+     * operator's command, and have it audited like one.
+     *
+     * <p>In a processor that implements it (generated processors, {@link DefaultEventProcessor}):
+     * <ol>
+     *   <li>every auditor is told {@code auditEvent} was received, so the clock takes the cycle's instant and the
+     *   audit log opens a record naming it; node {@code auditLog} writes inside {@code action} land in that record;</li>
+     *   <li>the processor is marked as processing, so an event {@code action} raises is queued, as a re-entrant event
+     *   is, and dispatched after it as its own cycle;</li>
+     *   <li>{@code action} runs;</li>
+     *   <li>the cycle is closed (event-end methods, the auditors' {@code processingComplete}, dirty flags reset) and the
+     *   queued events are dispatched;</li>
+     *   <li>if anything above throws (the action, an event-end method, a queued event), the cycle fails like any other
+     *   (see {@link #onEvent(Object)}): what the call queued is discarded, framework state is reset and the audit
+     *   record closed, with no user code run, and the exception propagates;</li>
+     *   <li>the processing mark is cleared in a {@code finally}.</li>
+     * </ol>
+     * {@code auditEvent} is NOT dispatched to any node, and nothing is marked dirty by it: an action that needs the
+     * graph to react raises an event.
+     *
+     * <p>It is not re-entrant: called while this processor is processing (from a node), it is refused. It is not
+     * thread-safe, like {@code onEvent}: the caller runs it on the thread that drives this processor. It grants no
+     * capability a holder of this processor lacks: such a holder can already call {@code onEvent}, its exported
+     * services and its nodes.
+     *
+     * <p>The default throws {@link UnsupportedOperationException}: a processor that predates this method cannot run
+     * an audited cycle, and a caller that needs one must learn that, not get the action run silently outside any
+     * cycle. A generated processor may also override it to throw, where the path is disabled.
+     *
+     * @param auditEvent what the cycle's audit record names; its {@code toString} is written to the audit log
+     * @param action     the work to run in the cycle
+     * @throws IllegalStateException         when called inside an event cycle of this processor
+     * @throws UnsupportedOperationException from a processor that does not implement it
+     */
+    default void runInEventCycle(Object auditEvent, Runnable action) {
+        throw new UnsupportedOperationException(
+                "runInEventCycle is not supported by " + getClass().getName() + ": it predates the method");
     }
 
     /**

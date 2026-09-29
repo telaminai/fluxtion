@@ -127,11 +127,17 @@ public class DefaultEventProcessor
       throw new RuntimeException("init() must be called before start()");
     }
     processing = true;
-    auditEvent(LifecycleEvent.Start);
-    allEventHandler.start();
-    afterEvent();
-    callbackDispatcher.dispatchQueuedCallbacks();
-    processing = false;
+    try {
+      auditEvent(LifecycleEvent.Start);
+      allEventHandler.start();
+      afterEvent();
+      callbackDispatcher.dispatchQueuedCallbacks();
+    } catch (Throwable t) {
+      failedCycle(t);
+      throw t;
+    } finally {
+      processing = false;
+    }
   }
 
   @Override
@@ -140,11 +146,16 @@ public class DefaultEventProcessor
       throw new RuntimeException("init() must be called before startComplete()");
     }
     processing = true;
-    auditEvent(LifecycleEvent.StartComplete);
-
-    afterEvent();
-    callbackDispatcher.dispatchQueuedCallbacks();
-    processing = false;
+    try {
+      auditEvent(LifecycleEvent.StartComplete);
+      afterEvent();
+      callbackDispatcher.dispatchQueuedCallbacks();
+    } catch (Throwable t) {
+      failedCycle(t);
+      throw t;
+    } finally {
+      processing = false;
+    }
   }
 
   @Override
@@ -153,11 +164,17 @@ public class DefaultEventProcessor
       throw new RuntimeException("init() must be called before stop()");
     }
     processing = true;
-    auditEvent(LifecycleEvent.Stop);
-    allEventHandler.stop();
-    afterEvent();
-    callbackDispatcher.dispatchQueuedCallbacks();
-    processing = false;
+    try {
+      auditEvent(LifecycleEvent.Stop);
+      allEventHandler.stop();
+      afterEvent();
+      callbackDispatcher.dispatchQueuedCallbacks();
+    } catch (Throwable t) {
+      failedCycle(t);
+      throw t;
+    } finally {
+      processing = false;
+    }
   }
 
   @Override
@@ -193,9 +210,17 @@ public class DefaultEventProcessor
       callbackDispatcher.queueReentrantEvent(event);
     } else {
       processing = true;
-      onEventInternal(event);
-      callbackDispatcher.dispatchQueuedCallbacks();
-      processing = false;
+      // the wedge: a node that throws must not leave processing set, or every later event is
+      // queued behind a cycle that never ends; and the failed cycle's queued work is discarded
+      try {
+        onEventInternal(event);
+        callbackDispatcher.dispatchQueuedCallbacks();
+      } catch (Throwable t) {
+        failedCycle(t);
+        throw t;
+      } finally {
+        processing = false;
+      }
     }
   }
 
@@ -233,8 +258,15 @@ public class DefaultEventProcessor
     beforeServiceCall(
         "public void com.telamin.service.runtime.dataflow.fluxtion.ServiceRegistryNode.deRegisterService(com.telamin.service.runtime.dataflow.fluxtion.Service<?>)");
     ExportFunctionAuditEvent typedEvent = functionAudit;
-    serviceRegistry.deRegisterService(arg0);
-    afterServiceCall();
+    try {
+      serviceRegistry.deRegisterService(arg0);
+      afterServiceCall();
+    } catch (Throwable t) {
+      failedCycle(t);
+      throw t;
+    } finally {
+      processing = false;
+    }
   }
 
   @Override
@@ -242,8 +274,15 @@ public class DefaultEventProcessor
     beforeServiceCall(
         "public void com.telamin.service.runtime.dataflow.fluxtion.ServiceRegistryNode.registerService(com.telamin.service.runtime.dataflow.fluxtion.Service<?>)");
     ExportFunctionAuditEvent typedEvent = functionAudit;
-    serviceRegistry.registerService(arg0);
-    afterServiceCall();
+    try {
+      serviceRegistry.registerService(arg0);
+      afterServiceCall();
+    } catch (Throwable t) {
+      failedCycle(t);
+      throw t;
+    } finally {
+      processing = false;
+    }
   }
   //EXPORTED SERVICE FUNCTIONS - END
 
@@ -297,18 +336,62 @@ public class DefaultEventProcessor
   }
 
   private void beforeServiceCall(String functionDescription) {
+    // buffered work first: triggerCalculation closes its own cycle's record, so it runs before this call's opens
+    if (buffering) {
+      triggerCalculation();
+    }
     functionAudit.setFunctionDescription(functionDescription);
     auditEvent(functionAudit);
+    processing = true;
+  }
+
+  /**
+   * {@link DataFlow#runInEventCycle}: the cycle closes and its queued events are dispatched inside the try, so a throw
+   * from the action, an event-end method or a queued event fails the cycle like any other ({@link #failedCycle}).
+   */
+  @Override
+  public void runInEventCycle(Object auditEvent, Runnable action) {
+    if (processing) {
+      throw new IllegalStateException("runInEventCycle is not re-entrant: it was called inside an event cycle");
+    }
     if (buffering) {
       triggerCalculation();
     }
     processing = true;
+    try {
+      auditEvent(auditEvent);
+      action.run();
+      afterEvent();
+      callbackDispatcher.dispatchQueuedCallbacks();
+    } catch (Throwable t) {
+      failedCycle(t);
+      throw t;
+    } finally {
+      processing = false;
+    }
   }
 
   private void afterServiceCall() {
     afterEvent();
     callbackDispatcher.dispatchQueuedCallbacks();
     processing = false;
+  }
+
+  /**
+   * The close of a cycle that failed: framework state only, no user code. What the call queued is discarded, dirty
+   * flags are reset, and the auditors close its record. An auditor's throw is added to the cycle's exception as
+   * suppressed, never replaces it.
+   */
+  private void failedCycle(Throwable cause) {
+    callbackDispatcher.discardQueuedCallbacks();
+    isDirty_clock = false;
+    try {
+      clock.processingComplete();
+      nodeNameLookup.processingComplete();
+      serviceRegistry.processingComplete();
+    } catch (Throwable t) {
+      cause.addSuppressed(t);
+    }
   }
 
   private void afterEvent() {
@@ -321,22 +404,32 @@ public class DefaultEventProcessor
 
   @Override
   public void batchPause() {
-    auditEvent(LifecycleEvent.BatchPause);
     processing = true;
-
-    afterEvent();
-    callbackDispatcher.dispatchQueuedCallbacks();
-    processing = false;
+    try {
+      auditEvent(LifecycleEvent.BatchPause);
+      afterEvent();
+      callbackDispatcher.dispatchQueuedCallbacks();
+    } catch (Throwable t) {
+      failedCycle(t);
+      throw t;
+    } finally {
+      processing = false;
+    }
   }
 
   @Override
   public void batchEnd() {
-    auditEvent(LifecycleEvent.BatchEnd);
     processing = true;
-
-    afterEvent();
-    callbackDispatcher.dispatchQueuedCallbacks();
-    processing = false;
+    try {
+      auditEvent(LifecycleEvent.BatchEnd);
+      afterEvent();
+      callbackDispatcher.dispatchQueuedCallbacks();
+    } catch (Throwable t) {
+      failedCycle(t);
+      throw t;
+    } finally {
+      processing = false;
+    }
   }
 
   @Override
