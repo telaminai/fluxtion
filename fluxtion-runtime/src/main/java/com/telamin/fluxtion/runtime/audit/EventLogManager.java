@@ -197,6 +197,16 @@ public class EventLogManager implements Auditor {
 
     @Override
     public void nodeInvoked(Object node, String nodeName, String methodName, Object event) {
+        nodeInvoked(node, nodeName, methodName, null, event);
+    }
+
+    /**
+     * Writes the trace entry. {@code annotation} is written as the {@code annotation} key, after the
+     * method, when the generator supplied one; a processor generated before it could supply one calls
+     * the four-argument form and its trace entries are unchanged.
+     */
+    @Override
+    public void nodeInvoked(Object node, String nodeName, String methodName, String annotation, Object event) {
         EventLogger logger = node2Logger.getOrDefault(nodeName, NullEventLogger.INSTANCE);
         logger.logNodeInvocation(traceLevel);
         if (printThreadName) {
@@ -207,6 +217,9 @@ public class EventLogManager implements Auditor {
             logger.log("asyncMethod", methodName, traceLevel);
         } else {
             logger.log("method", methodName, traceLevel);
+        }
+        if (annotation != null) {
+            logger.log("annotation", annotation, traceLevel);
         }
     }
 

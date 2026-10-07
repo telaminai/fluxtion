@@ -45,6 +45,11 @@ public interface Auditor extends Lifecycle {
     default void nodeInvoked(Object node, String nodeName, String methodName, Object event) {
     }
 
+    // since 1.1.1: also names the dispatching annotation, e.g. "OnTrigger"; defaults to the form above
+    default void nodeInvoked(Object node, String nodeName, String methodName, String annotation, Object event) {
+        nodeInvoked(node, nodeName, methodName, event);
+    }
+
     default void processingComplete() {
     }
 
@@ -62,6 +67,11 @@ metrics/tracing. If false, you still receive the other lifecycle callbacks.
 - General-purpose monitoring: counters, timers, gauges per node or per event
 - Seamless integration: forward telemetry to your global monitoring pipeline
 - Deep visibility: with auditInvocations=true, trace the exact execution path of each event
+  - A processor generated to supply it also names the annotation that dispatched each callback. The
+    built-in `EventLogManager` writes it as `annotation`, after `method`:
+    `- quoteHandler: { method: onQuote, annotation: OnEventHandler}`. The generator passes it as a string
+    constant, so nothing is looked up at runtime. An auditor that overrides only the four-argument form still
+    receives every call.
 - Alerting and SLOs: export latency histograms and error counters for alerting
 - Persistence and replay: implement auditors that write reproducible traces
 - Profiling and diagnostics: measure hotspots and call sequences without changing business code
