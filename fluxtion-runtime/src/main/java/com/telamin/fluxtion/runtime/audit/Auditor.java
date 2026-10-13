@@ -114,9 +114,14 @@ public interface Auditor extends Lifecycle {
      * <p>The generator supplies {@code annotation} as a string constant at each call site, so nothing is
      * looked up or cached at runtime. The default forwards to the four-argument form, so an auditor
      * written before this method existed sees every invocation exactly as before. Processors generated
-     * before it existed call the four-argument form directly, so an auditor that wants the annotation
-     * overrides BOTH forms, the four-argument one forwarding here with a {@code null} annotation, as
-     * {@link EventLogManager} does; overriding only this form receives nothing from such a processor.
+     * before it existed call the four-argument form directly, so an auditor implementing this interface that
+     * wants the annotation overrides BOTH forms, the four-argument one forwarding here with a {@code null}
+     * annotation; overriding only this form receives nothing from such a processor.
+     *
+     * <p>A subclass of {@link EventLogManager} is the exception: there the five-argument form forwards to the
+     * four-argument form, which writes the entry. Such a subclass overrides the five-argument form and calls
+     * {@code super} with the same form, and never forwards its four-argument override to the five-argument
+     * form: the two would call each other without end.
      *
      * @param node       The next node to process in the execution path
      * @param nodeName   The name of the node in the processor

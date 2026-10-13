@@ -93,7 +93,7 @@ public class TraceAnnotationTest {
         String record = trace(new EventLogManager(), LogLevel.INFO, new TestForkedSource(),
                 (m, node) -> m.nodeInvoked(node, "source", "onTrigger", "OnTrigger", "event"));
         assertTrue(record, record.contains("forkedExecution: true, asyncMethod: onTrigger, annotation: OnTrigger"));
-        assertFalse(record, record.contains("method: onTrigger,") && !record.contains("asyncMethod: onTrigger,"));
+        assertFalse("a forked node writes asyncMethod, not method: " + record, record.contains(" method: onTrigger"));
     }
 
     @Test
@@ -116,8 +116,24 @@ public class TraceAnnotationTest {
                 record.contains("method: onEvent, annotation"));
     }
 
+    @Test
+    public void aSubclassThatWantsTheAnnotationOverridesTheFiveArgumentFormAndCallsSuper() {
+        List<String> annotations = new ArrayList<>();
+        EventLogManager annotating = new EventLogManager() {
+            @Override
+            public void nodeInvoked(Object node, String nodeName, String methodName, String annotation, Object event) {
+                annotations.add(String.valueOf(annotation));
+                super.nodeInvoked(node, nodeName, methodName, annotation, event);
+            }
+        };
+        String record = trace(annotating, LogLevel.INFO, new TestAuditSource(),
+                (m, node) -> m.nodeInvoked(node, "source", "onTrigger", "OnTrigger", "event"));
+        assertEquals(List.of("OnTrigger"), annotations);
+        assertTrue(record, record.contains("method: onTrigger, annotation: OnTrigger"));
+    }
+
     private static String stripTimes(String record) {
-        return record.replaceAll("(eventTime|logTime|groupingId): [^\\n]*", "$1: _");
+        return record.replaceAll("(eventTime|logTime|endTime|groupingId): [^\\n]*", "$1: _");
     }
 
     @Test

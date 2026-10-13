@@ -201,7 +201,12 @@ public class EventLogManager implements Auditor {
      * Writes the trace entry. This four-argument form is the one that writes, so a subclass written before the
      * annotation existed, overriding it and calling {@code super}, still sees every invocation, including those
      * from a processor that supplies an annotation. The annotation travels in {@link #invocationAnnotation}:
-     * one field store, no allocation, and safe because a processor dispatches on one thread.
+     * one field store, no allocation. That is safe because the generated processor makes every audit call
+     * inline on the dispatching thread, and a forked task's {@code compute()} never calls {@code nodeInvoked};
+     * a change that audits from another thread must hand the annotation over another way.
+     *
+     * <p>A subclass that wants the annotation overrides the five-argument form and calls {@code super} with the
+     * same form. It must not forward an override of this form to the five-argument form: they would recurse.
      */
     @Override
     public void nodeInvoked(Object node, String nodeName, String methodName, Object event) {

@@ -75,8 +75,11 @@ metrics/tracing. If false, you still receive the other lifecycle callbacks.
   - An auditor that overrides only the four-argument form still receives every call, without the
     annotation. An auditor that wants the annotation overrides both forms, the four-argument one forwarding
     with a `null` annotation: a processor generated before the annotation existed calls only the
-    four-argument form. A subclass of `EventLogManager` that overrides the four-argument form and calls
-    `super` sees every call, and the annotation is still written.
+    four-argument form. A subclass of `EventLogManager` is different: its five-argument form forwards to
+    the four-argument form, which writes the entry. A subclass that overrides the four-argument form and
+    calls `super` sees every call, and the annotation is still written; one that wants the annotation
+    overrides the five-argument form and calls `super` with the same form. It never forwards its
+    four-argument override to the five-argument form, because the two would recurse.
 - Alerting and SLOs: export latency histograms and error counters for alerting
 - Persistence and replay: implement auditors that write reproducible traces
 - Profiling and diagnostics: measure hotspots and call sequences without changing business code
