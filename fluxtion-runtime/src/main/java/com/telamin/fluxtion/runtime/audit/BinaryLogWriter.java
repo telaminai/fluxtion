@@ -40,6 +40,8 @@ import java.io.UncheckedIOException;
  * Two limits are easy to confuse: this writer's FILE dictionary holds 65,535 names; a
  * {@link BinaryLogRecord}'s own intern table holds 32,767, so one record can never exhaust the file
  * alone, but several record instances can.
+ *
+ * <p><b>Not thread-safe.</b> One writer thread: the encode buffer, dictionary and cache are unguarded.
  */
 public final class BinaryLogWriter implements LogRecordListener, Closeable {
 
@@ -133,7 +135,10 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
             int[] translate = translationFor(record);
             int entries = record.length() / 16;
             int frameBytes = BinaryLogFile.RECORD_FIXED_BYTES + entries * 16;
-            byte[] frame = scratch.length >= frameBytes ? scratch : (scratch = new byte[frameBytes]);
+            // Geometric growth: a stream of slowly widening records reallocates O(log n) times, not once
+            // per new maximum.
+            byte[] frame = scratch.length >= frameBytes ? scratch
+                    : (scratch = new byte[Math.max(frameBytes, 2 * scratch.length)]);
             frame[0] = (byte) BinaryLogFile.FRAME_RECORD;
             int pos = putShort(frame, 1, entries);
             // TRANSLATED. eventTypeId is allocated by the record's own tableId(), so it is exactly as
