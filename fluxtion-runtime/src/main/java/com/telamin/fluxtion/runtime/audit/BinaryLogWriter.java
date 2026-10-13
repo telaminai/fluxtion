@@ -14,8 +14,17 @@ import java.io.UncheckedIOException;
  *
  * <p>Install it as the audit sink and the log becomes readable by {@link BinaryLogReader}:
  * <pre>
- *   eventLogManager.setLogSink(new BinaryLogWriter(Files.newOutputStream(path)));
+ *   eventLogManager.setLogSink(new BinaryLogWriter(
+ *           new BufferedOutputStream(Files.newOutputStream(path), 1 &lt;&lt; 16)));
  * </pre>
+ *
+ * <p><b>Buffer the stream.</b> The writer does not buffer: each record frame is encoded into a reused
+ * array and handed to the stream in ONE {@code write(byte[], int, int)}, so an unbuffered file stream
+ * costs one system call per record. What the writer guarantees is the other half: in the steady state
+ * - the same record instance, no new dictionary names - it allocates nothing and makes one bulk write
+ * per record. A record that introduces names also writes their {@code DICT} frames, and may allocate.
+ * The array is reused for the next record, so a stream must not keep a reference to it past the call -
+ * none of the JDK's do.
  *
  * <p>The record is reused and cleared after publish, so everything needed is taken during the callback
  * — a sink that keeps a reference and reads it later sees an empty record.
@@ -35,7 +44,11 @@ import java.io.UncheckedIOException;
 public final class BinaryLogWriter implements LogRecordListener, Closeable {
 
     private final OutputStream out;
-    private final byte[] scratch = new byte[BinaryLogFile.RECORD_FIXED_BYTES];
+    /**
+     * One record frame is encoded here and written with one bulk write. Grown only when a record has
+     * more entries than any before it, so the steady state allocates nothing.
+     */
+    private byte[] scratch = new byte[BinaryLogFile.RECORD_FIXED_BYTES + 16 * 64];
     private int dictionaryWritten;
     private long recordsWritten;
 
@@ -68,9 +81,11 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
         this.timeUnit = timeUnit;
         this.out = out;
         try {
-            out.write(BinaryLogFile.MAGIC);
-            writeShort(BinaryLogFile.FORMAT_VERSION);
-            writeShort(timeUnit);   // was the reserved u16, always 0; 0 still means "unspecified"
+            byte[] header = scratch;
+            System.arraycopy(BinaryLogFile.MAGIC, 0, header, 0, BinaryLogFile.MAGIC.length);
+            int pos = putShort(header, BinaryLogFile.MAGIC.length, BinaryLogFile.FORMAT_VERSION);
+            pos = putShort(header, pos, timeUnit);  // was the reserved u16, always 0; 0 still means "unspecified"
+            out.write(header, 0, pos);
         } catch (IOException e) {
             throw new UncheckedIOException("cannot write audit log header", e);
         }
@@ -83,7 +98,7 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
 
     /** Cache so the common case - one record instance, reused - does no per-record work. */
     private BinaryLogRecord lastRecord;
-    private int lastDictionaryLength = -1;
+    private int lastDictionarySize = -1;
     private int[] translation = new int[0];
 
 
@@ -117,26 +132,32 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
         try {
             int[] translate = translationFor(record);
             int entries = record.length() / 16;
-            out.write(BinaryLogFile.FRAME_RECORD);
-            writeShort(entries);
+            int frameBytes = BinaryLogFile.RECORD_FIXED_BYTES + entries * 16;
+            byte[] frame = scratch.length >= frameBytes ? scratch : (scratch = new byte[frameBytes]);
+            frame[0] = (byte) BinaryLogFile.FRAME_RECORD;
+            int pos = putShort(frame, 1, entries);
             // TRANSLATED. eventTypeId is allocated by the record's own tableId(), so it is exactly as
             // record-scoped as the node, key and value ids below - and it was the one id left out. A
             // replacement record allocated B into the id A held in the first record, and the file went
             // on calling that id A: a B event silently recorded as A, integrity counter clean. The
             // highest-risk polarity an audit system has.
-            writeShort((int) mapped(record.eventTypeId(), translate));
-            writeLong(record.eventTime());
-            writeLong(record.logTime());
-            writeLong(record.endTime());
+            pos = putShort(frame, pos, (int) mapped(record.eventTypeId(), translate));
+            pos = putLong(frame, pos, record.eventTime());
+            pos = putLong(frame, pos, record.logTime());
+            pos = putLong(frame, pos, record.endTime());
             long[] slots = record.slots();
             for (int i = 0; i < entries * 2; i += 2) {
-                writeLong(translateEntry(slots[i], translate));
+                pos = putLong(frame, pos, translateEntry(slots[i], translate));
                 // A CharSequence/Object VALUE is a dictionary id too, so it needs the same mapping.
                 long tag = slots[i] & 0xFFL;
-                writeLong(tag == TAG_CHARSEQ || tag == TAG_OBJECT
+                pos = putLong(frame, pos, tag == TAG_CHARSEQ || tag == TAG_OBJECT
                         ? mapped(slots[i + 1], translate)
                         : slots[i + 1]);
             }
+            // ONE write per record. The frame used to be written a byte at a time - 93 single-byte
+            // writes for a four-entry record - which on an unbuffered file stream is a system call per
+            // byte, and through a BufferedOutputStream still a synchronized call per byte.
+            out.write(frame, 0, pos);
             recordsWritten++;
         } catch (IOException e) {
             throw new UncheckedIOException("cannot write audit record", e);
@@ -159,13 +180,21 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
      * rejected a published contract. Translating honours it: names are the identity, ids are an
      * encoding detail of whoever allocated them.
      *
-     * <p>The common case costs nothing — same record instance, unchanged dictionary, cached map.
+     * <p>The common case costs nothing — same record instance, unchanged dictionary, cached map. The
+     * test is {@link BinaryLogRecord#dictionarySize()}, read BEFORE {@code dictionary()}: a record's
+     * dictionary only grows (ids are never removed or reassigned), so an unchanged size on the same
+     * instance is an unchanged dictionary. This comment used to make the same claim while the method
+     * called {@code dictionary()} first, which builds a new array and walks the id map on every record —
+     * an allocation that grows with the dictionary (48 to 152 B/record measured), enough to exhaust a
+     * 64 MB Epsilon heap. Pinned by
+     * {@code BinaryLogWriterSteadyStateTest}.
      */
     private int[] translationFor(BinaryLogRecord record) throws IOException {
-        String[] dictionary = record.dictionary();
-        if (record == lastRecord && dictionary.length == lastDictionaryLength) {
+        int dictionarySize = record.dictionarySize();
+        if (record == lastRecord && dictionarySize == lastDictionarySize) {
             return translation;
         }
+        String[] dictionary = record.dictionary();
         // PREFLIGHT, then emit. A review found the oversize-name refusal firing AFTER earlier names
         // of the same record had been written as DICT frames: the stream was well-formed but not
         // unchanged, and the writer's id table had advanced for a record that was never written. So
@@ -205,7 +234,7 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
             map[id] = fileId;
         }
         lastRecord = record;
-        lastDictionaryLength = dictionary.length;
+        lastDictionarySize = dictionarySize;
         translation = map;
         return map;
     }
@@ -247,9 +276,11 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
 
     private void emitDictionaryEntry(int id, String name) throws IOException {
         byte[] utf8 = name.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        out.write(BinaryLogFile.FRAME_DICT);
-        writeShort(id);
-        writeShort(utf8.length);
+        byte[] head = scratch;      // at least RECORD_FIXED_BYTES long; a DICT head is 5
+        head[0] = (byte) BinaryLogFile.FRAME_DICT;
+        int pos = putShort(head, 1, id);
+        pos = putShort(head, pos, utf8.length);
+        out.write(head, 0, pos);
         out.write(utf8);
         fileIdByName.put(name, id);
     }
@@ -258,15 +289,19 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
         return recordsWritten;
     }
 
-    private void writeShort(int v) throws IOException {
-        out.write((v >>> 8) & 0xFF);
-        out.write(v & 0xFF);
+    /** Big-endian u16 at {@code pos}; returns the next position. */
+    private static int putShort(byte[] b, int pos, int v) {
+        b[pos] = (byte) (v >>> 8);
+        b[pos + 1] = (byte) v;
+        return pos + 2;
     }
 
-    private void writeLong(long v) throws IOException {
+    /** Big-endian i64 at {@code pos}; returns the next position. */
+    private static int putLong(byte[] b, int pos, long v) {
         for (int shift = 56; shift >= 0; shift -= 8) {
-            out.write((int) (v >>> shift) & 0xFF);
+            b[pos++] = (byte) (v >>> shift);
         }
+        return pos;
     }
 
     @Override

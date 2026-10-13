@@ -63,13 +63,20 @@ config.performanceProfile(EventProcessorConfig.PerformanceProfile.LOWEST_LATENCY
 | Which clock STRATEGY that read uses | ✋ | ✋ | ✋ | — |
 | **Node registration** — supplies each node its `EventLogger` | ✅ | ✅ | ✅ | ❌ |
 | Runtime node-name map (`getNodeById`) | ✅ | ✅ | ✅ | ❌ |
-| **Dirty filtering** — conditional propagation | ✅ | ✅ | ❌ | ❌ |
+| **Dirty filtering** — conditional propagation | ✅ | ✅ | ◐ | ◐ |
 | Buffer-and-trigger | ✅ | ✅ | ❌ | ❌ |
 | Subscriptions | ✅ | ✅ | ❌ | ❌ |
 | **Re-entrancy** | ✅ | ✅ | ✋ | ✋ |
 | Void triggers | ✋ | ✋ | ✋ | ✋ |
 
-✅ on · ❌ off · ✋ your call, never the profile's · — not applicable
+✅ on · ❌ off · ◐ partly — see below · ✋ your call, never the profile's · — not applicable
+
+**Dirty filtering is ◐ in both low-latency profiles, and it is the same ◐.** Both call
+`setSupportDirtyFiltering(false)`, which drops only the flags that decide nothing: a `void` `@OnTrigger`
+always propagates, so its guard is pure overhead and goes. A `boolean` `@OnTrigger` return is the node's
+own propagation decision — every DSL node has one — and its guard is **kept**: the generated source still
+contains `guardCheck_…` for it. So neither profile changes what a graph computes; what they change is
+whether a `void` trigger runs when no parent is dirty. See [§5](#5-dirty-filtering-and-re-entrancy-carry-semantic-consequences).
 
 !!! danger "No profile turns the audit log on for you — including `DEFAULT` and `AUDITED`"
     The audit row is ✋, not ✅, and the distinction is easy to get wrong. A profile decides whether
@@ -270,10 +277,15 @@ setter: its `recordEndTime` is fixed at generation from the captured field, and 
 
 ### 5 · Dirty filtering and re-entrancy carry semantic consequences
 
-`LOW_LATENCY_AUDIT` deliberately **keeps** both, because an audit profile must not change what the graph
-computes. `LOWEST_LATENCY` gives up dirty filtering: an `@OnTrigger` method then runs whenever the wave
-reaches it, not only when a parent is dirty. Invisible for pure recomputation; **not** invisible for a
-node that accumulates or has side effects.
+An audit profile must not change what the graph computes, and neither low-latency profile does.
+`LOW_LATENCY_AUDIT` keeps re-entrancy. Both it and `LOWEST_LATENCY` call `setSupportDirtyFiltering(false)`,
+and the compiler reads that narrowly: it drops the guard of a `void` `@OnTrigger` method, which then runs
+whenever the wave reaches it, not only when a parent is dirty, and it **keeps** every guard that decides
+something — a `boolean` `@OnTrigger` return, and any parent whose child declares
+`failBuildOnUnguardedTrigger`. So a DSL graph (`map → filter → aggregate`, all boolean triggers) computes
+the same answer under either profile. The dropped guard is invisible for pure recomputation; **not**
+invisible for a `void` node that accumulates or has side effects — put guards back with
+`setSupportDirtyFiltering(true)` after the profile.
 
 `setSupportReentrancy(false)` is never set by a profile. It is the one setting that can turn a working
 graph into an `IllegalStateException` — re-entrant dispatch stops being queued and throws instead.
