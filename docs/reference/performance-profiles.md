@@ -63,13 +63,22 @@ config.performanceProfile(EventProcessorConfig.PerformanceProfile.LOWEST_LATENCY
 | Which clock STRATEGY that read uses | ✋ | ✋ | ✋ | — |
 | **Node registration** — supplies each node its `EventLogger` | ✅ | ✅ | ✅ | ❌ |
 | Runtime node-name map (`getNodeById`) | ✅ | ✅ | ✅ | ❌ |
-| **Dirty filtering** — conditional propagation | ✅ | ✅ | ❌ | ❌ |
+| **Dirty filtering** — conditional propagation | ✅ | ✅ | ◐ | ◐ |
 | Buffer-and-trigger | ✅ | ✅ | ❌ | ❌ |
 | Subscriptions | ✅ | ✅ | ❌ | ❌ |
 | **Re-entrancy** | ✅ | ✅ | ✋ | ✋ |
 | Void triggers | ✋ | ✋ | ✋ | ✋ |
 
-✅ on · ❌ off · ✋ your call, never the profile's · — not applicable
+✅ on · ❌ off · ◐ partly — see below · ✋ your call, never the profile's · — not applicable
+
+**Dirty filtering is ◐ in both low-latency profiles, and it is the same ◐.** Both call
+`setSupportDirtyFiltering(false)`. That drops the dirty flag **owned by** a node whose trigger always
+propagates — a `void` `@OnTrigger` — and that flag is what guards the node's **children**. Guards are not
+inherited through a parent that has no flag, so a child of a `void` node runs whenever the wave reaches it,
+even when the `void` node itself was skipped by a `boolean` guard upstream. Kept: every flag a `boolean`
+`@OnTrigger` return sets, and any flag a child's `failBuildOnUnguardedTrigger` requires. A pure-DSL graph
+(every trigger returns `boolean`) is unaffected; **a graph with a `void` node below a `boolean` gate can
+compute a different answer** under either profile. See [§5](#5-dirty-filtering-and-re-entrancy-carry-semantic-consequences).
 
 !!! danger "No profile turns the audit log on for you — including `DEFAULT` and `AUDITED`"
     The audit row is ✋, not ✅, and the distinction is easy to get wrong. A profile decides whether
@@ -270,10 +279,33 @@ setter: its `recordEndTime` is fixed at generation from the captured field, and 
 
 ### 5 · Dirty filtering and re-entrancy carry semantic consequences
 
-`LOW_LATENCY_AUDIT` deliberately **keeps** both, because an audit profile must not change what the graph
-computes. `LOWEST_LATENCY` gives up dirty filtering: an `@OnTrigger` method then runs whenever the wave
-reaches it, not only when a parent is dirty. Invisible for pure recomputation; **not** invisible for a
-node that accumulates or has side effects.
+`LOW_LATENCY_AUDIT` keeps re-entrancy. Both it and `LOWEST_LATENCY` call `setSupportDirtyFiltering(false)`,
+and that **can change what a graph computes**. With dirty filtering off, a `void` `@OnTrigger` node's own
+dirty flag is dropped, because a `void` trigger always propagates. But that flag is what guards the node's
+children, and a child does not inherit the guards above a parent that has no flag. So in a compiled processor the children of a
+`void` node can run whenever the wave reaches them, even when the `void` node itself was skipped by an
+upstream `boolean` guard (a child with another, guarded parent may still be held back):
+
+```
+Handler → Gate (boolean @OnTrigger, returns false) → Relay (void) → Counter (void)
+(void triggers declared with @OnTrigger(failBuildIfMissingBooleanReturn = false); compiled dispatch strategies)
+two events:   DEFAULT            relay = 0, counter = 0
+              LOW_LATENCY_AUDIT  relay = 0, counter = 2
+              LOWEST_LATENCY     relay = 0, counter = 2
+```
+
+The interpreted processor is not affected by this example (counter = 0 under every profile).
+
+What is kept: a `boolean` `@OnTrigger` return's guard on its immediate child, and any guard a child's
+`failBuildOnUnguardedTrigger` requires. A pure-DSL graph (`map → filter → aggregate`, every trigger
+`boolean`) is unaffected. A graph with a `void` node below a `boolean` gate can compute differently; for
+such a graph, put the guards back with `setSupportDirtyFiltering(true)` after the profile.
+
+!!! warning "Known issue"
+    This is tracked as a compiler defect: a `void` node that sits below a `boolean` guard does decide
+    something — whether its children run — so with dirty filtering off its flag should survive, or its
+    children should inherit the guard above it. Until a compiler release fixes it, treat the behaviour
+    above as current, and keep `setSupportDirtyFiltering(true)` for a graph with that shape.
 
 `setSupportReentrancy(false)` is never set by a profile. It is the one setting that can turn a working
 graph into an `IllegalStateException` — re-entrant dispatch stops being queued and throws instead.

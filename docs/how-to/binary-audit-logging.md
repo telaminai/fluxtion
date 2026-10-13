@@ -48,9 +48,24 @@ sink cannot take it. The window is after construction and before the first event
 ```java
 DataFlow processor = Fluxtion.compileAot(cfg -> { /* as above */ });
 EventLogManager audit = processor.getAuditorById(EventLogManager.NODE_NAME);
-audit.setLogSink(new BinaryLogWriter(Files.newOutputStream(Path.of("audit.flxa"))));
+audit.setLogSink(new BinaryLogWriter(new BufferedOutputStream(
+        Files.newOutputStream(Path.of("audit.flxa")), 1 << 16)));
 processor.init();                                   // now events can flow
 ```
+
+**Buffer the stream; the writer does not.** `BinaryLogWriter` encodes each record into a reused array
+and hands it to the stream in **one** `write(byte[], int, int)` call, and in the steady state — the same
+record instance, no new names — it allocates nothing. What happens to that call is the stream's
+business: a bare `Files.newOutputStream` turns every record into a system call, so wrap it in a
+`BufferedOutputStream` as above (or any stream that batches writes), and close the writer at shutdown so
+the buffer's tail reaches the file. The writer leaves buffering to you because when bytes reach the disk
+is your durability decision, not the audit log's.
+
+Measured on an Apple M4, JDK 21, four entries per record, median of 15 runs (3 JVMs × 5): through a
+64 KB `BufferedOutputStream` to a file **88 ns/record**; unbuffered, **1.8 µs/record**. Runtime 1.1.1 and
+earlier wrote each record a byte at a time — 93 `write(int)` calls for four entries — and re-read the
+record's dictionary on every record: 490 ns/record buffered, 144 µs unbuffered, and 48 B allocated per
+record on this graph (more on a larger dictionary). Numbers are machine-specific; the ratios are the point.
 
 `EventLogManager` builds the chosen record at `init()`. Swapping the record on a *running* processor
 through `EventLogControlEvent` still works and is still how you change format at runtime; this is how
