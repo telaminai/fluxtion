@@ -1,0 +1,80 @@
+name: Retry Repsy deploy of a release tag
+
+# Use when "Release to Repsy" got through release:prepare (tag and next-iteration commit pushed to
+# release-repsy) but release:perform's deploy failed - a Repsy 5xx, credentials, a network flake. Re-running that
+# workflow cannot recover: the tag already exists, and a fresh push to release-repsy would cut the NEXT version.
+# This checks out the existing tag and runs the deploy release:perform runs (the repsy-release profile, tests
+# skipped, the same JDK 8 + 21 setup), then makes the merges the failed run skipped. First needed for v1.1.1
+# (2026-10-13: Repsy answered 502 to the first upload).
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to deploy (e.g. v1.1.1)'
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Refuse anything but an existing release tag on release-repsy that is not yet on Repsy
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::'$TAG' is not a vX.Y.Z tag"; exit 1; }
+          git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || { echo "::error::tag $TAG does not exist"; exit 1; }
+          git merge-base --is-ancestor "$TAG" origin/release-repsy \
+            || { echo "::error::$TAG is not on release-repsy"; exit 1; }
+          VERSION=${TAG#v}
+          URL="https://repo.repsy.io/mvn/fluxtion/fluxtion-public/com/telamin/fluxtion/fluxtion-parent/$VERSION/fluxtion-parent-$VERSION.pom"
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' "$URL")
+          [ "$CODE" = "404" ] || { echo "::error::Repsy answered $CODE for $URL - already deployed, or Repsy is not healthy yet"; exit 1; }
+
+      - name: Check out the tag
+        run: git checkout --detach "${{ inputs.tag }}"
+
+      - name: Setup JDK 8 (for Retrolambda in fluxtion-builder-all-java8)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 8
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'adopt'
+
+      - name: Set up Repsy repository
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'adopt'
+
+      - name: Deploy the tag to Repsy
+        run: ./mvnw -P repsy-release -B -s .github/settings.xml -DskipTests -Djdk8.home=$JAVA_HOME_8_X64 deploy
+        env:
+          DEPLOYMENT_USERNAME: ${{ secrets.REPSY_USER }}
+          DEPLOYMENT_PASSWORD: ${{ secrets.REPSY_PASSWORD }}
+
+      - uses: actions/checkout@master
+      - name: Merge release-repsy -> main
+        uses: devmasx/merge-branch@master
+        with:
+          type: now
+          from_branch: release-repsy
+          target_branch: main
+          github_token: ${{ github.token }}
+
+      - name: Merge main -> develop
+        uses: devmasx/merge-branch@master
+        with:
+          type: now
+          from_branch: main
+          target_branch: develop
+          github_token: ${{ github.token }}
