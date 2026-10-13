@@ -114,12 +114,15 @@ public interface Auditor extends Lifecycle {
      * <p>The generator supplies {@code annotation} as a string constant at each call site, so nothing is
      * looked up or cached at runtime. The default forwards to the four-argument form, so an auditor
      * written before this method existed sees every invocation exactly as before. Processors generated
-     * before it existed call the four-argument form directly.
+     * before it existed call the four-argument form directly, so an auditor that wants the annotation
+     * overrides BOTH forms, the four-argument one forwarding here with a {@code null} annotation, as
+     * {@link EventLogManager} does; overriding only this form receives nothing from such a processor.
      *
      * @param node       The next node to process in the execution path
      * @param nodeName   The name of the node in the processor
      * @param methodName The method of the node that is next to be invoked
-     * @param annotation The simple name of the dispatching annotation, never null
+     * @param annotation The simple name of the dispatching annotation; {@code null} when the call arrived
+     *                   through the four-argument form
      * @param event      The event that is the root of this execution path
      */
     default void nodeInvoked(Object node, String nodeName, String methodName, String annotation, Object event) {

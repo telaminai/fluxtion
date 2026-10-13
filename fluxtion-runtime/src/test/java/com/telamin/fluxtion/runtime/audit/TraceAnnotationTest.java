@@ -26,11 +26,15 @@ public class TraceAnnotationTest {
     }
 
     private static String trace(LogLevel level, Invocation invocation) {
+        return trace(new EventLogManager(), level, new TestAuditSource(), invocation);
+    }
+
+    private static String trace(EventLogManager manager, LogLevel level, Object source, Invocation invocation) {
         List<String> records = new ArrayList<>();
-        EventLogManager manager = new EventLogManager(record -> records.add(record.toString())).tracingOn(level);
+        manager.calculationLogConfig(new EventLogControlEvent(record -> records.add(record.toString())));
+        manager.tracingOn(level);
         manager.clock = new Clock();
         manager.clock.init();
-        TestAuditSource source = new TestAuditSource();
         manager.init();
         manager.nodeRegistered(source, "source");
         manager.eventReceived("event");
@@ -66,11 +70,54 @@ public class TraceAnnotationTest {
     }
 
     @Test
-    public void tracingOffMeansTheProcessorIsNotAskedToTrace() {
-        // A generated processor calls nodeInvoked only when auditInvocations() is true; the attribute adds
-        // nothing to a processor that does not trace.
-        assertFalse(new EventLogManager().tracingOff().auditInvocations());
-        assertFalse(new EventLogManager().tracingOn(LogLevel.NONE).auditInvocations());
+    public void withoutAnAnnotationTheTraceIsByteIdenticalToTheFourArgumentForm() {
+        for (boolean thread : new boolean[]{true, false}) {
+            String four = trace(new EventLogManager().printThreadName(thread), LogLevel.INFO, new TestAuditSource(),
+                    (m, node) -> m.nodeInvoked(node, "source", "onTrigger", "event"));
+            String fiveNull = trace(new EventLogManager().printThreadName(thread), LogLevel.INFO, new TestAuditSource(),
+                    (m, node) -> m.nodeInvoked(node, "source", "onTrigger", null, "event"));
+            assertEquals(stripTimes(four), stripTimes(fiveNull));
+        }
+    }
+
+    @Test
+    public void withoutTheThreadNameTheAnnotationStillFollowsTheMethod() {
+        String record = trace(new EventLogManager().printThreadName(false), LogLevel.INFO, new TestAuditSource(),
+                (m, node) -> m.nodeInvoked(node, "source", "onTrigger", "OnTrigger", "event"));
+        assertFalse(record, record.contains("thread:"));
+        assertTrue(record, record.contains("method: onTrigger, annotation: OnTrigger"));
+    }
+
+    @Test
+    public void aForkedNodeWritesTheAnnotationAfterItsAsyncMethod() {
+        String record = trace(new EventLogManager(), LogLevel.INFO, new TestForkedSource(),
+                (m, node) -> m.nodeInvoked(node, "source", "onTrigger", "OnTrigger", "event"));
+        assertTrue(record, record.contains("forkedExecution: true, asyncMethod: onTrigger, annotation: OnTrigger"));
+        assertFalse(record, record.contains("method: onTrigger,") && !record.contains("asyncMethod: onTrigger,"));
+    }
+
+    @Test
+    public void aSubclassWrittenForTheFourArgumentFormSeesEveryInvocationAndTheAnnotationIsStillWritten() {
+        List<String> seen = new ArrayList<>();
+        EventLogManager counting = new EventLogManager() {
+            @Override
+            public void nodeInvoked(Object node, String nodeName, String methodName, Object event) {
+                seen.add(nodeName + "." + methodName);
+                super.nodeInvoked(node, nodeName, methodName, event);
+            }
+        };
+        String record = trace(counting, LogLevel.INFO, new TestAuditSource(), (m, node) -> {
+            m.nodeInvoked(node, "source", "onTrigger", "OnTrigger", "event");
+            m.nodeInvoked(node, "source", "onEvent", "event");
+        });
+        assertEquals(List.of("source.onTrigger", "source.onEvent"), seen);
+        assertTrue(record, record.contains("method: onTrigger, annotation: OnTrigger"));
+        assertFalse("the annotation does not leak into the next, four-argument call: " + record,
+                record.contains("method: onEvent, annotation"));
+    }
+
+    private static String stripTimes(String record) {
+        return record.replaceAll("(eventTime|logTime|groupingId): [^\\n]*", "$1: _");
     }
 
     @Test
@@ -90,9 +137,12 @@ public class TraceAnnotationTest {
         assertEquals(List.of("source.onTrigger/event"), seen);
     }
 
-    private static final class TestAuditSource implements EventLogSource {
+    private static class TestAuditSource implements EventLogSource {
         @Override
         public void setLogger(EventLogger log) {
         }
+    }
+
+    private static final class TestForkedSource extends TestAuditSource implements com.telamin.fluxtion.runtime.node.ForkedTrigger {
     }
 }

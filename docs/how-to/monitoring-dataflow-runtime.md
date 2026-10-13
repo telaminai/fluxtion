@@ -68,10 +68,15 @@ metrics/tracing. If false, you still receive the other lifecycle callbacks.
 - Seamless integration: forward telemetry to your global monitoring pipeline
 - Deep visibility: with auditInvocations=true, trace the exact execution path of each event
   - A processor generated to supply it also names the annotation that dispatched each callback. The
-    built-in `EventLogManager` writes it as `annotation`, after `method`:
-    `- quoteHandler: { method: onQuote, annotation: OnEventHandler}`. The generator passes it as a string
-    constant, so nothing is looked up at runtime. An auditor that overrides only the four-argument form still
-    receives every call.
+    built-in `EventLogManager` writes it as `annotation`, after `method` (after `asyncMethod` for a forked
+    node): `- quoteHandler: { thread: main, method: onQuote, annotation: OnEventHandler}` (`thread` is
+    omitted with `printThreadName(false)`). The generator passes it as a string constant, so nothing is
+    looked up at runtime.
+  - An auditor that overrides only the four-argument form still receives every call, without the
+    annotation. An auditor that wants the annotation overrides both forms, the four-argument one forwarding
+    with a `null` annotation: a processor generated before the annotation existed calls only the
+    four-argument form. A subclass of `EventLogManager` that overrides the four-argument form and calls
+    `super` sees every call, and the annotation is still written.
 - Alerting and SLOs: export latency histograms and error counters for alerting
 - Persistence and replay: implement auditors that write reproducible traces
 - Profiling and diagnostics: measure hotspots and call sequences without changing business code
