@@ -282,16 +282,19 @@ setter: its `recordEndTime` is fixed at generation from the captured field, and 
 `LOW_LATENCY_AUDIT` keeps re-entrancy. Both it and `LOWEST_LATENCY` call `setSupportDirtyFiltering(false)`,
 and that **can change what a graph computes**. With dirty filtering off, a `void` `@OnTrigger` node's own
 dirty flag is dropped, because a `void` trigger always propagates. But that flag is what guards the node's
-children, and a child does not inherit the guards above a parent that has no flag. So the children of a
-`void` node run whenever the wave reaches them, even when the `void` node itself was skipped by an upstream
-`boolean` guard:
+children, and a child does not inherit the guards above a parent that has no flag. So in a compiled processor the children of a
+`void` node can run whenever the wave reaches them, even when the `void` node itself was skipped by an
+upstream `boolean` guard (a child with another, guarded parent may still be held back):
 
 ```
 Handler → Gate (boolean @OnTrigger, returns false) → Relay (void) → Counter (void)
+(void triggers declared with @OnTrigger(failBuildIfMissingBooleanReturn = false); compiled dispatch strategies)
 two events:   DEFAULT            relay = 0, counter = 0
               LOW_LATENCY_AUDIT  relay = 0, counter = 2
               LOWEST_LATENCY     relay = 0, counter = 2
 ```
+
+The interpreted processor is not affected by this example (counter = 0 under every profile).
 
 What is kept: a `boolean` `@OnTrigger` return's guard on its immediate child, and any guard a child's
 `failBuildOnUnguardedTrigger` requires. A pure-DSL graph (`map → filter → aggregate`, every trigger
