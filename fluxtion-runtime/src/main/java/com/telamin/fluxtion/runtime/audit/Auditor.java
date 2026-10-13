@@ -107,6 +107,34 @@ public interface Auditor extends Lifecycle {
     }
 
     /**
+     * As {@link #nodeInvoked(Object, String, String, Object)}, also naming the annotation that made the
+     * generator dispatch this callback: its simple name, for example {@code "OnTrigger"},
+     * {@code "OnEventHandler"} or {@code "OnParentUpdate"}.
+     *
+     * <p>The generator supplies {@code annotation} as a string constant at each call site, so nothing is
+     * looked up or cached at runtime. The default forwards to the four-argument form, so an auditor
+     * written before this method existed sees every invocation exactly as before. Processors generated
+     * before it existed call the four-argument form directly, so an auditor implementing this interface that
+     * wants the annotation overrides BOTH forms, the four-argument one forwarding here with a {@code null}
+     * annotation; overriding only this form receives nothing from such a processor.
+     *
+     * <p>A subclass of {@link EventLogManager} is the exception: there the five-argument form forwards to the
+     * four-argument form, which writes the entry. Such a subclass overrides the five-argument form and calls
+     * {@code super} with the same form, and never forwards its four-argument override to the five-argument
+     * form: the two would call each other without end.
+     *
+     * @param node       The next node to process in the execution path
+     * @param nodeName   The name of the node in the processor
+     * @param methodName The method of the node that is next to be invoked
+     * @param annotation The simple name of the dispatching annotation; {@code null} when the call arrived
+     *                   through the four-argument form
+     * @param event      The event that is the root of this execution path
+     */
+    default void nodeInvoked(Object node, String nodeName, String methodName, String annotation, Object event) {
+        nodeInvoked(node, nodeName, methodName, event);
+    }
+
+    /**
      * Indicates whether an auditor is interested in receiving nodeInvoked event
      * callback. Some auditors are not interested in granular monitoring of the
      * execution path and can opt out of node invocation callbacks.
