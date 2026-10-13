@@ -24,9 +24,9 @@ import static org.junit.Assert.assertTrue;
  * move a byte of the file.
  *
  * <p>Two defects, measured on a released runtime. The writer called {@code BinaryLogRecord.dictionary()}
- * on every record - a new {@code String[]} and a walk of the id map, 152 B/record, enough to exhaust a
+ * on every record - a new {@code String[]} and a walk of the id map, 48-152 B/record by dictionary size, enough to exhaust a
  * 64 MB Epsilon heap - under a comment saying the common case cost nothing. And it wrote every long as
- * eight {@code write(int)} calls, about 109 per record, so an unbuffered file stream was a system call
+ * eight {@code write(int)} calls, 93 for a four-entry record, so an unbuffered file stream was a system call
  * per byte. The writer now checks the dictionary's size before reading it and encodes each record into
  * a reused array written with one call.
  *
@@ -112,7 +112,7 @@ public class BinaryLogWriterSteadyStateTest {
     /**
      * Bytes allocated per record over {@link #RECORDS} steady-state records. The measurement brackets
      * the loop, not each record, so the accounting call's own cost is spread over 20,000 records; the
-     * old writer measured 152 B/record here, three orders of magnitude above the bound.
+     * old writer measured 43-72 B/record here, well over an order of magnitude above the bound.
      */
     private static double bytesPerRecord(com.sun.management.ThreadMXBean bean, BinaryLogRecord rec,
                                          Object event, int node, int[] keys, LogRecordListener sink) {
