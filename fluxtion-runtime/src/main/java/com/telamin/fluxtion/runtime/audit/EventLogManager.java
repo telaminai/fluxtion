@@ -45,6 +45,8 @@ public class EventLogManager implements Auditor {
     public boolean trace = false;
     public boolean printEventToString = true;
     public boolean printThreadName = true;
+    /** The annotation of the invocation being written, handed from the five-argument form to the four. */
+    private transient String invocationAnnotation;
     public LogLevel traceLevel;
     @Inject
     public Clock clock;
@@ -195,8 +197,21 @@ public class EventLogManager implements Auditor {
         return trace;
     }
 
+    /**
+     * Writes the trace entry. This four-argument form is the one that writes, so a subclass written before the
+     * annotation existed, overriding it and calling {@code super}, still sees every invocation, including those
+     * from a processor that supplies an annotation. The annotation travels in {@link #invocationAnnotation}:
+     * one field store, no allocation. That is safe because the generated processor makes every audit call
+     * inline on the dispatching thread, and a forked task's {@code compute()} never calls {@code nodeInvoked};
+     * a change that audits from another thread must hand the annotation over another way.
+     *
+     * <p>A subclass that wants the annotation overrides the five-argument form and calls {@code super} with the
+     * same form. It must not forward an override of this form to the five-argument form: they would recurse.
+     */
     @Override
     public void nodeInvoked(Object node, String nodeName, String methodName, Object event) {
+        String annotation = invocationAnnotation;
+        invocationAnnotation = null;
         EventLogger logger = node2Logger.getOrDefault(nodeName, NullEventLogger.INSTANCE);
         logger.logNodeInvocation(traceLevel);
         if (printThreadName) {
@@ -207,6 +222,24 @@ public class EventLogManager implements Auditor {
             logger.log("asyncMethod", methodName, traceLevel);
         } else {
             logger.log("method", methodName, traceLevel);
+        }
+        if (annotation != null) {
+            logger.log("annotation", annotation, traceLevel);
+        }
+    }
+
+    /**
+     * Writes the trace entry with {@code annotation} as the {@code annotation} key, after the method (after
+     * {@code asyncMethod} for a forked node), by routing through the four-argument form. A processor generated
+     * before it could supply one calls the four-argument form, and its trace entries are unchanged.
+     */
+    @Override
+    public void nodeInvoked(Object node, String nodeName, String methodName, String annotation, Object event) {
+        invocationAnnotation = annotation;
+        try {
+            nodeInvoked(node, nodeName, methodName, event);
+        } finally {
+            invocationAnnotation = null;
         }
     }
 

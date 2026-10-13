@@ -45,6 +45,11 @@ public interface Auditor extends Lifecycle {
     default void nodeInvoked(Object node, String nodeName, String methodName, Object event) {
     }
 
+    // since 1.1.1: also names the dispatching annotation, e.g. "OnTrigger"; defaults to the form above
+    default void nodeInvoked(Object node, String nodeName, String methodName, String annotation, Object event) {
+        nodeInvoked(node, nodeName, methodName, event);
+    }
+
     default void processingComplete() {
     }
 
@@ -62,6 +67,19 @@ metrics/tracing. If false, you still receive the other lifecycle callbacks.
 - General-purpose monitoring: counters, timers, gauges per node or per event
 - Seamless integration: forward telemetry to your global monitoring pipeline
 - Deep visibility: with auditInvocations=true, trace the exact execution path of each event
+  - A processor generated to supply it also names the annotation that dispatched each callback. The
+    built-in `EventLogManager` writes it as `annotation`, after `method` (after `asyncMethod` for a forked
+    node): `- quoteHandler: { thread: main, method: onQuote, annotation: OnEventHandler}` (`thread` is
+    omitted with `printThreadName(false)`). The generator passes it as a string constant, so nothing is
+    looked up at runtime.
+  - An auditor that overrides only the four-argument form still receives every call, without the
+    annotation. An auditor that wants the annotation overrides both forms, the four-argument one forwarding
+    with a `null` annotation: a processor generated before the annotation existed calls only the
+    four-argument form. A subclass of `EventLogManager` is different: its five-argument form forwards to
+    the four-argument form, which writes the entry. A subclass that overrides the four-argument form and
+    calls `super` sees every call, and the annotation is still written; one that wants the annotation
+    overrides the five-argument form and calls `super` with the same form. It never forwards its
+    four-argument override to the five-argument form, because the two would recurse.
 - Alerting and SLOs: export latency histograms and error counters for alerting
 - Persistence and replay: implement auditors that write reproducible traces
 - Profiling and diagnostics: measure hotspots and call sequences without changing business code
