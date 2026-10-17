@@ -43,6 +43,28 @@ The output file is named after the class with a **`.java` extension**, but it co
 to `.h` or `.hpp` when you build. The Fluxtion Maven plugin has no setting for the target, so select
 it in code as shown above.
 
+### With the Maven plugin
+
+The plugin's `scan` goal runs each `FluxtionGraphBuilder` it finds. Its `configureGeneration` receives the
+`FluxtionCompilerConfig`, so the target is set there:
+
+```java
+@Override
+public void configureGeneration(FluxtionCompilerConfig cfg) {
+    cfg.setPackageName("com.example.pricing");
+    cfg.setClassName("PricingProcessor");
+    cfg.setTargetId("cpp");
+    cfg.setWriteSourceToFile(true);
+    cfg.setCompileSource(false);
+    cfg.setFormatSource(false);
+}
+```
+
+The plugin replaces the output directory with `src/main/java`, and it also writes a copy under
+`src/main/resources`. So the C++ file lands in your Java source tree with a `.java` name, and the **next**
+`mvn compile` fails when `javac` tries to compile it. Move both copies out of the source tree, under their
+`.h` name, before you build again.
+
 ## How you obtain C++ output today
 
 Read this section before you plan around the C++ target. Not every part of the C++ toolchain is
@@ -72,10 +94,19 @@ So, today:
   packaged inside `fluxtion-generator-cpp`, which you write out with
   `CppSourceGenerator.writeRuntimeHeaders(dir)`. The server does not send it.
 
-!!! note "To be confirmed"
-    This page does not yet say whether the public hosted service answers `targetId` `"cpp"`, or how a
-    user without access to `fluxtion-generator-cpp` gets the runtime headers. Until it does, treat C++
-    output as available only where both the generator and the runtime are available to you.
+!!! note "Checked on 2026-10-17: the hosted service answers, but you cannot compile the result yet"
+    A Maven build that used only public artefacts (`fluxtion-builder` 1.0.79 from the public Repsy
+    repository, runtime 1.1.2 and the Fluxtion Maven plugin) sent a graph with `targetId` `"cpp"` to the
+    hosted service with an API key. **The service returned C++.** It is running 1.0.79.
+
+    The runtime headers that the C++ includes are still available only inside `fluxtion-generator-cpp`,
+    which is not public. **A public user can obtain generated C++ but cannot yet compile it.** Until the
+    headers are published, treat C++ output as usable only where the runtime headers are available to
+    you.
+
+    On the hosted route at 1.0.79, the C++ output has **no audit**, even when the graph configures event
+    audit. There is no `setLogSink` and no audit record. A locally generated build of the same graph has
+    both. See [Known limits](#known-limits).
 
 ## What you write, and what is generated
 
@@ -90,7 +121,8 @@ So, today:
       thread.
     - **Your event types**, in a `<YourProcessor>.types.h` header that the generated file names and
       includes. The generator knows your event types by name, not by layout. It checks each numeric
-      field's width with a `static_assert`. It does not check booleans, strings or enums, or field order,
+      field's width with a `static_assert`. At 1.0.79 these checks are emitted on the hosted route but
+      not by local generation. It does not check booleans, strings or enums, or field order,
       meaning and units. The dispatch key is the fully qualified **Java** class name, so if you rename the
       Java class, the C++ struct still compiles but the processor stops recognising the event.
 
@@ -141,8 +173,10 @@ the graph before emission, so they need nothing from the target.
       that injected it gets no reference to it. Its C++ stub has no member for the field.
     - **An injected framework service**, such as `NodeNameLookup`, `DirtyStateMonitor` or `Clock`, does not
       appear on the stub either.
+    - **A parent set through a field** (`node.parent = a` in the builder) is dispatched and guarded
+      correctly, but the stub has no member for it either. This happens with or without `@Inject`.
 
-    Pass parents as ordinary constructor or field references instead. Those are carried, as typed
+    Pass parents as **constructor arguments** instead. Only constructor arguments are carried, as typed
     `p0`, `p1`, … members.
 
 ### DSL
@@ -222,7 +256,14 @@ Generated in **both Java and C++**:
   [conformance corpus](flxa-format.md). Unit-code validation, the id-exhaustion and oversize-name
   execution tests, and by-name id translation are still open.
 - **Your event-type header is not verified** beyond the width checks.
-- **`@Inject` is not refused.** See [Annotations](#annotations-event-time-behaviour).
+- **`@Inject` is not refused**, and a parent set through a field is not carried. See
+  [Annotations](#annotations-event-time-behaviour).
+- **The hosted route and local generation do not emit the same C++** at 1.0.79. Hosted output has no
+  audit, even when the graph configures event audit. Locally generated output has no event-type width
+  checks. If you depend on the audit-log comparison, check that your generated header declares
+  `setLogSink`.
+- **The runtime headers are not public**, so C++ from the hosted service cannot yet be compiled by a
+  user who has only public artefacts.
 - **Unsupported node state is refused, not dropped**, as listed under
   [captured node state](#captured-node-state).
 - **The latency kit's C++ arms predate array-state setters**, so a fixture that holds array state needs
