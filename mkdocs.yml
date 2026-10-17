@@ -134,6 +134,7 @@ nav:
           - Imperative lifecycle callbacks: reference/imperative/lifecycle-callbacks.md
       - Combine DSL and imperative: reference/connecting-dsl-imperative.md
       - SEP lifecycle: reference/sep-lifecycle.md
+      - "C++ target (preview): what works today": reference/cpp-target.md
       - Services:
           - Service introduction: reference/service/introduction.md
           - Service import: reference/service/service-registered.md
