@@ -5,7 +5,7 @@ Quickstart tutorial to get developers up and running in 1 minute leveraging jban
 of s stream of cars grouped by manufacturer in a sliding window of 2 seconds with a 500 millisecond bucket size.
 
 !!! note "Generation is remote and needs an API key"
-    {{fluxtion_remote_build_note}}
+    {{fluxtion_remote_build_note}} {{fluxtion_api_key_line}}
 
 ### 1. Install jbang
 

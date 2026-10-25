@@ -49,7 +49,7 @@ graph TD
 ---
 
 !!! note "Generation is remote and needs an API key"
-    {{fluxtion_remote_build_note}}
+    {{fluxtion_remote_build_note}} {{fluxtion_api_key_line}}
 
 ### 1. Plugin Configuration
 
@@ -157,10 +157,11 @@ processor.newPriceLadder(myPriceLadder);
 
 ### 5. Full Example Code
 
-The complete source for this quickstart can be found in the [Fluxtion Examples repository](https://github.com/telaminai/fluxtion-examples/blob/main/compiler/aot-compiler).
+The snippets above are complete for the current release. The aot-compiler project in the
+[Fluxtion Examples repository](https://github.com/telaminai/fluxtion-examples) has not been migrated yet:
+it still uses the legacy pre-`com.telamin` Maven plugin and an older Fluxtion version, so copy the coordinates
+from this page rather than from its `pom.xml`. Its graph definition and generated processor are still
+useful as reading:
 
-Key files:
-
-*   [pom.xml](https://github.com/telaminai/fluxtion-examples/blob/main/compiler/aot-compiler/pom.xml) - Plugin and dependency configuration.
 *   [FluxtionBuilder.java](https://github.com/telaminai/fluxtion-examples/blob/main/compiler/aot-compiler/src/main/java/com/telamin/fluxtion/example/compile/maven/FluxtionBuilder.java) - Graph definition and generation config.
 *   [PriceLadderProcessorAot.java](https://github.com/telaminai/fluxtion-examples/blob/main/compiler/aot-compiler/src/main/java/com/telamin/fluxtion/example/compile/maven/generated/PriceLadderProcessorAot.java) - Example of the generated AOT source.

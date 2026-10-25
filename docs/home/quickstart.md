@@ -27,7 +27,7 @@ More details: [https://www.jbang.dev](https://www.jbang.dev)
 ---
 
 !!! note "Generation is remote and needs an API key"
-    {{fluxtion_remote_build_note}}
+    {{fluxtion_remote_build_note}} {{fluxtion_api_key_line}}
 
 ## 1. Hello world
 

@@ -27,7 +27,7 @@ More details: [https://www.jbang.dev](https://www.jbang.dev)
 ## 1. Getting an API Key
 
 !!! note "Generation is remote and needs an API key"
-    {{fluxtion_remote_build_note}}
+    {{fluxtion_remote_build_note}} {{fluxtion_api_key_line}}
 
 To use the Fluxtion cloud-hosted AOT compiler, you need a RapidAPI key.
 
@@ -56,6 +56,12 @@ apiKey=YOUR_RAPIDAPI_KEY_HERE
 ```
 
 Replace `YOUR_RAPIDAPI_KEY_HERE` with the actual key you obtained from RapidAPI.
+
+The first build creates this file for you with a placeholder (`apiKey=MISSING_KEY`); edit that line. You can
+also pass the key as `-Dfluxtion.apiKey=...`. Without a key the build stops before sending anything
+("Fluxtion API key is not configured"); a key the service rejects fails with HTTP 401/403. What a build sends
+is listed in the README section
+[Cloud generation and your API key](https://github.com/telaminai/fluxtion#cloud-generation-and-your-api-key).
 
 ---
 

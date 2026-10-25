@@ -22,3 +22,8 @@ jobs:
           python-version: '3.11'
       - name: Check Fluxtion versions in docs and READMEs
         run: python3 scripts/check-doc-versions.py
+      # Network: every pinned version must exist (Repsy for the runtime/builder line, Maven Central for
+      # the plugin) - a pin that does not resolve is the failure the 2026-10-25 stranger trial hit.
+      # Comparing with the deployed playground llms.txt only warns: the two sites deploy separately.
+      - name: Pinned versions are published; playground agrees
+        run: python3 scripts/check-doc-versions.py --online
