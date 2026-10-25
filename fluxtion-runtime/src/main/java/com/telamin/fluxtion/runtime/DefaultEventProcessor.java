@@ -395,6 +395,8 @@ public class DefaultEventProcessor
           }
           failedCycle(t);
         }
+        // a close can queue work too: discarded, never dispatched later
+        callbackDispatcher.discardQueuedCallbacks();
         throw t;
       }
       // #105/#36: closing the cycle and draining what the action queued are part of the cycle; a throw there fails it,
@@ -423,7 +425,6 @@ public class DefaultEventProcessor
    * its own. An auditor's throw is added to the cycle's exception as suppressed, never replaces it.
    */
   private void failedCycle(Throwable cause) {
-    callbackDispatcher.discardQueuedCallbacks();
     isDirty_clock = false;
     try {
       clock.processingComplete();
@@ -434,6 +435,8 @@ public class DefaultEventProcessor
         cause.addSuppressed(t);
       }
     }
+    // last, so nothing the close itself queued survives it
+    callbackDispatcher.discardQueuedCallbacks();
   }
 
   private void afterEvent() {

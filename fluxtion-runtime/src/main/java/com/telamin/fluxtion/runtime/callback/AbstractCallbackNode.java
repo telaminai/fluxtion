@@ -122,7 +122,7 @@ public abstract class AbstractCallbackNode<R> extends BaseNode implements Event,
     private void registerPayloadOwner() {
         Object current = getContext().getEventDispatcher();
         if (payloadRegistry != current) {
-            payloadRegistry = QueuedPayloadRegistry.registerIfSupported(current, this);
+            payloadRegistry = QueuedPayloadRegistry.reRegister(payloadRegistry, current, this);
         }
     }
 }

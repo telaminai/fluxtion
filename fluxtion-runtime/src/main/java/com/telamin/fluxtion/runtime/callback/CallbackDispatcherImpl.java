@@ -84,6 +84,16 @@ public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, N
     }
 
     @Override
+    public void unregisterPayloadOwner(QueuedPayloadOwner owner) {
+        for (int i = 0; i < payloadOwners.size(); i++) {
+            if (payloadOwners.get(i) == owner) {
+                payloadOwners.remove(i);
+                return;
+            }
+        }
+    }
+
+    @Override
     public void fireCallback(int id) {
         SingleCallBackWrapper<Object> callBackWrapper = new SingleCallBackWrapper<>();
         callBackWrapper.setFilterId(id);

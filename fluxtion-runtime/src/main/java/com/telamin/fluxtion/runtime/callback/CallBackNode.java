@@ -127,7 +127,7 @@ public class CallBackNode<R>
     private void registerPayloadOwner() {
         Object current = dispatcher;
         if (payloadRegistry != current) {
-            payloadRegistry = QueuedPayloadRegistry.registerIfSupported(current, this);
+            payloadRegistry = QueuedPayloadRegistry.reRegister(payloadRegistry, current, this);
         }
     }
 }

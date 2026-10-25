@@ -14,11 +14,12 @@ When a node, a trigger, an event-end method, a lifecycle method, an exported ser
    fails, the original exception is still the one thrown, and the cleanup failure is attached to it as a suppressed
    exception.
 2. **The failed cycle is closed.** The in-cycle flag is cleared. Dirty flags and fork tasks are reset. Every auditor
-   gets `processingComplete`, so the audit record of the failed cycle is closed and the next cycle's record is its
-   own.
+   with event receipt enabled gets `processingComplete`, so the audit record of the failed cycle is closed and the next
+   cycle's record is its own.
 3. **What the failed cycle queued is discarded, not dispatched later.** This covers re-entrant events, callbacks, the
    remaining elements of a flat-map, and the **payloads** a callback node stored for its queued triggers. A later,
-   successful cycle never receives a discarded payload.
+   successful cycle never receives a discarded payload. The discard runs after the close, so work queued while closing
+   (for example by an `@AfterEvent` method after a failed `runInEventCycle` action) is discarded too.
 4. **Node state is not rolled back.** Whatever a node changed before the throw stays changed. Clearing the flag is not
    a transaction. The engine only guarantees that the processor is not wedged and that nothing of the failed cycle
    runs later.
@@ -35,9 +36,9 @@ When a node, a trigger, an event-end method, a lifecycle method, an exported ser
 | Exported service methods | The service call is a cycle of its own, and it fails as above. |
 | `start`, `startComplete`, `stop`, `batchPause`, `batchEnd` | These fail as above. Their audit prologue is inside the boundary. |
 | `runInEventCycle(auditEvent, action)` | A failed action has its queued work discarded. The cycle is still closed, so its record is complete. A throw while closing or draining after a successful action fails the cycle. The action's exception is the one the caller sees. |
-| `bufferEvent` | A buffered handler that throws fails the **whole buffered batch**. Buffering ends, buffered dirty state is reset, the batch's queued work is discarded, and nothing of the batch is calculated later. Later `bufferEvent` / `triggerCalculation` calls start a new batch. |
+| `bufferEvent` | A buffered handler that throws fails the **whole buffered batch**. Buffering ends, buffered dirty state is reset, the batch's queued work is discarded, and nothing of the batch is calculated later. Later `bufferEvent` / `triggerCalculation` calls start a new batch. The handlers of events buffered earlier in the batch **have already run** and changed node state, which is not rolled back: resubmitting the whole batch applies them twice. |
 | `triggerCalculation` | The calculation is a cycle of its own, and it fails as above. It does not run again on the next event. |
-| A buffered calculation flushed by `onEvent`, a service call or `runInEventCycle` | The flush fails as a `triggerCalculation` does. Its exception propagates from the call that flushed it, and that call's own event, service body or action is **not** run. The caller may resubmit. |
+| A buffered calculation flushed by `onEvent`, a service call or `runInEventCycle` | The flush fails as a `triggerCalculation` does. Its exception propagates from the call that flushed it, and that call's own event, service body or action is **not** run. The caller **cannot tell** this apart from a failure of its own work, so it cannot reliably decide to resubmit. When that matters, end each buffered batch with an explicit `triggerCalculation()`, so a calculation failure surfaces on its own. |
 
 **An exported service called from inside a cycle.** For example, a node calls another node's exported service while
 handling an event. That call is not refused, and it runs inline. Its close clears the in-cycle flag of the cycle it is
@@ -45,6 +46,10 @@ nested in; this behaviour predates 1.1.3. If the nested call throws, it fails as
 cycle's queued work and closes the enclosing record. Its exception then propagates through the calling node and fails
 the enclosing cycle too, unless that node catches it. Prefer raising an event over calling an exported service from
 inside a cycle.
+
+**Proposed follow-up (not in 1.1.3):** wrap a flush failure in a distinguishable exception, for example
+`BufferedCalculationFailedException` with the calculation's exception as the cause, so a caller knows its own event,
+service body or action did not run.
 
 ## Runtime floor and upgrading
 
@@ -78,6 +83,28 @@ implementation must:
 Generated processors call `discardQueuedCallbacks()` only when a cycle fails. A node that stores callback payloads
 apart from the trigger it queues implements `QueuedPayloadOwner` and registers with the dispatcher through
 `QueuedPayloadRegistry.registerIfSupported`, as `CallBackNode` and `AbstractCallbackNode` do.
+
+## Changes in runtime 1.1.3 / compiler 1.0.80
+
+- **Policy:** an exception in an event cycle propagates to the caller, the failed cycle is closed, and what it queued,
+  callback payloads included, is discarded rather than run later. Node state is not rolled back, and the host decides
+  whether to continue. Before this change, one exception wedged the processor and later events were silently queued.
+- **New abstract SPI method:** `EventProcessorCallbackInternal.discardQueuedCallbacks()`. Third-party implementations
+  must add it (see above). It is abstract on purpose.
+- **Runtime floor:** a processor generated by compiler 1.0.80 discards a failed cycle's queue only on runtime 1.1.3+.
+  On an older runtime it is not wedged, but a throwing queued item poisons later cycles (see above).
+- **Regenerate after upgrading:** upgrading the runtime does not change processors already generated. Regenerate them
+  with the 1.0.80 builder (or BOM).
+- **Interpreted processor, exported services:** an event raised by a node during an interpreted service call is now
+  queued and dispatched after the call, as in generated processors. Before, it was dispatched synchronously, in the
+  middle of the call.
+- **Interpreted processor, exported services:** a checked exception thrown sneakily from an interpreted service call is
+  now wrapped in `java.lang.reflect.UndeclaredThrowableException`, with the original as the cause. Generated processors
+  still rethrow it unwrapped.
+- **Buffering:** a failing `bufferEvent` ends the buffered batch, and a failing `triggerCalculation` is not retried on
+  the next event.
+- **Callback payloads:** `CallBackNode` and `AbstractCallbackNode` payloads are discarded with a failed cycle
+  (`QueuedPayloadOwner` / `QueuedPayloadRegistry`).
 
 ## Not covered
 

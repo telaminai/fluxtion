@@ -166,6 +166,12 @@ public interface DataFlow extends ServiceRegistry, NodeDiscovery, Lifecycle {
      * call dispatches normally. Nothing else of the failed cycle is completed: its remaining nodes and event-end methods
      * do not run, and what it queued (re-entrant events and callbacks) is discarded, never dispatched later. Handle the
      * exception where you want the cycle to go on; the processor only guarantees it is not wedged.
+     * <p>
+     * <b>A buffered calculation that fails first.</b> When events are buffered, this call first runs
+     * {@link #triggerCalculation()}. If that calculation throws, its exception propagates from this call and {@code e} is
+     * <em>not</em> dispatched. The caller cannot tell that exception from a failure of {@code e} itself, so it cannot know
+     * whether resubmitting {@code e} is safe; end each buffered batch with an explicit {@link #triggerCalculation()}
+     * when that distinction matters. See {@code docs/runtime/failed-event-cycles.md}.
      *
      * @param e the {@link Event Event} to process.
      */
@@ -202,6 +208,11 @@ public interface DataFlow extends ServiceRegistry, NodeDiscovery, Lifecycle {
     /**
      * Buffers an event as part of a transaction only EventHandler methods are invoked, no OnTrigger methods are
      * processed. EventHandlers are marked as dirty ready for {@link #triggerCalculation()} to invoke a full event cycle
+     * <p>
+     * <b>A buffered handler that throws fails the whole buffered batch</b>: buffering ends, the batch's dirty state and
+     * queued work are discarded, and nothing of the batch is calculated. The handlers of events buffered earlier in the
+     * batch have already run and changed node state, and that is not rolled back, so resubmitting the whole batch applies
+     * them twice. See {@code docs/runtime/failed-event-cycles.md}.
      *
      * @param event
      */

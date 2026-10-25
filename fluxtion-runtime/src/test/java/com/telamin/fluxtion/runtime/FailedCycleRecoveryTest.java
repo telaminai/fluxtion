@@ -109,7 +109,37 @@ public class FailedCycleRecoveryTest {
         f.setAccessible(true);
         f.set(callback, dispatcher);
         List<String> got = new ArrayList<>();
-        dispatcher.setEventProcessor(new InternalEventProcessor() {
+        dispatcher.setEventProcessor(recording(callback, got));
+        callback.fireCallback("DEMO-stale");
+        dispatcher.discardQueuedCallbacks();
+        callback.fireCallback("DEMO-fresh");
+        dispatcher.dispatchQueuedCallbacks();
+        assertEquals(List.of("DEMO-fresh"), got);
+    }
+
+    /** A callback node reused by a second processor: a failure in the first must not clear the second's payloads. */
+    @Test
+    public void aReusedCallbackNodeMovesItsRegistration_theOldProcessorsDiscardLeavesTheNewPayload() throws Exception {
+        CallbackDispatcherImpl first = new CallbackDispatcherImpl();
+        CallbackDispatcherImpl second = new CallbackDispatcherImpl();
+        CallBackNode<String> callback = new CallBackNode<>(new InstanceCallbackEvent.InstanceCallbackEvent_1());
+        Field f = CallBackNode.class.getDeclaredField("dispatcher");
+        f.setAccessible(true);
+        List<String> got = new ArrayList<>();
+        first.setEventProcessor(recording(callback, new ArrayList<>()));
+        second.setEventProcessor(recording(callback, got));
+        f.set(callback, first);
+        callback.fireCallback("DEMO-first");
+        first.dispatchQueuedCallbacks();
+        f.set(callback, second);                     // reused by another processor
+        callback.fireCallback("DEMO-second");
+        first.discardQueuedCallbacks();              // the old processor fails
+        second.dispatchQueuedCallbacks();
+        assertEquals(List.of("DEMO-second"), got);
+    }
+
+    private static InternalEventProcessor recording(CallBackNode<String> callback, List<String> got) {
+        return new InternalEventProcessor() {
             @Override
             public void onEvent(Object event) {
                 onEventInternal(event);
@@ -143,11 +173,6 @@ public class FailedCycleRecoveryTest {
             public <T> T getNodeById(String id) {
                 return null;
             }
-        });
-        callback.fireCallback("DEMO-stale");
-        dispatcher.discardQueuedCallbacks();
-        callback.fireCallback("DEMO-fresh");
-        dispatcher.dispatchQueuedCallbacks();
-        assertEquals(List.of("DEMO-fresh"), got);
+        };
     }
 }
