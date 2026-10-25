@@ -20,7 +20,7 @@ import java.util.List;
  * Extend this node to expose instance callback outside the {@link CloneableDataFlow}.
  * Use the protected fireCallback methods to trigger child nodes. Data can be optionally passed into a fireCallback method
  */
-public abstract class AbstractCallbackNode<R> extends BaseNode implements Event, Callback<R> {
+public abstract class AbstractCallbackNode<R> extends BaseNode implements Event, Callback<R>, QueuedPayloadOwner {
 
     public static int instanceFilterCounter = 0;
     private static final Object INSTANCE_FILTER_COUNTER_LOCK = new Object();
@@ -28,6 +28,9 @@ public abstract class AbstractCallbackNode<R> extends BaseNode implements Event,
     protected R data;
     @FluxtionIgnore
     private final List<R> dataQueue = new ArrayList<>();
+    /** The dispatcher this node registered with to have its payloads discarded with a failed cycle's queue (#36). */
+    @FluxtionIgnore
+    private transient Object payloadRegistry;
 
     public AbstractCallbackNode() {
         synchronized (INSTANCE_FILTER_COUNTER_LOCK) {
@@ -65,6 +68,7 @@ public abstract class AbstractCallbackNode<R> extends BaseNode implements Event,
      */
     @Override
     public void fireCallback(R data) {
+        registerPayloadOwner();
         dataQueue.add(data);
         getContext().processReentrantEvent(this);
     }
@@ -91,6 +95,7 @@ public abstract class AbstractCallbackNode<R> extends BaseNode implements Event,
      */
     @Override
     public void fireNewEventCycle(R data) {
+        registerPayloadOwner();
         dataQueue.add(data);
         getContext().processAsNewEventCycle(this);
     }
@@ -103,5 +108,21 @@ public abstract class AbstractCallbackNode<R> extends BaseNode implements Event,
     @Override
     public int filterId() {
         return filterId;
+    }
+
+    /**
+     * Discards the payloads of callbacks queued but not yet dispatched: called when a failed cycle's queued work is
+     * discarded, so the next callback never receives a payload of the failed cycle.
+     */
+    @Override
+    public void discardQueuedPayloads() {
+        dataQueue.clear();
+    }
+
+    private void registerPayloadOwner() {
+        Object current = getContext().getEventDispatcher();
+        if (payloadRegistry != current) {
+            payloadRegistry = QueuedPayloadRegistry.reRegister(payloadRegistry, current, this);
+        }
     }
 }
