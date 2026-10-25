@@ -163,17 +163,25 @@ The published `fluxtion-builder` ships only a remote generator: `DataFlowBuilder
 generated model or Java source back. Nothing is generated on your machine unless a local generator is on the classpath.
 
 - **Key:** `apiKey=` in `~/.fluxtion/fluxtion.apiKeyFile` (created with a placeholder on first use), or
-  `-Dfluxtion.apiKey=...`. The key travels in the `X-RapidAPI-Key` header.
-- **What is sent:** for each node its variable name, class name, annotated callback method signatures,
-  parent/child wiring, handled event types and filters, and **its configured field values rendered as Java
-  constructor/setter expressions** — so any literal you set on a node (thresholds, names, and any secret or
-  credential you put in node configuration) is sent. Also exported service signatures, the generation settings
-  (package and class name, dispatch options, output directory paths) and side-band metadata (model fingerprint,
+  `-Dfluxtion.apiKey=...`. Without a key the build stops with "Fluxtion API key is not configured" before
+  anything is sent.
+- **All node field values, private ones included, are sent in clear text in the request body.** Each node's
+  configured state is rendered as Java constructor/setter expressions, so a constructor-set `private String
+  password` travels to the generator exactly like a threshold. **Do not put credentials or other secrets in node
+  fields.** Supply them at runtime, after the processor is built: register a service with
+  `dataFlow.registerService(new Service<>(...))` and receive it in the node through a `@ServiceRegistered` method,
+  or hand the instance over with `dataFlow.injectInstance(...)`. Neither is part of the graph model, so neither is
+  sent.
+- **What else is sent:** for each node its variable name, class name, annotated callback method signatures,
+  parent/child wiring, handled event types and filters; exported service signatures; the generation settings
+  (package and class name, dispatch options, output directory paths); side-band metadata (model fingerprint,
   target language).
-- **What is not sent:** your source files or method bodies, compiled classes, the GraphML/PNG renderings, the
-  events you process at runtime, and audit records.
-- **Old clients:** `com.telamin.fluxtion:fluxtion-builder:1.0.80` on Maven Central predates the hosted generator's
-  wire format and fails against it. Use the BOM from the Fluxtion public repository.
+- **The API key travels only in the `X-RapidAPI-Key` request header** (with `X-RapidAPI-Host`), never in the body.
+- **What is not sent:** your source files or method bodies (a string constant inside a handler method stays
+  local), compiled classes, the GraphML/PNG renderings, the events you process at runtime, and audit records.
+- **Old clients:** `fluxtion-builder` 1.0.9 on Maven Central (and 1.0.0 to 1.0.8) predates the hosted generator's
+  wire format and fails against it; once the generator is redeployed such a client gets a readable "too old"
+  message instead of a `ClassNotFoundException`. Use the BOM from the Fluxtion public repository.
 
 ---
 
