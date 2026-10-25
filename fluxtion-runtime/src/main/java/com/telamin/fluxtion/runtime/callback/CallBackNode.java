@@ -24,12 +24,16 @@ public class CallBackNode<R>
         implements
         Callback<R>,
         EventHandlerNode<InstanceCallbackEvent>,
-        DataFlowContextListener {
+        DataFlowContextListener,
+        QueuedPayloadOwner {
 
     private final InstanceCallbackEvent event;
     protected R data;
     @FluxtionIgnore
     private final List<R> dataQueue = new ArrayList<>();
+    /** The dispatcher this node registered with to have its payloads discarded with a failed cycle's queue (#36). */
+    @FluxtionIgnore
+    private transient Object payloadRegistry;
     private EventDispatcher dispatcher;
 
     public CallBackNode(InstanceCallbackEvent event) {
@@ -74,6 +78,7 @@ public class CallBackNode<R>
      */
     @Override
     public void fireCallback(R data) {
+        registerPayloadOwner();
         dataQueue.add(data);
         dispatcher.processReentrantEvent(event);
     }
@@ -100,6 +105,7 @@ public class CallBackNode<R>
      */
     @Override
     public void fireNewEventCycle(R data) {
+        registerPayloadOwner();
         dataQueue.add(data);
         dispatcher.processAsNewEventCycle(event);
     }
@@ -107,5 +113,21 @@ public class CallBackNode<R>
     @Override
     public R get() {
         return data;
+    }
+
+    /**
+     * Discards the payloads of callbacks queued but not yet dispatched: called when a failed cycle's queued work is
+     * discarded, so the next callback never receives a payload of the failed cycle.
+     */
+    @Override
+    public void discardQueuedPayloads() {
+        dataQueue.clear();
+    }
+
+    private void registerPayloadOwner() {
+        Object current = dispatcher;
+        if (payloadRegistry != current) {
+            payloadRegistry = QueuedPayloadRegistry.registerIfSupported(current, this);
+        }
     }
 }

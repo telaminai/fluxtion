@@ -289,23 +289,38 @@ public class DefaultEventProcessor
   //EVENT BUFFERING - START
   public void bufferEvent(Object event) {
     buffering = true;
-    if (event instanceof ClockStrategyEvent) {
-      ClockStrategyEvent typedEvent = (ClockStrategyEvent) event;
-      auditEvent(typedEvent);
-      isDirty_clock = true;
-      clock.setClockStrategy(typedEvent);
-      allEventHandler.onEvent(typedEvent);
-    } else if (event instanceof Object) {
-      Object typedEvent = (Object) event;
-      auditEvent(typedEvent);
-      allEventHandler.onEvent(typedEvent);
+    // #36: a buffered handler that throws fails the whole buffered batch: its queued work is discarded and its
+    // buffered state reset, so nothing of it is calculated or dispatched later
+    try {
+      if (event instanceof ClockStrategyEvent) {
+        ClockStrategyEvent typedEvent = (ClockStrategyEvent) event;
+        auditEvent(typedEvent);
+        isDirty_clock = true;
+        clock.setClockStrategy(typedEvent);
+        allEventHandler.onEvent(typedEvent);
+      } else if (event instanceof Object) {
+        Object typedEvent = (Object) event;
+        auditEvent(typedEvent);
+        allEventHandler.onEvent(typedEvent);
+      }
+    } catch (Throwable t) {
+      buffering = false;
+      failedCycle(t);
+      throw t;
     }
   }
 
   public void triggerCalculation() {
     buffering = false;
-    String typedEvent = "No event information - buffered dispatch";
-    afterEvent();
+    // #36: the buffered calculation is a cycle of its own; when it throws it is closed as a failed cycle, so it does
+    // not run again on the next event and its queued work is discarded
+    try {
+      String typedEvent = "No event information - buffered dispatch";
+      afterEvent();
+    } catch (Throwable t) {
+      failedCycle(t);
+      throw t;
+    }
   }
   //EVENT BUFFERING - END
 
@@ -346,8 +361,9 @@ public class DefaultEventProcessor
 
   /**
    * {@link DataFlow#runInEventCycle}. A buffered calculation runs first, because it closes its own cycle's record;
-   * then the cycle opens with the caller's event and runs the action; a finally closes it and dispatches what the
-   * action queued, and an inner finally clears the processing mark, so a throw cannot wedge the processor.
+   * then the cycle opens with the caller's event and runs the action, closes it and dispatches what the action queued.
+   * A failed action has its queued work discarded and the cycle still closed; a throw while closing or draining fails
+   * the cycle like any other ({@link #failedCycle}). The processing mark is cleared in a finally.
    */
   @Override
   public void runInEventCycle(Object auditEvent, Runnable action) {
@@ -359,25 +375,39 @@ public class DefaultEventProcessor
     }
     processing = true;
     try {
-      // an Event supplies its own event time, as on the event path: the static type selects the auditors' overload
-      if (auditEvent instanceof Event) {
-        auditEvent((Event) auditEvent);
-      } else {
-        auditEvent(auditEvent);
+      try {
+        // an Event supplies its own event time, as on the event path: the static type selects the auditors' overload
+        if (auditEvent instanceof Event) {
+          auditEvent((Event) auditEvent);
+        } else {
+          auditEvent(auditEvent);
+        }
+        action.run();
+      } catch (Throwable t) {
+        // the action failed: what it queued is discarded, and the cycle is still closed, as a host's own audit bracket
+        // closes its record. A throw from the close is kept as suppressed; the action's exception reaches the caller.
+        callbackDispatcher.discardQueuedCallbacks();
+        try {
+          afterEvent();
+        } catch (Throwable closeFailure) {
+          if (closeFailure != t) {
+            t.addSuppressed(closeFailure);
+          }
+          failedCycle(t);
+        }
+        throw t;
       }
-      action.run();
-    } catch (Throwable t) {
-      callbackDispatcher.discardQueuedCallbacks();
-      throw t;
-    } finally {
-      // closed even when the action throws, as a host's own audit bracket closes its record; processing is cleared
-      // innermost, so a throw from the close cannot wedge the processor either
+      // #105/#36: closing the cycle and draining what the action queued are part of the cycle; a throw there fails it,
+      // so the failing queued item and the rest of the queue are discarded instead of leaking into the next event
       try {
         afterEvent();
         callbackDispatcher.dispatchQueuedCallbacks();
-      } finally {
-        processing = false;
+      } catch (Throwable t) {
+        failedCycle(t);
+        throw t;
       }
+    } finally {
+      processing = false;
     }
   }
 
