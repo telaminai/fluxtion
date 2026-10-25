@@ -82,7 +82,9 @@ implementation must:
 
 Generated processors call `discardQueuedCallbacks()` only when a cycle fails. A node that stores callback payloads
 apart from the trigger it queues implements `QueuedPayloadOwner` and registers with the dispatcher through
-`QueuedPayloadRegistry.registerIfSupported`, as `CallBackNode` and `AbstractCallbackNode` do.
+`QueuedPayloadRegistry.reRegister(previous, current, owner)`, as `CallBackNode` and `AbstractCallbackNode` do: it
+unregisters from the previous dispatcher, so a node reused by another processor moves its registration.
+`QueuedPayloadRegistry.registerIfSupported` suits an owner that only ever belongs to one processor.
 
 ## Changes in runtime 1.1.3 / compiler 1.0.80
 
