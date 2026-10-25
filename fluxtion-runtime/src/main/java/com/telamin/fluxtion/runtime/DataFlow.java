@@ -159,6 +159,19 @@ public interface DataFlow extends ServiceRegistry, NodeDiscovery, Lifecycle {
     /**
      * Called when a new event e is ready to be processed. Calls a {@link #triggerCalculation()} first if any events
      * have been buffered.
+     * <p>
+     * <b>A node that throws.</b> The exception propagates to the caller unchanged (the interpreted processor may wrap
+     * it, with the node's exception as the cause), and the processor stays usable:
+     * every event, lifecycle and exported-service boundary clears its in-cycle flag in a {@code finally}, so the next
+     * call dispatches normally. Nothing else of the failed cycle is completed: its remaining nodes and event-end methods
+     * do not run, and what it queued (re-entrant events and callbacks) is discarded, never dispatched later. Handle the
+     * exception where you want the cycle to go on; the processor only guarantees it is not wedged.
+     * <p>
+     * <b>A buffered calculation that fails first.</b> When events are buffered, this call first runs
+     * {@link #triggerCalculation()}. If that calculation throws, its exception propagates from this call and {@code e} is
+     * <em>not</em> dispatched. The caller cannot tell that exception from a failure of {@code e} itself, so it cannot know
+     * whether resubmitting {@code e} is safe; end each buffered batch with an explicit {@link #triggerCalculation()}
+     * when that distinction matters. See {@code docs/runtime/failed-event-cycles.md}.
      *
      * @param e the {@link Event Event} to process.
      */
@@ -195,6 +208,11 @@ public interface DataFlow extends ServiceRegistry, NodeDiscovery, Lifecycle {
     /**
      * Buffers an event as part of a transaction only EventHandler methods are invoked, no OnTrigger methods are
      * processed. EventHandlers are marked as dirty ready for {@link #triggerCalculation()} to invoke a full event cycle
+     * <p>
+     * <b>A buffered handler that throws fails the whole buffered batch</b>: buffering ends, the batch's dirty state and
+     * queued work are discarded, and nothing of the batch is calculated. The handlers of events buffered earlier in the
+     * batch have already run and changed node state, and that is not rolled back, so resubmitting the whole batch applies
+     * them twice. See {@code docs/runtime/failed-event-cycles.md}.
      *
      * @param event
      */
@@ -458,7 +476,8 @@ public interface DataFlow extends ServiceRegistry, NodeDiscovery, Lifecycle {
      *   <li>{@code action} runs;</li>
      *   <li>in a {@code finally}, so also when the action throws: the cycle is closed (event-end methods, the
      *   auditors' {@code processingComplete}, dirty flags reset), so its audit record is complete, the events the
-     *   action queued are dispatched, and the processing mark is cleared, innermost.</li>
+     *   action queued are dispatched, and the processing mark is cleared, innermost. When {@code action} throws,
+     *   what it queued is discarded, not dispatched, as for any failed cycle (see {@link #onEvent(Object)}).</li>
      * </ol>
      * A throw from a queued event, or from closing the cycle, is handled as for any event that throws: this method
      * adds no failure handling of its own beyond closing the cycle and clearing the processing mark.

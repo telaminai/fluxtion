@@ -9,11 +9,14 @@ import com.telamin.fluxtion.runtime.node.NamedNode;
 import lombok.ToString;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.function.BooleanSupplier;
 
 @ToString
-public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, NamedNode, DirtyStateMonitor {
+public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, NamedNode, DirtyStateMonitor,
+        QueuedPayloadRegistry {
 
     public InternalEventProcessor eventProcessor;
     // W2: declared as the concrete type — an interface-typed field on this path is not
@@ -22,6 +25,9 @@ public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, N
     // returns primitive boolean, so the generic queue boxed on every callback.
     ArrayDeque<BooleanSupplier> myStack = new ArrayDeque<>();
     private boolean dispatching = false;
+    /** Nodes that hold the payloads of the callbacks they queue (#36): discarded with the queue. Few, so a list. */
+    @ToString.Exclude
+    private final transient List<QueuedPayloadOwner> payloadOwners = new ArrayList<>();
 
     /**
      * M50/W1 — every queueing path funnels through here so the processor's flag cannot drift from the
@@ -51,6 +57,40 @@ public class CallbackDispatcherImpl implements EventProcessorCallbackInternal, N
         }
         dispatching = false;
         eventProcessor.callbacksPending(false);
+    }
+
+    @Override
+    public void discardQueuedCallbacks() {
+        myStack.clear();
+        // a payload a node stored for a discarded trigger would otherwise be consumed by its next, unrelated trigger
+        for (int i = 0; i < payloadOwners.size(); i++) {
+            payloadOwners.get(i).discardQueuedPayloads();
+        }
+        // a throw inside the drain above leaves dispatching set, which would put later iterator callbacks at the front
+        dispatching = false;
+        if (eventProcessor != null) {
+            eventProcessor.callbacksPending(false);
+        }
+    }
+
+    @Override
+    public void registerPayloadOwner(QueuedPayloadOwner owner) {
+        for (int i = 0; i < payloadOwners.size(); i++) {
+            if (payloadOwners.get(i) == owner) {
+                return;
+            }
+        }
+        payloadOwners.add(owner);
+    }
+
+    @Override
+    public void unregisterPayloadOwner(QueuedPayloadOwner owner) {
+        for (int i = 0; i < payloadOwners.size(); i++) {
+            if (payloadOwners.get(i) == owner) {
+                payloadOwners.remove(i);
+                return;
+            }
+        }
     }
 
     @Override
