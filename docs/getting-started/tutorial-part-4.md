@@ -34,7 +34,8 @@ jbang TutorialPart4.java
 ```
 
 ```java
-//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
+//REPOS mavencentral,fluxtion={{fluxtion_repository}}
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_builder_version}}
 //DEPS org.slf4j:slf4j-simple:2.0.16
 //JAVA 25
 
@@ -141,10 +142,17 @@ public class TutorialPart4 {
 
 ```xml
 
+<repositories>
+    <repository>
+        <id>fluxtion-public</id>
+        <url>{{fluxtion_repository}}</url>
+    </repository>
+</repositories>
+
 <dependency>
     <groupId>com.telamin.fluxtion</groupId>
     <artifactId>fluxtion-builder</artifactId>
-    <version>{{fluxtion_version}}</version>
+    <version>{{fluxtion_builder_version}}</version>
 </dependency>
 <dependency>
     <groupId>org.slf4j</groupId>
@@ -194,7 +202,7 @@ public class TutorialPart4 {
 ```console
 fluxtion-exmples % jbang TutorialPart4.java 
 [jbang] Resolving dependencies...
-[jbang]    com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
+[jbang]    com.telamin.fluxtion:fluxtion-builder:{{fluxtion_builder_version}}
 [jbang]    org.slf4j:slf4j-simple:2.0.16
 [jbang] Dependencies resolved
 [jbang] Building jar for TutorialPart4.java...

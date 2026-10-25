@@ -34,7 +34,8 @@ jbang TutorialPart3.java
 ```
 
 ```java
-//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
+//REPOS mavencentral,fluxtion={{fluxtion_repository}}
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_builder_version}}
 //JAVA 25
 
 import com.telamin.fluxtion.builder.DataFlowBuilder;

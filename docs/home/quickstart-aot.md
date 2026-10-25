@@ -26,6 +26,9 @@ More details: [https://www.jbang.dev](https://www.jbang.dev)
 
 ## 1. Getting an API Key
 
+!!! note "Generation is remote and needs an API key"
+    {{fluxtion_remote_build_note}}
+
 To use the Fluxtion cloud-hosted AOT compiler, you need a RapidAPI key.
 
 1.  Visit [RapidAPI](https://rapidapi.com/).
@@ -64,7 +67,7 @@ Create a simple AOT-compiled event pipeline. Save this as `aot/quickstart/Ex1.ja
 
 ```java
 //REPOS central=https://repo1.maven.org/maven2,fluxtion=https://repo.repsy.io/mvn/fluxtion/fluxtion-public
-//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}, com.telamin.fluxtion:fluxtion-generator-restclient:1.4.1
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_builder_version}}
 //JAVA 25
 
 package aot.quickstart;
@@ -128,7 +131,7 @@ When you call `Fluxtion.compileAot`, the following steps occur:
     *   `src/main/resources/aot/quickstart/generated/StringProcessor.graphml` - A visual representation of the event graph.
     *   `src/main/resources/aot/quickstart/generated/StringProcessor.png` - A PNG image of the event graph.
 
-The generated `StringProcessor.java` is a plain Java class that you can inspect and even bundle with your application, removing the need for `fluxtion-builder` and `fluxtion-generator-restclient` at runtime.
+The generated `StringProcessor.java` is a plain Java class that you can inspect and even bundle with your application, removing the need for `fluxtion-builder` at runtime.
 
 ---
 
@@ -142,7 +145,7 @@ React to parent updates programmatically by implementing the `TriggeredNode` int
 
 ```java
 //REPOS central=https://repo1.maven.org/maven2,fluxtion=https://repo.repsy.io/mvn/fluxtion/fluxtion-public
-//DEPS com.telamin.fluxtion:fluxtion-builder:0.9.17, com.telamin.fluxtion:fluxtion-generator-restclient:1.4.1
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_builder_version}}
 //JAVA 25
 
 package aot.quickstart;
@@ -207,7 +210,7 @@ Use declarative annotations for cleaner code and flexible event handling. Save t
 
 ```java
 //REPOS central=https://repo1.maven.org/maven2,fluxtion=https://repo.repsy.io/mvn/fluxtion/fluxtion-public
-//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_builder_version}}
 //JAVA 25
 
 package aot.quickstart;
@@ -274,7 +277,7 @@ Nodes can have multiple parents. Use `DataFlowBuilder.push` to explicitly connec
 
 ```java
 //REPOS central=https://repo1.maven.org/maven2,fluxtion=https://repo.repsy.io/mvn/fluxtion/fluxtion-public
-//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_builder_version}}
 //JAVA 25
 
 package aot.quickstart;
@@ -328,7 +331,7 @@ You can filter events based on static strings, integers, or even classes. Events
 
 ```java
 //REPOS central=https://repo1.maven.org/maven2,fluxtion=https://repo.repsy.io/mvn/fluxtion/fluxtion-public
-//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_builder_version}}
 //JAVA 25
 
 package aot.quickstart;
@@ -388,7 +391,7 @@ The `@OnTrigger` annotation has a `dirty` property. By default, it's `true`, mea
 
 ```java
 //REPOS central=https://repo1.maven.org/maven2,fluxtion=https://repo.repsy.io/mvn/fluxtion/fluxtion-public
-//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_builder_version}}
 //JAVA 25
 
 package aot.quickstart;
@@ -467,7 +470,7 @@ Fluxtion automatically identifies parents by analyzing constructors or fields. I
 
 ```java
 //REPOS central=https://repo1.maven.org/maven2,fluxtion=https://repo.repsy.io/mvn/fluxtion/fluxtion-public
-//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_builder_version}}
 //JAVA 25
 
 package aot.quickstart;

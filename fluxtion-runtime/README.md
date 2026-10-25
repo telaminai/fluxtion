@@ -9,11 +9,20 @@ module is the only library the generated dispatcher needs at runtime.
 
 ## Coordinates
 
+Releases are published to the Fluxtion public repository; declare it:
+
 ```xml
+<repositories>
+  <repository>
+    <id>fluxtion-public</id>
+    <url>https://repo.repsy.io/mvn/fluxtion/fluxtion-public</url>
+  </repository>
+</repositories>
+
 <dependency>
     <groupId>com.telamin.fluxtion</groupId>
     <artifactId>fluxtion-runtime</artifactId>
-    <version>${fluxtion.version}</version>
+    <version>1.1.3</version>
 </dependency>
 ```
 
@@ -46,7 +55,7 @@ CheerpJ, you need agrona 1.21.2 (the last class file 52 release of agrona):
 <dependency>
     <groupId>com.telamin.fluxtion</groupId>
     <artifactId>fluxtion-runtime</artifactId>
-    <version>${fluxtion.version}</version>
+    <version>1.1.3</version>
     <exclusions>
         <exclusion>
             <groupId>org.agrona</groupId>

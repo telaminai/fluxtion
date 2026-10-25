@@ -39,7 +39,7 @@ The fastest way to try Fluxtion is using [Jbang](https://www.jbang.dev/). Save t
 
 ```java
 //REPOS fluxtion-public=https://repo.repsy.io/mvn/fluxtion/fluxtion-public
-//DEPS com.telamin.fluxtion:fluxtion-builder:1.0.56
+//DEPS com.telamin.fluxtion:fluxtion-builder:1.0.80
 //JAVA 25
 
 import com.telamin.fluxtion.builder.DataFlowBuilder;
@@ -62,6 +62,12 @@ void main() {
 ```
 
 **Run:** `jbang TradeFilter.java`
+
+**Generation is remote.** Building a graph (`DataFlowBuilder...build()`, `interpret()`, `Fluxtion.compile*` /
+`compileAot` or the Fluxtion Maven plugin) sends the graph model to the hosted Fluxtion generator and needs an API
+key in `~/.fluxtion/fluxtion.apiKeyFile` — see [Getting an API key](https://telaminai.github.io/fluxtion/home/quickstart-aot/#1-getting-an-api-key)
+([subscribe](https://rapidapi.com/hub)). Without a key the build fails with HTTP 401. A generated processor runs
+with `fluxtion-runtime` alone and makes no network call.
 
 ---
 
@@ -98,18 +104,26 @@ Unlike traditional stream processors that interpret graphs or use reflection-hea
 ## Standard Installation
 
 ### Maven
-Import the Fluxtion BOM, then declare the artifacts you need. Generated processors
-only need `fluxtion-runtime` at runtime. Local graph analysis/source generation uses
-the `fluxtion-builder` build-time artifact; authoring APIs live in
-`fluxtion-builder-api`.
+Releases are published to the Fluxtion public repository, `https://repo.repsy.io/mvn/fluxtion/fluxtion-public` — declare
+it; Maven Central does not carry current releases. Import the Fluxtion BOM, then declare the
+artifacts you need. Generated processors only need `fluxtion-runtime` at runtime. The
+`fluxtion-builder` build-time artifact builds graphs (by default through the hosted generator,
+see the note above); authoring APIs live in `fluxtion-builder-api`.
 
 ```xml
+<repositories>
+  <repository>
+    <id>fluxtion-public</id>
+    <url>https://repo.repsy.io/mvn/fluxtion/fluxtion-public</url>
+  </repository>
+</repositories>
+
 <dependencyManagement>
   <dependencies>
     <dependency>
       <groupId>com.telamin.fluxtion</groupId>
       <artifactId>fluxtion-bom</artifactId>
-      <version>1.0.56</version>
+      <version>1.0.80</version>
       <type>pom</type>
       <scope>import</scope>
     </dependency>
@@ -125,7 +139,12 @@ the `fluxtion-builder` build-time artifact; authoring APIs live in
 
 ### Gradle (Kotlin DSL)
 ```kotlin
-implementation(platform("com.telamin.fluxtion:fluxtion-bom:1.0.56"))
+repositories {
+    mavenCentral()
+    maven("https://repo.repsy.io/mvn/fluxtion/fluxtion-public")
+}
+
+implementation(platform("com.telamin.fluxtion:fluxtion-bom:1.0.80"))
 compileOnly("com.telamin.fluxtion:fluxtion-builder")
 implementation("com.telamin.fluxtion:fluxtion-runtime")
 ```

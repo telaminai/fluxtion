@@ -4,6 +4,14 @@ You are writing or modifying Fluxtion code. Read this once at session start; tre
 
 This file is the canonical author-orientation document maintained by Telamin AI. It is intentionally written for an LLM cold-start — the structure is symptom-organised so you can scan it.
 
+## Get Fluxtion — coordinates, repository, remote build
+
+- Repository (declare it): https://repo.repsy.io/mvn/fluxtion/fluxtion-public — current releases are published here; Maven Central does not carry them.
+- BOM `com.telamin.fluxtion:fluxtion-bom:1.0.80`, builder `com.telamin.fluxtion:fluxtion-builder:1.0.80`, runtime `com.telamin.fluxtion:fluxtion-runtime:1.1.3`.
+- JBang: `//REPOS mavencentral,fluxtion=https://repo.repsy.io/mvn/fluxtion/fluxtion-public` then `//DEPS com.telamin.fluxtion:fluxtion-builder:1.0.80`.
+- Remote build: building a graph (`DataFlowBuilder...build()`, `interpret()`, `Fluxtion.compile*` / `compileAot`, the Maven plugin) sends the graph model to the hosted Fluxtion generator and needs an API key in `~/.fluxtion/fluxtion.apiKeyFile` (subscribe: https://rapidapi.com/hub); without one it fails with HTTP 401. A generated processor needs only `fluxtion-runtime` and makes no network call.
+- Starter project (zip): https://fluxtion-playground.dev/start/scaffold?template=fluxtion-embedded
+
 ## The mental model in 60 seconds
 
 Fluxtion is a **compile-time event-graph compiler** for Java. You author plain Java classes that hold state and react to events; Fluxtion statically analyses the dependency graph and generates a flat dispatch tree. There is **no scheduler, no thread pool, no async runtime** — events flow through compile-time-determined dispatch order, deterministically, with zero allocation in the hot path.
@@ -392,7 +400,7 @@ Imperative / AOT, one file (the supported shape — match it):
 
 ```java
 //REPOS central=https://repo1.maven.org/maven2,fluxtion=https://repo.repsy.io/mvn/fluxtion/fluxtion-public
-//DEPS com.telamin.fluxtion:fluxtion-builder:1.0.56
+//DEPS com.telamin.fluxtion:fluxtion-builder:1.0.80
 //JAVA 21
 package demo;                                          // a NAMED package — required
 import com.telamin.fluxtion.Fluxtion;

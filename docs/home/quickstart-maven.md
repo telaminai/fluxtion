@@ -1,22 +1,22 @@
 # Fluxtion Maven Plugin Quickstart
 ---
 
-This quickstart demonstrates how to use the [`dataflow-maven-plugin`](https://github.com/telaminai/fluxtion-mavenplugin)
+This quickstart demonstrates how to use the [`fluxtion-maven-plugin`](https://github.com/telaminai/fluxtion-mavenplugin)
 to generate high-performance, Ahead-of-Time (AOT) compiled event processors as part of your standard Maven build cycle.
 
 ## Overview
 
-The `dataflow-maven-plugin` integrates Fluxtion's graph building and code generation tools directly into the Maven lifecycle. It scans your project for graph definitions, generates optimized Java source code, and ensures the generated code is compiled into your final artifact.
+The `fluxtion-maven-plugin` integrates Fluxtion's graph building and code generation tools directly into the Maven lifecycle. It scans your project for graph definitions, generates optimized Java source code, and ensures the generated code is compiled into your final artifact.
 
 ## Architecture and Execution Path
 
-The following diagram illustrates how the `dataflow-maven-plugin` fits into the developer's execution path, highlighting the separation between build-time generation and runtime execution.
+The following diagram illustrates how the `fluxtion-maven-plugin` fits into the developer's execution path, highlighting the separation between build-time generation and runtime execution.
 
 ```mermaid
 graph TD
     subgraph Build [Build Phase - Maven]
         S[Source/Config: Java, Spring, YAML] --> M[Maven Build]
-        M --> P[dataflow-maven-plugin]
+        M --> P[fluxtion-maven-plugin]
         P --> G[Generated AOT Java Source]
         G --> C[Maven Compiler]
         C --> A[Application Artifact JAR]
@@ -48,15 +48,43 @@ graph TD
 
 ---
 
+!!! note "Generation is remote and needs an API key"
+    {{fluxtion_remote_build_note}}
+
 ### 1. Plugin Configuration
 
-Add the `dataflow-maven-plugin` to your `pom.xml`. The `scan` goal is used here to find graph definitions in your compiled classes.
+Declare the Fluxtion public repository and the builder (the plugin itself is on Maven Central):
+
+```xml
+<repositories>
+    <repository>
+        <id>fluxtion-public</id>
+        <url>{{fluxtion_repository}}</url>
+    </repository>
+</repositories>
+
+<dependencies>
+    <dependency>
+        <groupId>com.telamin.fluxtion</groupId>
+        <artifactId>fluxtion-builder</artifactId>
+        <version>{{fluxtion_builder_version}}</version>
+        <scope>provided</scope>
+    </dependency>
+    <dependency>
+        <groupId>com.telamin.fluxtion</groupId>
+        <artifactId>fluxtion-runtime</artifactId>
+        <version>{{fluxtion_runtime_version}}</version>
+    </dependency>
+</dependencies>
+```
+
+Add the `fluxtion-maven-plugin` to your `pom.xml`. The `scan` goal is used here to find graph definitions in your compiled classes.
 
 ```xml
 <plugin>
-    <groupId>com.fluxtion.dataflow</groupId>
-    <artifactId>dataflow-maven-plugin</artifactId>
-    <version>1.2.1</version>
+    <groupId>com.telamin.fluxtion</groupId>
+    <artifactId>fluxtion-maven-plugin</artifactId>
+    <version>{{fluxtion_maven_plugin_version}}</version>
     <executions>
         <execution>
             <goals>

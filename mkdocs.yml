@@ -63,13 +63,24 @@ extra:
   # which is why there is no fluxtion_src_compiler - the six links that used it pointed nowhere.
   fluxtion_src_builder: https://github.com/telaminai/fluxtion/tree/main/fluxtion-builder-api/src/main/java/com/telamin/fluxtion/builder
   fluxtion_example_src: https://github.com/telaminai/fluxtion-examples/tree/main
-  fluxtion_version: 1.0.15
-  fluxtion_javadoc: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-runtime/${fluxtion_version}/index.html
+  # Single source of truth for the Fluxtion versions shown in the docs and READMEs. Pages use the
+  # macros; README.md and docs/claude.txt carry literals stamped by scripts/check-doc-versions.py
+  # --write, and CI runs the script without --write so a stale version fails the build.
+  fluxtion_runtime_version: 1.1.3   # fluxtion-runtime, fluxtion-builder-api
+  fluxtion_builder_version: 1.0.80  # fluxtion-builder, fluxtion-bom, fluxtion-starter-core
+  fluxtion_repository: https://repo.repsy.io/mvn/fluxtion/fluxtion-public
+  fluxtion_api_key_url: https://rapidapi.com/hub
+  fluxtion_maven_plugin_version: 1.3.0   # com.telamin.fluxtion:fluxtion-maven-plugin
+  # One sentence, rendered wherever the docs describe generation.
+  fluxtion_remote_build_note: >-
+    Building a graph (`DataFlowBuilder...build()`, `interpret()`, `Fluxtion.compile*` / `compileAot`
+    or the Fluxtion Maven plugin) sends the graph model to the hosted Fluxtion generator and needs an
+    API key in `~/.fluxtion/fluxtion.apiKeyFile` - see
+    [Getting an API key](https://telaminai.github.io/fluxtion/home/quickstart-aot/#1-getting-an-api-key)
+    ([subscribe](https://rapidapi.com/hub)). Without a key the build fails with HTTP 401. A generated
+    processor runs with `fluxtion-runtime` alone and makes no network call.
+  fluxtion_javadoc: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-runtime/latest/index.html
   release_date: "2026-06-16"
-
-not_in_nav: |
-  claude.txt
-
 
 not_in_nav: |
   claude.txt

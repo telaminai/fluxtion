@@ -27,7 +27,8 @@ Key building blocks:
 This mirrors the example in the examples repo. You can run it directly with jbang.
 
 ```java
-//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
+//REPOS mavencentral,fluxtion={{fluxtion_repository}}
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_builder_version}}
 //JAVA 21
 //JAVA_OPTIONS --add-opens java.base/jdk.internal.misc=ALL-UNNAMED
 
