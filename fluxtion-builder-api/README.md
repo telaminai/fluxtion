@@ -30,7 +30,7 @@ Releases are published to the Fluxtion public repository; declare it:
         <dependency>
             <groupId>com.telamin.fluxtion</groupId>
             <artifactId>fluxtion-bom</artifactId>
-            <version>1.0.80</version>
+            <version>1.0.81</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>

@@ -39,7 +39,7 @@ The fastest way to try Fluxtion is using [Jbang](https://www.jbang.dev/). Save t
 
 ```java
 //REPOS fluxtion-public=https://repo.repsy.io/mvn/fluxtion/fluxtion-public
-//DEPS com.telamin.fluxtion:fluxtion-builder:1.0.80
+//DEPS com.telamin.fluxtion:fluxtion-builder:1.0.81
 //JAVA 25
 
 import com.telamin.fluxtion.builder.DataFlowBuilder;
@@ -123,7 +123,7 @@ see [Cloud generation and your API key](#cloud-generation-and-your-api-key)); au
     <dependency>
       <groupId>com.telamin.fluxtion</groupId>
       <artifactId>fluxtion-bom</artifactId>
-      <version>1.0.80</version>
+      <version>1.0.81</version>
       <type>pom</type>
       <scope>import</scope>
     </dependency>
@@ -144,7 +144,7 @@ repositories {
     maven("https://repo.repsy.io/mvn/fluxtion/fluxtion-public")
 }
 
-implementation(platform("com.telamin.fluxtion:fluxtion-bom:1.0.80"))
+implementation(platform("com.telamin.fluxtion:fluxtion-bom:1.0.81"))
 compileOnly("com.telamin.fluxtion:fluxtion-builder")
 implementation("com.telamin.fluxtion:fluxtion-runtime")
 ```
