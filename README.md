@@ -165,13 +165,15 @@ generated model or Java source back. Nothing is generated on your machine unless
 - **Key:** `apiKey=` in `~/.fluxtion/fluxtion.apiKeyFile` (created with a placeholder on first use), or
   `-Dfluxtion.apiKey=...`. Without a key the build stops with "Fluxtion API key is not configured" before
   anything is sent.
-- **All node field values, private ones included, are sent in clear text in the request body.** Each node's
-  configured state is rendered as Java constructor/setter expressions, so a constructor-set `private String
-  password` travels to the generator exactly like a threshold. **Do not put credentials or other secrets in node
-  fields.** Supply them at runtime, after the processor is built: register a service with
-  `dataFlow.registerService(new Service<>(...))` and receive it in the node through a `@ServiceRegistered` method,
-  or hand the instance over with `dataFlow.injectInstance(...)`. Neither is part of the graph model, so neither is
-  sent.
+- **Configured node instance field values, private fields included, are sent in clear text in the request
+  body.** Each node's configured state is rendered as Java constructor/setter expressions, so a constructor-set
+  `private String password` travels to the generator exactly like a threshold. Static, transient, synthetic and
+  author-excluded fields are not captured, but that is not a secrecy guarantee: a value can still reach the
+  model another way, for example through constructor arguments or custom serialization. **Do not put
+  credentials or other secrets in node fields.** Supply them at runtime, after the processor is built: register
+  a service with `dataFlow.registerService(new Service<>(...))` and receive it in the node through a
+  `@ServiceRegistered` method, or hand the instance over with `dataFlow.injectInstance(...)`. Neither is part of
+  the graph model, so neither is sent.
 - **What else is sent:** for each node its variable name, class name, annotated callback method signatures,
   parent/child wiring, handled event types and filters; exported service signatures; the generation settings
   (package and class name, dispatch options, output directory paths); side-band metadata (model fingerprint,

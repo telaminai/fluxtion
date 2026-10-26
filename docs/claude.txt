@@ -17,7 +17,7 @@ Current runtime, builder-api, builder, BOM and starter releases are published to
 **Generation is remote.** Building a graph (`DataFlowBuilder...build()`, `interpret()`, `Fluxtion.compile*` / `compileAot` or the `fluxtion-maven-plugin`) sends the graph model - not your source files - to the hosted Fluxtion generator by default, and needs an API key. Without a key the build stops before sending anything ("Fluxtion API key is not configured"); a rejected key fails with HTTP 401/403. Put the key in `~/.fluxtion/fluxtion.apiKeyFile` as `apiKey=YOUR_KEY` (the first build creates the file). A generated processor runs with `fluxtion-runtime` alone and makes no network call. How to get a key: [Getting an API key](https://telaminai.github.io/fluxtion/home/quickstart-aot/#1-getting-an-api-key) (subscribe to "Fluxtion Source Generator" on [RapidAPI](https://rapidapi.com/hub)).
 <!-- /fluxtion:remote-build-note -->
 
-What is and is not sent: https://github.com/telaminai/fluxtion#cloud-generation-and-your-api-key
+Node configuration is sent: configured node instance field values, private fields included, travel as Java expressions (static, transient, synthetic and author-excluded fields are not captured - not a secrecy guarantee). Never put credentials in node fields; supply them at runtime with `registerService(new Service<>(...))` + `@ServiceRegistered`, or `injectInstance(...)`. What is and is not sent: https://github.com/telaminai/fluxtion#cloud-generation-and-your-api-key
 
 - Starter project (zip): https://fluxtion-playground.dev/start/scaffold?template=fluxtion-embedded
 
