@@ -2,7 +2,7 @@
 
 **Deterministic, low-latency continuous decision engine for Java with event replay.**
 
-[![Maven Central](https://img.shields.io/maven-central/v/com.telamin.fluxtion/fluxtion-runtime.svg)](https://search.maven.org/search?q=g:com.telamin.fluxtion)
+[![fluxtion-runtime](https://img.shields.io/maven-metadata/v?metadataUrl=https%3A%2F%2Frepo.repsy.io%2Fmvn%2Ffluxtion%2Ffluxtion-public%2Fcom%2Ftelamin%2Ffluxtion%2Ffluxtion-runtime%2Fmaven-metadata.xml&label=fluxtion-runtime)](https://repo.repsy.io/mvn/fluxtion/fluxtion-public/com/telamin/fluxtion/fluxtion-runtime/)
 ![Java](https://img.shields.io/badge/java-21+-blue)
 [![License](https://img.shields.io/badge/license-AGPL%2FSSPL-important)](./LICENSE)
 [![Docs](https://img.shields.io/badge/docs-website-blue)](https://telaminai.github.io/fluxtion/)
@@ -39,7 +39,7 @@ The fastest way to try Fluxtion is using [Jbang](https://www.jbang.dev/). Save t
 
 ```java
 //REPOS fluxtion-public=https://repo.repsy.io/mvn/fluxtion/fluxtion-public
-//DEPS com.telamin.fluxtion:fluxtion-builder:1.0.56
+//DEPS com.telamin.fluxtion:fluxtion-builder:1.0.80
 //JAVA 25
 
 import com.telamin.fluxtion.builder.DataFlowBuilder;
@@ -62,6 +62,9 @@ void main() {
 ```
 
 **Run:** `jbang TradeFilter.java`
+
+Building the graph needs an API key and sends the graph model to a hosted generator — see
+[Cloud generation and your API key](#cloud-generation-and-your-api-key).
 
 ---
 
@@ -98,18 +101,29 @@ Unlike traditional stream processors that interpret graphs or use reflection-hea
 ## Standard Installation
 
 ### Maven
-Import the Fluxtion BOM, then declare the artifacts you need. Generated processors
-only need `fluxtion-runtime` at runtime. Local graph analysis/source generation uses
-the `fluxtion-builder` build-time artifact; authoring APIs live in
-`fluxtion-builder-api`.
+<!-- fluxtion:repository-note - generated from mkdocs.yml extra: by scripts/check-doc-versions.py --write; edit there -->
+Current runtime, builder-api, builder, BOM and starter releases are published to the Fluxtion public repository, https://repo.repsy.io/mvn/fluxtion/fluxtion-public - declare it. Maven Central has only an outdated 1.0.9 runtime and builder and no BOM; the `fluxtion-maven-plugin` is published to Maven Central.
+<!-- /fluxtion:repository-note -->
+
+Import the Fluxtion BOM, then declare the
+artifacts you need. Generated processors only need `fluxtion-runtime` at runtime. The
+`fluxtion-builder` build-time artifact builds graphs (by default through the hosted generator,
+see [Cloud generation and your API key](#cloud-generation-and-your-api-key)); authoring APIs live in `fluxtion-builder-api`.
 
 ```xml
+<repositories>
+  <repository>
+    <id>fluxtion-public</id>
+    <url>https://repo.repsy.io/mvn/fluxtion/fluxtion-public</url>
+  </repository>
+</repositories>
+
 <dependencyManagement>
   <dependencies>
     <dependency>
       <groupId>com.telamin.fluxtion</groupId>
       <artifactId>fluxtion-bom</artifactId>
-      <version>1.0.56</version>
+      <version>1.0.80</version>
       <type>pom</type>
       <scope>import</scope>
     </dependency>
@@ -125,10 +139,51 @@ the `fluxtion-builder` build-time artifact; authoring APIs live in
 
 ### Gradle (Kotlin DSL)
 ```kotlin
-implementation(platform("com.telamin.fluxtion:fluxtion-bom:1.0.56"))
+repositories {
+    mavenCentral()
+    maven("https://repo.repsy.io/mvn/fluxtion/fluxtion-public")
+}
+
+implementation(platform("com.telamin.fluxtion:fluxtion-bom:1.0.80"))
 compileOnly("com.telamin.fluxtion:fluxtion-builder")
 implementation("com.telamin.fluxtion:fluxtion-runtime")
 ```
+
+---
+
+## Cloud generation and your API key
+
+<!-- fluxtion:remote-build-note - generated from mkdocs.yml extra: by scripts/check-doc-versions.py --write; edit there -->
+**Generation is remote.** Building a graph (`DataFlowBuilder...build()`, `interpret()`, `Fluxtion.compile*` / `compileAot` or the `fluxtion-maven-plugin`) sends the graph model - not your source files - to the hosted Fluxtion generator by default, and needs an API key. Without a key the build stops before sending anything ("Fluxtion API key is not configured"); a rejected key fails with HTTP 401/403. Put the key in `~/.fluxtion/fluxtion.apiKeyFile` as `apiKey=YOUR_KEY` (the first build creates the file). A generated processor runs with `fluxtion-runtime` alone and makes no network call. How to get a key: [Getting an API key](https://telaminai.github.io/fluxtion/home/quickstart-aot/#1-getting-an-api-key) (subscribe to "Fluxtion Source Generator" on [RapidAPI](https://rapidapi.com/hub)).
+<!-- /fluxtion:remote-build-note -->
+
+The published `fluxtion-builder` ships only a remote generator: `DataFlowBuilder...build()`, `Fluxtion.compile(...)`,
+`Fluxtion.interpret(...)`, `compileAot(...)` and the Maven/Spring generation paths POST the graph model to
+`https://fluxtion-source-gen.p.rapidapi.com` (a RapidAPI gateway in front of the Fluxtion generator) and receive the
+generated model or Java source back. Nothing is generated on your machine unless a local generator is on the classpath.
+
+- **Key:** `apiKey=` in `~/.fluxtion/fluxtion.apiKeyFile` (created with a placeholder on first use), or
+  `-Dfluxtion.apiKey=...`. Without a key the build stops with "Fluxtion API key is not configured" before
+  anything is sent.
+- **Configured node instance field values, private fields included, are sent in clear text in the request
+  body.** Each node's configured state is rendered as Java constructor/setter expressions, so a constructor-set
+  `private String password` travels to the generator exactly like a threshold. Static, transient, synthetic and
+  author-excluded fields are not captured, but that is not a secrecy guarantee: a value can still reach the
+  model another way, for example through constructor arguments or custom serialization. **Do not put
+  credentials or other secrets in node fields.** Supply them at runtime, after the processor is built: register
+  a service with `dataFlow.registerService(new Service<>(...))` and receive it in the node through a
+  `@ServiceRegistered` method, or hand the instance over with `dataFlow.injectInstance(...)`. Neither is part of
+  the graph model, so neither is sent.
+- **What else is sent:** for each node its variable name, class name, annotated callback method signatures,
+  parent/child wiring, handled event types and filters; exported service signatures; the generation settings
+  (package and class name, dispatch options, output directory paths); side-band metadata (model fingerprint,
+  target language).
+- **The API key travels only in the `X-RapidAPI-Key` request header** (with `X-RapidAPI-Host`), never in the body.
+- **What is not sent:** your source files or method bodies (a string constant inside a handler method stays
+  local), compiled classes, the GraphML/PNG renderings, the events you process at runtime, and audit records.
+- **Old clients:** `fluxtion-builder` 1.0.9 on Maven Central (and 1.0.0 to 1.0.8) predates the hosted generator's
+  wire format and fails against it; once the generator is redeployed such a client gets a readable "too old"
+  message instead of a `ClassNotFoundException`. Use the BOM from the Fluxtion public repository.
 
 ---
 

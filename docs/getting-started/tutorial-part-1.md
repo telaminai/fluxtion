@@ -28,7 +28,8 @@ jbang TutorialPart1.java
 ```
 
 ```java
-//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
+//REPOS mavencentral,fluxtion={{fluxtion_repository}}
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_builder_version}}
 //JAVA 25
 
 import com.telamin.fluxtion.builder.DataFlowBuilder;
@@ -93,10 +94,17 @@ public class TutorialPart1 {
 
 ```xml
 
+<repositories>
+    <repository>
+        <id>fluxtion-public</id>
+        <url>{{fluxtion_repository}}</url>
+    </repository>
+</repositories>
+
 <dependency>
     <groupId>com.telamin.fluxtion</groupId>
     <artifactId>fluxtion-builder</artifactId>
-    <version>{{fluxtion_version}}</version>
+    <version>{{fluxtion_builder_version}}</version>
 </dependency>
 ```
 

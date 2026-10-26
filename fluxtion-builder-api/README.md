@@ -15,13 +15,22 @@ graphs but you do not need to run local generation in that module.
 Prefer the BOM so the open runtime/API artifacts and the local build-engine
 artifact stay on a tested version pairing.
 
+Releases are published to the Fluxtion public repository; declare it:
+
 ```xml
+<repositories>
+    <repository>
+      <id>fluxtion-public</id>
+      <url>https://repo.repsy.io/mvn/fluxtion/fluxtion-public</url>
+    </repository>
+</repositories>
+
 <dependencyManagement>
     <dependencies>
         <dependency>
             <groupId>com.telamin.fluxtion</groupId>
             <artifactId>fluxtion-bom</artifactId>
-            <version>1.0.56</version>
+            <version>1.0.80</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
