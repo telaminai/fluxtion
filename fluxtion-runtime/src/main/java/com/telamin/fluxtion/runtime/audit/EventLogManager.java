@@ -42,6 +42,7 @@ public class EventLogManager implements Auditor {
     private Map<String, EventLogger> node2Logger;
     private Map<String, EventLogSource> name2LogSourceMap;
     private boolean clearAfterPublish;
+    private boolean cycleComplete;
     public boolean trace = false;
     public boolean printEventToString = true;
     public boolean printThreadName = true;
@@ -312,6 +313,7 @@ public class EventLogManager implements Auditor {
         logRecord.terminateRecord();
         sink.processLogRecord(logRecord);
         logRecord.clear();
+        cycleComplete = true;
     }
 
     /**
@@ -326,12 +328,18 @@ public class EventLogManager implements Auditor {
 
     @Override
     public void processingComplete() {
+        if (cycleComplete) {
+            return;
+        }
         if (canTrace | logRecord.terminateRecord()) {
             sink.processLogRecord(logRecord);
         }
         if (clearAfterPublish) {
             logRecord.clear();
         }
+        // A throwing listener leaves this false so failed-cycle cleanup can retry it.
+        // Once published, a later cleanup call must not close/publish the cleared buffer.
+        cycleComplete = true;
     }
 
     /**
@@ -361,6 +369,7 @@ public class EventLogManager implements Auditor {
 
     @Override
     public void init() {
+        cycleComplete = false;
         logRecord = binaryRecord ? new BinaryLogRecord(clock) : new LogRecord(clock);
         logRecord.printEventToString(printEventToString);
         logRecord.setPrintThreadName(printThreadName);
@@ -372,11 +381,13 @@ public class EventLogManager implements Auditor {
 
     @Override
     public void eventReceived(Event triggerEvent) {
+        cycleComplete = false;
         logRecord.triggerEvent(triggerEvent);
     }
 
     @Override
     public void eventReceived(Object triggerEvent) {
+        cycleComplete = false;
         logRecord.triggerObject(triggerEvent);
     }
 

@@ -56,6 +56,8 @@ public class LogRecord {
     protected final StringBuilder sb;
     protected String sourceId;
     protected boolean firstProp;
+    protected boolean terminated;
+    protected boolean terminatedWithProperties;
     /**
      * Whether to take a second clock reading for {@code endTime}. <b>On by default.</b>
      *
@@ -124,6 +126,7 @@ public class LogRecord {
         this.logLevel = newLogLevel == null ? EventLogControlEvent.LogLevel.NONE : newLogLevel;
         if (!loggingEnabled()) {
             sb.setLength(0);
+            resetTermination();
         }
     }
 
@@ -139,6 +142,7 @@ public class LogRecord {
     public void replaceBuffer(CharSequence newBuffer) {
         sb.setLength(0);
         sb.append(newBuffer);
+        resetTermination();
     }
 
     /**
@@ -300,6 +304,7 @@ public class LogRecord {
     }
 
     public void clear() {
+        resetTermination();
         firstProp = true;
         sourceId = null;
         sb.setLength(0);
@@ -310,6 +315,7 @@ public class LogRecord {
     }
 
     public void triggerEvent(Event event) {
+        resetTermination();
         if (loggingEnabled()) {
             Class<? extends Event> aClass = event.getClass();
             sb.append("eventLogRecord: ");
@@ -335,6 +341,7 @@ public class LogRecord {
     }
 
     public void triggerObject(Object event) {
+        resetTermination();
         if (loggingEnabled()) {
             if (event instanceof Event) {
                 triggerEvent((Event) event);
@@ -363,11 +370,16 @@ public class LogRecord {
 
     /**
      * complete record processing, the return value indicates if any log values
-     * were written.
+     * were written. Retrying a completed close leaves the record unchanged and returns
+     * the original result, so a failed listener can retry publication without losing data.
+     * A new event, {@link #clear()} or {@link #replaceBuffer(CharSequence)} starts a new close.
      *
      * @return flag to indicate properties were logged
      */
     public boolean terminateRecord() {
+        if (terminated) {
+            return terminatedWithProperties;
+        }
         boolean logged = !firstProp;
         if (loggingEnabled()) {
             if (this.sourceId != null) {
@@ -380,7 +392,15 @@ public class LogRecord {
         }
         firstProp = true;
         sourceId = null;
+        terminatedWithProperties = logged;
+        terminated = true;
         return logged;
+    }
+
+    /** Reset by record implementations when starting or replacing their content. */
+    protected final void resetTermination() {
+        terminated = false;
+        terminatedWithProperties = false;
     }
 
     @Override

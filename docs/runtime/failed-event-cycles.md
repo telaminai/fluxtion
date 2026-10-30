@@ -108,6 +108,19 @@ unregisters from the previous dispatcher, so a node reused by another processor 
 - **Callback payloads:** `CallBackNode` and `AbstractCallbackNode` payloads are discarded with a failed cycle
   (`QueuedPayloadOwner` / `QueuedPayloadRegistry`).
 
+## Retrying audit publication (unreleased)
+
+A completed text or binary audit record keeps its first end time and close result
+when publication is retried after a listener throws. `EventLogManager.processingComplete()`
+can retry that failed publication; after a successful completion it does nothing until
+the next `eventReceived` call. This also prevents cleanup after a later callback failure
+from publishing an empty record containing only an end marker. `publishLastRecord()`
+remains an explicit publication request, including for callers outside an event cycle.
+
+These are close/retry guarantees, not exactly-once delivery: a listener that writes the
+record and then throws may write it again on retry. Starting a new record or clearing
+or replacing its contents resets the close state.
+
 ## Not covered
 
 The C++ target (`fluxtion-generator-cpp`) has its own queue guard and pending work. None of the above applies there

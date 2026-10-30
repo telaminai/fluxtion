@@ -427,6 +427,7 @@ public final class BinaryLogRecord extends LogRecord {
     public void triggerObject(Object event) { header(event.getClass()); }
 
     private void header(Class<?> type) {
+        resetTermination();
         pos = 0;
         slot = 0;
         overflow = false;
@@ -519,17 +520,23 @@ public final class BinaryLogRecord extends LogRecord {
 
     @Override
     public boolean terminateRecord() {
+        if (terminated) {
+            return terminatedWithProperties;
+        }
         // slot > 0 covers the id path, where writeSlots no longer touches firstProp; !firstProp
         // covers the String and trace paths, which still do.
         boolean logged = slot > 0 || !firstProp;
         endTime = recordEndTime ? endTimeNow() : 0L;
         firstProp = true;
         sourceId = null;
+        terminatedWithProperties = logged;
+        terminated = true;
         return logged;
     }
 
     @Override
     public void clear() {
+        resetTermination();
         firstProp = true;
         sourceId = null;
         pos = 0;
