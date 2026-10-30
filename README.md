@@ -4,7 +4,7 @@
 
 [![fluxtion-runtime](https://img.shields.io/maven-metadata/v?metadataUrl=https%3A%2F%2Frepo.repsy.io%2Fmvn%2Ffluxtion%2Ffluxtion-public%2Fcom%2Ftelamin%2Ffluxtion%2Ffluxtion-runtime%2Fmaven-metadata.xml&label=fluxtion-runtime)](https://repo.repsy.io/mvn/fluxtion/fluxtion-public/com/telamin/fluxtion/fluxtion-runtime/)
 ![Java](https://img.shields.io/badge/java-21+-blue)
-[![License](https://img.shields.io/badge/license-AGPL%2FSSPL-important)](./LICENSE)
+[![License](https://img.shields.io/badge/license-AGPL--3.0%20%7C%20commercial-important)](./LICENSE)
 [![Docs](https://img.shields.io/badge/docs-website-blue)](https://telaminai.github.io/fluxtion/)
 
 Fluxtion replaces reactive pipelines and event wiring with a compiled, deterministic execution engine. Instead of interpreting a runtime graph, Fluxtion:
@@ -206,4 +206,4 @@ Three open public artifacts:
 
 ## License
 
-Fluxtion is dual-licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](./LICENSE) and the [Server Side Public License (SSPL)](./LICENSE). Commercial licenses and support are available for enterprise use.
+Fluxtion is dual-licensed: under the [GNU Affero General Public License v3.0 (AGPL-3.0)](./LICENSE), or under a commercial licence from Telamin, which lets you use it on Telamin's terms instead of the AGPL's. Commercial licences and support: see [telamin.com/licensing](https://telamin.com/licensing/).
