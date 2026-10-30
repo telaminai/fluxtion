@@ -1,6 +1,6 @@
 /*
  * Copyright: © 2026. Gregory Higgins
- * SPDX-License-Identifier: AGPL-3.0-only OR SSPL-1.0
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 package com.telamin.fluxtion.runtime.audit;
 
