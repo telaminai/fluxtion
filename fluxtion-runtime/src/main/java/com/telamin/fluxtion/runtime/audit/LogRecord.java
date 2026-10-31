@@ -397,6 +397,11 @@ public class LogRecord {
         return logged;
     }
 
+    /** Whether anything has been written since the record was last cleared. */
+    boolean hasContent() {
+        return sb.length() > 0;
+    }
+
     /** Reset by record implementations when starting or replacing their content. */
     protected final void resetTermination() {
         terminated = false;

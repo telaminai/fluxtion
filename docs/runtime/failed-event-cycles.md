@@ -116,6 +116,9 @@ can retry that failed publication; after a successful completion it does nothing
 the next `eventReceived` call. This also prevents cleanup after a later callback failure
 from publishing an empty record containing only an end marker. `publishLastRecord()`
 remains an explicit publication request, including for callers outside an event cycle.
+If a node writes to the record after a `publishLastRecord()` call inside a cycle, the
+cycle's completion closes and publishes those entries as their own record, so they are
+neither lost nor carried into the next event's record.
 
 These are close/retry guarantees, not exactly-once delivery: a listener that writes the
 record and then throws may write it again on retry. Starting a new record or clearing

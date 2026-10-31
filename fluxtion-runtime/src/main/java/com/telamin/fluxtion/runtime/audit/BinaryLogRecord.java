@@ -535,6 +535,11 @@ public final class BinaryLogRecord extends LogRecord {
     }
 
     @Override
+    boolean hasContent() {
+        return slot > 0 || pos > 0 || !firstProp;
+    }
+
+    @Override
     public void clear() {
         resetTermination();
         firstProp = true;

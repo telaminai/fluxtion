@@ -328,7 +328,7 @@ public class EventLogManager implements Auditor {
 
     @Override
     public void processingComplete() {
-        if (cycleComplete) {
+        if (cycleComplete && (logRecord.terminated || !logRecord.hasContent())) {
             return;
         }
         if (canTrace | logRecord.terminateRecord()) {
@@ -338,7 +338,8 @@ public class EventLogManager implements Auditor {
             logRecord.clear();
         }
         // A throwing listener leaves this false so failed-cycle cleanup can retry it.
-        // Once published, a later cleanup call must not close/publish the cleared buffer.
+        // Once published, a later cleanup call must not close/publish the cleared buffer;
+        // anything written after publication (publishLastRecord mid-cycle) is still closed here.
         cycleComplete = true;
     }
 

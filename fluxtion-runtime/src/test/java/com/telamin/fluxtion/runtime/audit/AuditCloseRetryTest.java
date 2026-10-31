@@ -55,6 +55,74 @@ public class AuditCloseRetryTest {
         assertEquals("explicit publication also completed the cycle", 2, records.size());
     }
 
+    @Test
+    public void textWritesAfterAMidCycleExplicitPublicationAreClosedInTheirOwnRecord() {
+        List<String> records = new ArrayList<>();
+        EventLogManager manager = new EventLogManager(record -> records.add(record.toString())).logLevel(LogLevel.INFO);
+        manager.clock = new Time().clock;
+        manager.init();
+        Source source = new Source();
+        manager.nodeRegistered(source, "source");
+        manager.eventReceived("DEMO one");
+        source.logger.info("value", 1);
+        manager.publishLastRecord();
+        source.logger.info("after", 2);
+        manager.processingComplete();
+        manager.eventReceived("DEMO two");
+        source.logger.info("value", 3);
+        manager.processingComplete();
+
+        assertEquals(3, records.size());
+        assertTrue(records.get(1).contains("after: 2}"));
+        assertEquals(1, endTimes(records.get(1)));
+        String next = records.get(2);
+        assertTrue("the next record starts with its own header: " + next, next.startsWith("eventLogRecord: "));
+        assertFalse("a late write must not leak into the next record: " + next, next.contains("after"));
+        assertEquals(1, endTimes(next));
+    }
+
+    @Test
+    public void midCycleExplicitPublicationWithNothingAfterItPublishesNoEmptyRecord() {
+        for (boolean binary : new boolean[]{false, true}) {
+            List<Object> records = new ArrayList<>();
+            EventLogManager manager = new EventLogManager(records::add).logLevel(LogLevel.INFO).binaryRecord(binary);
+            manager.clock = new Time().clock;
+            manager.init();
+            Source source = new Source();
+            manager.nodeRegistered(source, "source");
+            manager.eventReceived("DEMO one");
+            source.logger.info("value", 1);
+            manager.publishLastRecord();
+            manager.processingComplete();
+            assertEquals("binary=" + binary, 1, records.size());
+        }
+    }
+
+    @Test
+    public void binaryWritesAfterAMidCycleExplicitPublicationArePublishedNotDropped() throws Exception {
+        List<Integer> sizes = new ArrayList<>();
+        EventLogManager manager = new EventLogManager(record -> {
+            BinaryLogRecord binary = (BinaryLogRecord) record;
+            assertTrue("a published record has content", binary.hasContent());
+            sizes.add(binary.length());
+        }).logLevel(LogLevel.INFO).binaryRecord(true);
+        manager.clock = new Time().clock;
+        manager.init();
+        Source source = new Source();
+        manager.nodeRegistered(source, "source");
+        manager.eventReceived("DEMO one");
+        source.logger.info("value", 1);
+        manager.publishLastRecord();
+        source.logger.info("after", 2);
+        manager.processingComplete();
+        manager.eventReceived("DEMO two");
+        source.logger.info("value", 3);
+        manager.processingComplete();
+
+        assertEquals("the late write is published, not dropped", 3, sizes.size());
+        assertEquals("the next record holds only its own entry", sizes.get(0), sizes.get(2));
+    }
+
     private static void assertListenerRetry(boolean trace, boolean clear, boolean endTime,
                                            boolean explicitPublication, boolean logValues) {
         List<String> attempts = new ArrayList<>();
