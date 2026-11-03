@@ -410,11 +410,11 @@ format change and belongs on this page first.**
 | f24 trace bits | non-zero bits on a TRACE entry are ignored; it is still "invoked" | ✅ | ✅ | — |
 | f25 no endTime | `0` reads as not recorded — absent in the model, not an instant | ✅ | ✅ | — |
 | f26 concatenated | the first file's records, then the second header reported as an unknown frame | ✅ | ✅ | — |
-| f27 stream header | version 2: the HEADER is delivered after the file header and before the dictionary; it is not a record | ✅ | — | — |
-| f28 stream header re-sent | a second HEADER mid-stream; each describes the records after it | ✅ | — | — |
-| f29 version one | a version-1 file (f01's bytes) reads unchanged by a version-2 reader | ✅ | — | — |
-| f30 header frame in version one | `0x03` in a version-1 file is an unknown frame; nothing delivered as a header | ✅ | — | — |
-| f31 truncated stream header | a HEADER cut inside its text is a truncated tail, never delivered half-read | ✅ | — | — |
+| f27 stream header | version 2: the HEADER is delivered after the file header and before the dictionary; it is not a record | ✅ | ✅ | — |
+| f28 stream header re-sent | a second HEADER mid-stream; each describes the records after it | ✅ | ✅ | — |
+| f29 version one | a version-1 file (f01's bytes) reads unchanged by a version-2 reader | ✅ | ✅ | — |
+| f30 header frame in version one | `0x03` in a version-1 file is an unknown frame; nothing delivered as a header | ✅ | ✅ | — |
+| f31 truncated stream header | a HEADER cut inside its text is a truncated tail, never delivered half-read | ✅ | ✅ | — |
 | filter redefinition (no file) | an id renamed matching → non-matching → matching is selected only while its current name matches, for node, key and event | ✅ `AuditLogFilterCompositionTest` | — | — |
 | counter scope (no file) | f11 with every record declined: the event type counts, no entry is examined | ✅ `BinaryAuditEndToEndTest` | — | — |
 | equal names in one record (no file) | 2,000 equal-but-distinct String values in a near-full file cost one id; the true overflow is still refused | ✅ `BinaryAuditEndToEndTest` | — | — |
