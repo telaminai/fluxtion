@@ -361,6 +361,11 @@ public class EventLogManager implements Auditor {
         return this;
     }
 
+    /** The host context the next header will carry; unmodifiable. Empty when no host supplied one. */
+    public Map<String, String> getHeaderContext() {
+        return java.util.Collections.unmodifiableMap(headerContext);
+    }
+
     /** The header the next stream would begin with, built now. */
     public AuditStreamHeader currentHeader() {
         return AuditStreamHeader.of(resolveDescriptor(), headerContext);

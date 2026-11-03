@@ -166,6 +166,7 @@ public class StreamHeaderTest {
         host.put("name", "quoter");
         host.put("generation", "1");
         m.setHeaderContext(host);
+        assertEquals(host, m.getHeaderContext());
         publish(m, book, 3);
         assertEquals("header, record, header, record: " + second, 4, second.size());
         assertTrue(second.get(2), second.get(2).contains(
