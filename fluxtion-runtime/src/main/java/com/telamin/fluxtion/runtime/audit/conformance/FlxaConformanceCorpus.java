@@ -4,6 +4,7 @@
  */
 package com.telamin.fluxtion.runtime.audit.conformance;
 
+import com.telamin.fluxtion.runtime.audit.AuditStreamHeader;
 import com.telamin.fluxtion.runtime.audit.BinaryLogFile;
 import com.telamin.fluxtion.runtime.audit.BinaryLogRecord;
 import com.telamin.fluxtion.runtime.audit.BinaryLogWriter;
@@ -92,6 +93,11 @@ public final class FlxaConformanceCorpus {
         FIXTURES.put("f24-trace-bits", FlxaConformanceCorpus::traceBits);
         FIXTURES.put("f25-no-end-time", FlxaConformanceCorpus::noEndTime);
         FIXTURES.put("f26-concatenated", FlxaConformanceCorpus::concatenated);
+        FIXTURES.put("f27-stream-header", FlxaConformanceCorpus::streamHeader);
+        FIXTURES.put("f28-stream-header-resent", FlxaConformanceCorpus::streamHeaderResent);
+        FIXTURES.put("f29-version-one", () -> withVersion(minimal(), 1));
+        FIXTURES.put("f30-header-frame-in-version-one", () -> withVersion(streamHeader(), 1));
+        FIXTURES.put("f31-truncated-stream-header", FlxaConformanceCorpus::truncatedStreamHeader);
     }
 
     private FlxaConformanceCorpus() {
@@ -526,7 +532,69 @@ public final class FlxaConformanceCorpus {
         return out;
     }
 
+    /**
+     * A fixed header, so the fixture does not drift with the runtime's version or the time it was generated. The
+     * host map is what a hosting server supplies; {@code generation} is a number written as a string.
+     */
+    static AuditStreamHeader fixtureHeader(String runId) {
+        Map<String, String> host = new LinkedHashMap<>();
+        host.put("serverId", "pricing-1");
+        host.put("runId", runId);
+        host.put("group", "pricing");
+        host.put("name", "quoter");
+        host.put("generation", "1");
+        return new AuditStreamHeader("com.acme.TradeProcessor",
+                "5f3c0a9e1b7d4c2a8e6f0b3d9c1a7e5f2b8d4c6a0e9f3b7d1c5a8e2f6b0d4c9a",
+                "1.0.84", "1.1.4", "2023-11-14T22:13:20Z", host);
+    }
+
+    /** Version 2: a stream header frame, then the minimal file's dictionary and record. */
+    static byte[] streamHeader() {
+        Clock clock = countingClock(MILLIS_BASE);
+        return write(BinaryLogFile.TIME_UNIT_EPOCH_MILLIS, w -> {
+            w.writeStreamHeader(fixtureHeader("run-1"));
+            BinaryLogRecord r = record(clock);
+            arrive(clock, r, new Tick());
+            r.addRecord("pricer", "price", 1.25d);
+            r.terminateRecord();
+            w.processLogRecord(r);
+        });
+    }
+
+    /** A header re-sent mid-stream with a new host context: the later header describes the records after it. */
+    static byte[] streamHeaderResent() {
+        Clock clock = countingClock(MILLIS_BASE);
+        return write(BinaryLogFile.TIME_UNIT_EPOCH_MILLIS, w -> {
+            w.writeStreamHeader(fixtureHeader("run-1"));
+            BinaryLogRecord r = record(clock);
+            arrive(clock, r, new Tick());
+            r.addRecord("pricer", "price", 1.25d);
+            r.terminateRecord();
+            w.processLogRecord(r);
+            r.clear();
+            w.writeStreamHeader(fixtureHeader("run-2"));
+            arrive(clock, r, new Tick());
+            r.addRecord("pricer", "price", 1.5d);
+            r.terminateRecord();
+            w.processLogRecord(r);
+        });
+    }
+
+    /** {@link #streamHeader()} cut inside the header's text: nothing whole after the file header. */
+    static byte[] truncatedStreamHeader() {
+        byte[] whole = streamHeader();
+        return Arrays.copyOf(whole, BinaryLogFile.HEADER_BYTES + BinaryLogFile.STREAM_HEADER_FIXED_BYTES + 20);
+    }
+
     // ------------------------------------------------------------------ byte edits
+
+    /** The same bytes under another format version: version 2 differs from 1 only by allowing the header frame. */
+    static byte[] withVersion(byte[] bytes, int version) {
+        byte[] out = bytes.clone();
+        out[4] = (byte) (version >>> 8);
+        out[5] = (byte) version;
+        return out;
+    }
 
     /** Overwrites slot1 of the given entry of the first RECORD frame with {@code id}. */
     static void patchValueId(byte[] bytes, int entryIndex, long id) {

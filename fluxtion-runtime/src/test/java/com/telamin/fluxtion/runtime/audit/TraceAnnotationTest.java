@@ -133,7 +133,7 @@ public class TraceAnnotationTest {
     }
 
     private static String stripTimes(String record) {
-        return record.replaceAll("(eventTime|logTime|endTime|groupingId): [^\\n]*", "$1: _");
+        return record.replaceAll("(eventTime|logTime|endTime|groupingId|startedAt): [^\\n]*", "$1: _");
     }
 
     @Test

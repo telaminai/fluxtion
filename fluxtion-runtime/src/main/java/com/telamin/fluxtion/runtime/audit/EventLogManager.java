@@ -7,11 +7,13 @@ package com.telamin.fluxtion.runtime.audit;
 import com.telamin.fluxtion.runtime.annotations.OnEventHandler;
 import com.telamin.fluxtion.runtime.annotations.builder.Inject;
 import com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel;
+import com.telamin.fluxtion.runtime.describe.ProcessorDescriptor;
 import com.telamin.fluxtion.runtime.event.Event;
 import com.telamin.fluxtion.runtime.node.ForkedTrigger;
 import com.telamin.fluxtion.runtime.time.Clock;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.ObjLongConsumer;
 
@@ -74,6 +76,15 @@ public class EventLogManager implements Auditor {
      */
     public boolean recordEndTime = true;
     private LogLevel logLevel = LogLevel.INFO;
+    /** Names the processor in the stream header; handed over by generated code or the host, else null. */
+    private transient ProcessorDescriptor descriptor;
+    /** Host-supplied run identity for the stream header (server, run, group, name, generation...). */
+    private transient Map<String, String> headerContext = new LinkedHashMap<>();
+    /**
+     * True until the stream header has been written to the CURRENT sink. Set again by every sink, record or
+     * context change, so each stream a sink receives begins with a header. Cleared only by writing one.
+     */
+    private transient boolean headerPending = true;
 
 
     public EventLogManager() {
@@ -245,8 +256,13 @@ public class EventLogManager implements Auditor {
 
     @OnEventHandler(propagate = false)
     public void calculationLogConfig(EventLogControlEvent newConfig) {
+        if (newConfig.getDescriptor() != null) {
+            this.descriptor = newConfig.getDescriptor();
+            headerPending = true;
+        }
         if (newConfig.getLogRecordProcessor() != null) {
             this.sink = newConfig.getLogRecordProcessor();
+            headerPending = true;
         }
 
         LogRecord newLogRecord = newConfig.getLogRecord();
@@ -255,6 +271,8 @@ public class EventLogManager implements Auditor {
             newLogRecord.replaceBuffer(logRecord.sb);
             this.logRecord = newLogRecord;
             this.logRecord.setClock(clock);
+            // a format swap starts a new stream on the sink: a binary writer needs its own header frame
+            headerPending = true;
             // PRECEDENCE: the manager's recordEndTime governs the records the MANAGER builds; a record
             // the caller supplies keeps its own setting. An earlier version overwrote it, so a caller
             // who had chosen setRecordEndTime(false) on a replacement record - the route the docs
@@ -294,6 +312,57 @@ public class EventLogManager implements Auditor {
 
     public void setLogSink(LogRecordListener sink) {
         this.sink = sink;
+        headerPending = true;
+    }
+
+    /**
+     * Names the processor in the stream header. Generated processors call this from their constructor with their
+     * compiled descriptor; a host may call it for a processor generated before that call existed. Takes effect
+     * at the next header: a stream already started is not re-headed unless its sink or context changes.
+     */
+    public EventLogManager setDescriptor(ProcessorDescriptor descriptor) {
+        this.descriptor = descriptor;
+        return this;
+    }
+
+    public ProcessorDescriptor getDescriptor() {
+        return descriptor;
+    }
+
+    /**
+     * Sets the host's run identity for the stream header, replacing any earlier context, and re-heads the stream:
+     * the next record published is preceded by a header carrying it. Keys are free-form; a hosting server uses
+     * {@code serverId, runId, group, name, generation}. Null keys and values are dropped.
+     */
+    public EventLogManager setHeaderContext(Map<String, String> context) {
+        LinkedHashMap<String, String> copy = new LinkedHashMap<>();
+        if (context != null) {
+            for (Map.Entry<String, String> e : context.entrySet()) {
+                if (e.getKey() != null && e.getValue() != null) {
+                    copy.put(e.getKey(), e.getValue());
+                }
+            }
+        }
+        this.headerContext = copy;
+        headerPending = true;
+        return this;
+    }
+
+    /** The header the next stream would begin with, built now. */
+    public AuditStreamHeader currentHeader() {
+        return AuditStreamHeader.of(descriptor, headerContext);
+    }
+
+    /**
+     * Writes the stream header to the sink if this stream has not had one. Called before every publish, so the
+     * header always precedes the stream's first record and is never written for a stream that publishes
+     * nothing. A sink that throws on the header has the same failure path as one that throws on a record.
+     */
+    private void writeHeaderIfPending() {
+        if (headerPending) {
+            headerPending = false;
+            sink.processStreamHeader(new StreamHeaderRecord(currentHeader(), logRecord instanceof BinaryLogRecord));
+        }
     }
 
     public void setLogGroupId(String groupId) {
@@ -310,6 +379,7 @@ public class EventLogManager implements Auditor {
      */
     public void publishLastRecord() {
         logRecord.terminateRecord();
+        writeHeaderIfPending();
         sink.processLogRecord(logRecord);
         logRecord.clear();
     }
@@ -327,6 +397,7 @@ public class EventLogManager implements Auditor {
     @Override
     public void processingComplete() {
         if (canTrace | logRecord.terminateRecord()) {
+            writeHeaderIfPending();
             sink.processLogRecord(logRecord);
         }
         if (clearAfterPublish) {

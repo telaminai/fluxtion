@@ -427,8 +427,12 @@ public interface DataFlow extends ServiceRegistry, NodeDiscovery, Lifecycle {
         onEvent(new EventLogControlEvent(nodeName, null, logLevel));
     }
 
+    /**
+     * Installs the audit sink. The processor's {@link #getDescriptor() descriptor} travels with it, so the stream
+     * header the sink receives first names the processor and its graph fingerprint, whichever builder generated it.
+     */
     default void setAuditLogProcessor(LogRecordListener logProcessor) {
-        onEvent(new EventLogControlEvent(logProcessor));
+        onEvent(new EventLogControlEvent(logProcessor).descriptor(getDescriptor()));
     }
 
     default void setAuditLogRecordEncoder(LogRecord logRecord) {

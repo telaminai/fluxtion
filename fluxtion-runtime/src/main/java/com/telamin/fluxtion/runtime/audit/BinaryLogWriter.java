@@ -120,6 +120,10 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
 
     @Override
     public void processLogRecord(LogRecord logRecord) {
+        if (logRecord instanceof StreamHeaderRecord) {
+            processStreamHeader((StreamHeaderRecord) logRecord);
+            return;
+        }
         if (!(logRecord instanceof BinaryLogRecord)) {
             throw new IllegalArgumentException("BinaryLogWriter needs a BinaryLogRecord, got "
                     + logRecord.getClass().getName()
@@ -277,6 +281,37 @@ public final class BinaryLogWriter implements LogRecordListener, Closeable {
             else n += 3;
         }
         return n;
+    }
+
+    /** Writes the header as a {@link BinaryLogFile#FRAME_STREAM_HEADER} frame, whatever stream it opens. */
+    @Override
+    public void processStreamHeader(StreamHeaderRecord header) {
+        writeStreamHeader(header.header());
+    }
+
+    /**
+     * Writes a {@link BinaryLogFile#FRAME_STREAM_HEADER} frame. Allocates: it runs once per stream, not per record.
+     *
+     * @throws IllegalArgumentException when the header text is longer than the format allows; nothing is written
+     */
+    public void writeStreamHeader(AuditStreamHeader header) {
+        byte[] text = header.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        if (text.length > BinaryLogFile.MAX_STREAM_HEADER_BYTES) {
+            throw new IllegalArgumentException("audit stream header is " + text.length
+                    + " bytes, the format allows " + BinaryLogFile.MAX_STREAM_HEADER_BYTES);
+        }
+        byte[] frame = new byte[BinaryLogFile.STREAM_HEADER_FIXED_BYTES + text.length];
+        frame[0] = (byte) BinaryLogFile.FRAME_STREAM_HEADER;
+        frame[1] = (byte) (text.length >>> 24);
+        frame[2] = (byte) (text.length >>> 16);
+        frame[3] = (byte) (text.length >>> 8);
+        frame[4] = (byte) text.length;
+        System.arraycopy(text, 0, frame, BinaryLogFile.STREAM_HEADER_FIXED_BYTES, text.length);
+        try {
+            out.write(frame, 0, frame.length);
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot write audit stream header", e);
+        }
     }
 
     private void emitDictionaryEntry(int id, String name) throws IOException {

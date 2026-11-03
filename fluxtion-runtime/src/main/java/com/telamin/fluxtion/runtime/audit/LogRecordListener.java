@@ -15,6 +15,22 @@ public interface LogRecordListener {
     void processLogRecord(LogRecord logRecord);
 
     /**
+     * Receives the stream header, before the first record of each stream (see {@link AuditStreamHeader}).
+     *
+     * <p>The default delivers a TEXT stream's header as an ordinary record, so every text sink writes it with no
+     * change: its {@code asCharSequence()} is one YAML document, {@code auditStreamHeader:}. A BINARY stream's
+     * header is ignored by default, because a binary sink written before the header existed casts each record to
+     * {@link BinaryLogRecord} and has no frame to write it in; {@link BinaryLogWriter} overrides this to write a
+     * {@link BinaryLogFile#FRAME_STREAM_HEADER} frame. A sink that counts records and does not want the header
+     * counted overrides this too.
+     */
+    default void processStreamHeader(StreamHeaderRecord header) {
+        if (!header.isBinaryStream()) {
+            processLogRecord(header);
+        }
+    }
+
+    /**
      * The byte-facing path: take the record's encoded form without downcasting to reach it.
      *
      * <p>M52.3, spec-binary-audit-encoding §6.1(2). A sink that ships records onward — to a queue, a

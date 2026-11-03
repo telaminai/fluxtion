@@ -10,9 +10,10 @@ package com.telamin.fluxtion.runtime.audit;
  *
  * <pre>
  *   file    := header, frame*
- *   header  := magic "FLXA" (4 bytes), formatVersion:u16, reserved:u16
+ *   header  := magic "FLXA" (4 bytes), formatVersion:u16, timeUnit:u16
  *
- *   frame   := DICT | RECORD
+ *   frame   := DICT | RECORD | HEADER                (HEADER from version 2)
+ *   HEADER  := 0x03, len:u32, utf8[len]              (an AuditStreamHeader, text form)
  *   DICT    := 0x02, id:u16, len:u16, utf8[len]
  *   RECORD  := 0x01, entryCount:u16, eventTypeId:u16,
  *              eventTime:i64, logTime:i64, endTime:i64,
@@ -33,11 +34,30 @@ package com.telamin.fluxtion.runtime.audit;
 public final class BinaryLogFile {
 
     public static final byte[] MAGIC = {'F', 'L', 'X', 'A'};
-    public static final int FORMAT_VERSION = 1;
+    /**
+     * The version this runtime WRITES. Version 2 adds the {@link #FRAME_STREAM_HEADER} frame and nothing else, so a
+     * version-2 reader reads version 1 unchanged. A version-1 reader refuses a version-2 file by its version number,
+     * which is the point of the bump: it would otherwise throw on the first header frame as an unknown frame type.
+     * The C++ runtime still writes version 1.
+     */
+    public static final int FORMAT_VERSION = 2;
+    /** The oldest version a reader of this runtime accepts. */
+    public static final int MIN_READABLE_VERSION = 1;
     public static final int HEADER_BYTES = 8;
 
     public static final int FRAME_RECORD = 0x01;
     public static final int FRAME_DICT = 0x02;
+    /**
+     * The stream header (version 2+): the text form of an {@link AuditStreamHeader}. Written before the first record
+     * of a stream, and again whenever the producer re-heads the stream (a new host context), so a reader takes the
+     * LATEST header as describing the records that follow it. {@code len} is a u32: the text is small, but a u16
+     * would make a long host context a refusal for no reason.
+     */
+    public static final int FRAME_STREAM_HEADER = 0x03;
+    /** Bytes before the header frame's text: frame type and the u32 length. */
+    public static final int STREAM_HEADER_FIXED_BYTES = 1 + 4;
+    /** A header longer than this is refused by the writer and treated as damage by the reader. */
+    public static final int MAX_STREAM_HEADER_BYTES = 1 << 20;
 
     // ---- THE BOUNDS TABLE ------------------------------------------------------------------------
     // Every field the wire writes as a u16, in one place, so both writers check the same limits and a

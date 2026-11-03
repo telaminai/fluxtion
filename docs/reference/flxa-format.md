@@ -1,6 +1,7 @@
 # FLXA — the binary audit log format
 
-**Status: normative for format version 1, shipped in `fluxtion-runtime` 1.0.15.** The key words MUST,
+**Status: normative for format versions 1 (shipped in `fluxtion-runtime` 1.0.15) and 2 (adds the stream
+header frame, §3.4; the Java writer writes it from `fluxtion-runtime` 1.1.4).** The key words MUST,
 MUST NOT, SHOULD and MAY are as in RFC 2119. Where this page and an implementation disagree, this
 page is the bug report; where this page is silent, the implementation is not a promise.
 
@@ -23,7 +24,7 @@ and another did not. Everything a consumer may rely on is stated here, and a **c
 ```
 file   := header frame*
 header := magic "FLXA" (4 bytes) , formatVersion:u16 , timeUnit:u16        # 8 bytes
-frame  := DICT | RECORD
+frame  := DICT | RECORD | HEADER                                           # HEADER: version 2 only
 ```
 
 A file is a header followed by any number of frames. Frames carry no length prefix and no checksum;
@@ -33,7 +34,7 @@ in §9 and §10.
 | field | value | rule |
 |---|---|---|
 | `magic` | `46 4C 58 41` | MUST be present. A reader MUST refuse a file without it. |
-| `formatVersion` | `1` | A reader MUST refuse a version it does not implement. This page defines version 1 only. |
+| `formatVersion` | `1`, `2` | A reader MUST refuse a version it does not implement. Version 2 differs from 1 only by allowing the HEADER frame (§3.4); a version-2 reader reads version 1 unchanged (f29). |
 | `timeUnit` | `0`, `1`, `2` | §7. A writer MUST NOT write any other value. |
 
 ## 3. Frames
@@ -92,6 +93,29 @@ scores or plots names MUST state that keyless evidence is outside its coverage.
 A writer MUST NOT emit a tag outside this table. A reader MUST deliver an entry whose tag it does
 not know, with its bits, and MUST NOT fail the record or the file (f12); rendering it is
 diagnostic (`#tag<n>:<bits>`), and a text constructor treats it as text (§11).
+
+### 3.4 HEADER — the stream header (version 2)
+
+```
+HEADER := 0x03 , length:u32 , utf8[length]
+```
+
+The text form of an `AuditStreamHeader`: one YAML document, `auditStreamHeader:`, naming the processor,
+its graph's `sourceFingerprint`, the toolchain and runtime versions, when the stream started, and the
+host's run identity. It is the same text a text-format stream carries as its first document, so a reader
+parses one shape for both formats. `length` is at most `1048576`; a reader MUST treat a larger value as
+damage.
+
+- A writer writes a HEADER before the first RECORD of a stream (the Java `EventLogManager` does so before
+  the first record it publishes after any sink, record or context change) and MAY write another later; a
+  reader MUST take the most recent HEADER as describing the RECORDs that follow it (f28).
+- A HEADER is not a record: it is not counted in `records` and has no timestamps of its own.
+- A HEADER frame in a version-1 file is an unknown frame (§9.4, f30).
+- A truncated HEADER is a truncated tail (§9.3); it MUST NOT be delivered half-read (f31).
+
+What the header proves is stated with it: equal `sourceFingerprint`s mean the same graph **shape** —
+node names, classes, callbacks and edges — never the same build, because method bodies and configured
+values are not in the digest. `null` means the producer had no fingerprint to state.
 
 ## 4. The dictionary
 
@@ -214,7 +238,8 @@ while a writer is open is unsupported: start a new writer with the new unit.
 
 ## 8. Writer requirements
 
-1. Write the header first, then frames; nothing else, ever.
+1. Write the header first, then frames; nothing else, ever. The Java writer writes `formatVersion 2`;
+   the C++ writer still writes `1`.
 2. Define every id before its first use (§4).
 3. Decide every **semantic** refusal for a record before writing the first byte of it, on every
    path that emits a record. The refusals are:
@@ -239,7 +264,8 @@ while a writer is open is unsupported: start a new writer with the new unit.
 
 ## 9. Reader requirements
 
-1. Refuse a file without the magic or with a version this reader does not implement.
+1. Refuse a file without the magic or with a version this reader does not implement. A reader of this
+   page implements `1` and `2`.
 2. Deliver the header before any frame (§7.4).
 3. Deliver every **whole** frame in order. A frame that is incomplete at end of file — a truncated
    tail, the normal end state of a crash — MUST NOT fail the file: everything before it is delivered
@@ -249,10 +275,16 @@ while a writer is open is unsupported: start a new writer with the new unit.
 5. Deliver an entry whose value tag is unknown, with its bits (f12).
 6. Render an unresolved id as `#<id>`, count it, continue (f11). Id `0` is never unresolved.
 7. Never guess a unit (§7.4).
+8. Deliver each HEADER frame (version 2) in file order, between the records it separates (f27, f28).
 
 ## 10. Where a file comes from is not in the file
 
-The format carries no producer identity, thread, grouping id, host, or processor name. A consumer
+**From version 2 a file MAY state it, in a HEADER frame (§3.4).** That is the producer's own statement —
+which processor, which graph shape, which host run — and a consumer presents it as such, not as proof:
+nothing in the format prevents a header from being edited (§15). A version-1 file, or a version-2 file
+whose producer wrote no header, has none, and the rest of this section applies to it unchanged.
+
+The version-1 format carries no producer identity, thread, grouping id, host, or processor name. A consumer
 that presents those MUST take them from outside the file and say so; it MUST NOT invent them. The
 analyser's provenance model (its *§E provenance*) is the consumer-side answer, and the text it
 constructs omits `thread` and `groupingId` rather than writing `null`. The consequence to state
@@ -378,6 +410,11 @@ format change and belongs on this page first.**
 | f24 trace bits | non-zero bits on a TRACE entry are ignored; it is still "invoked" | ✅ | ✅ | — |
 | f25 no endTime | `0` reads as not recorded — absent in the model, not an instant | ✅ | ✅ | — |
 | f26 concatenated | the first file's records, then the second header reported as an unknown frame | ✅ | ✅ | — |
+| f27 stream header | version 2: the HEADER is delivered after the file header and before the dictionary; it is not a record | ✅ | — | — |
+| f28 stream header re-sent | a second HEADER mid-stream; each describes the records after it | ✅ | — | — |
+| f29 version one | a version-1 file (f01's bytes) reads unchanged by a version-2 reader | ✅ | — | — |
+| f30 header frame in version one | `0x03` in a version-1 file is an unknown frame; nothing delivered as a header | ✅ | — | — |
+| f31 truncated stream header | a HEADER cut inside its text is a truncated tail, never delivered half-read | ✅ | — | — |
 | filter redefinition (no file) | an id renamed matching → non-matching → matching is selected only while its current name matches, for node, key and event | ✅ `AuditLogFilterCompositionTest` | — | — |
 | counter scope (no file) | f11 with every record declined: the event type counts, no entry is examined | ✅ `BinaryAuditEndToEndTest` | — | — |
 | equal names in one record (no file) | 2,000 equal-but-distinct String values in a near-full file cost one id; the true overflow is still refused | ✅ `BinaryAuditEndToEndTest` | — | — |
@@ -391,7 +428,7 @@ format change and belongs on this page first.**
 | keyless evidence in named reductions (no file) | a keyless number beside a business key named `null`, both orders, repeated blocks: the scorer compares the named figure and reports the change; the graph menu offers named series only and does not throw | — | ✅ `ExpectationScorerTest`, `TopologyPanelKeylessTest` | — |
 | `endTime` precedence (no file) | the manager governs the records it builds and the one it holds when set; a supplied record keeps its own setting; the setter is live on a generated processor | ✅ `BinaryAuditEndToEndTest`; generated: compiler `GeneratedBinaryAuditSinkTest` | — | — |
 | writer refusals (no file) | overflow, 65,536 entries, oversize LATER name, a full FILE dictionary across record instances (and exactly filling it is allowed), a name of exactly 65,535 bytes, undefined unit: refused before any byte, stream and dictionary unchanged; a refused record instance is reusable after its next trigger; the preflight length equals the encoded length for surrogate pairs and lone surrogates | ✅ `BinaryAuditEndToEndTest` | — | overflow ✅, others source-inspected² |
-| header refusals (no file) | bad magic, unknown version | ✅ `BinaryLogFileRoundTripTest` | ✅ (`canOpen`) | — |
+| header refusals (no file) | bad magic, unknown version (`3`) | ✅ `BinaryLogFileRoundTripTest` | ✅ (`canOpen`) | — |
 | read paths (no file) | mapped and streamed reads agree, including a frame straddling a chunk | ✅ `BinaryLogFileReadPathTest` | — | — |
 | CLI (no file) | bounds scaled; out-of-domain bounds keep their inequality on both sides, together, and with `--limit`; an explicit extreme is a bound; refusal on unstated/undefined unit; `--declare-unit` | ✅ `AuditLogToolTest` | — | — |
 
@@ -417,8 +454,11 @@ tested:
 
 ## 14. Versioning
 
-- `formatVersion` is `1`. A reader MUST refuse any other value; there is no forward tolerance at
+- `formatVersion` is `1` or `2`. A reader MUST refuse any other value; there is no forward tolerance at
   the frame level, because frames have no length prefix.
+- Version 2 (2026) added one frame type, HEADER (§3.4), and nothing else, exactly as the next bullet
+  requires. Its purpose is that a reader of version 1 refuses a version-2 file by its version number
+  instead of failing on the first HEADER as an unknown frame.
 - A new **value tag** MAY be added without a version change, because §9.5 requires readers to
   deliver unknown tags. A new **frame type**, a change to any fixed layout, or a change to the
   meaning of an existing field requires `formatVersion 2`.

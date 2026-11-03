@@ -33,7 +33,9 @@ public class FlxaConformanceTest {
         final List<String> dictionary = new ArrayList<>();
 
         @Override public void onHeader(int version, int unit) { headerUnit = unit; events.add("header"); }
+        final List<String> streamHeaders = new ArrayList<>();
         @Override public void onDictionaryEntry(int id, String name) { dictionary.add(id + "=" + name); events.add("dict"); }
+        @Override public void onStreamHeader(String text) { streamHeaders.add(text); events.add("streamHeader"); }
         @Override public boolean onRecord(int typeId, String type, long ev, long log, long end, int n) {
             records.add(type + " ev=" + ev + " log=" + log + " end=" + end + " n=" + n);
             events.add("record");
@@ -72,7 +74,7 @@ public class FlxaConformanceTest {
                     + "treat the diff as a FORMAT change to be specified, not a file to be refreshed",
                     FlxaConformanceCorpus.generate(name), FlxaConformanceCorpus.committed(name));
         }
-        assertEquals("the set is the published artefact; add a fixture here AND a test below", 26,
+        assertEquals("the set is the published artefact; add a fixture here AND a test below", 31,
                 FlxaConformanceCorpus.names().size());
     }
 
@@ -82,7 +84,8 @@ public class FlxaConformanceTest {
             byte[] b = FlxaConformanceCorpus.committed(name);
             assertTrue(name, b.length >= BinaryLogFile.HEADER_BYTES);
             assertArrayEquals(name, BinaryLogFile.MAGIC, Arrays.copyOf(b, 4));
-            assertEquals(name + " version", BinaryLogFile.FORMAT_VERSION, ((b[4] & 0xFF) << 8) | (b[5] & 0xFF));
+            int expected = name.startsWith("f29-") || name.startsWith("f30-") ? 1 : BinaryLogFile.FORMAT_VERSION;
+            assertEquals(name + " version", expected, ((b[4] & 0xFF) << 8) | (b[5] & 0xFF));
         }
     }
 
@@ -335,5 +338,66 @@ public class FlxaConformanceTest {
             assertTrue(reported.getMessage(), reported.getMessage().contains("unknown frame type 0x7"));
         }
         assertEquals("the record before it was delivered", 1, r.records.size());
+    }
+
+    // ------------------------------------------------------------------ version 2: the stream header
+
+    @Test
+    public void f27_streamHeader_deliveredBeforeTheDictionaryAndRecord() throws IOException {
+        Recording r = read("f27-stream-header");
+        assertEquals(Arrays.asList("header", "streamHeader", "dict", "dict", "dict", "record", "entry"), r.events);
+        assertEquals(1, r.streamHeaders.size());
+        String h = r.streamHeaders.get(0);
+        assertTrue(h, h.startsWith("auditStreamHeader:\n    schema: 1\n    processor: com.acme.TradeProcessor\n"));
+        assertTrue(h, h.contains("\n    sourceFingerprint: 5f3c0a9e"));
+        assertTrue(h, h.endsWith("\n    host: {serverId: pricing-1, runId: run-1, group: pricing, name: quoter, generation: '1'}"));
+        BinaryLogReader.Result res = result("f27-stream-header");
+        assertEquals(2, res.formatVersion);
+        assertEquals("the header is not a record", 1, res.records);
+        assertEquals(1, res.streamHeaders.size());
+    }
+
+    @Test
+    public void f28_streamHeaderResent_eachHeaderDescribesTheRecordsAfterIt() throws IOException {
+        Recording r = read("f28-stream-header-resent");
+        assertEquals(2, r.streamHeaders.size());
+        assertTrue(r.streamHeaders.get(0).contains("runId: run-1"));
+        assertTrue(r.streamHeaders.get(1).contains("runId: run-2"));
+        int second = r.events.lastIndexOf("streamHeader");
+        assertEquals("one record before the second header and one after", 1,
+                r.events.subList(0, second).stream().filter("record"::equals).count());
+        assertEquals(2, r.records.size());
+    }
+
+    @Test
+    public void f29_versionOne_readsUnchangedByAVersionTwoReader() throws IOException {
+        Recording r = read("f29-version-one");
+        assertEquals(Arrays.asList("header", "dict", "dict", "dict", "record", "entry"), r.events);
+        assertEquals(Arrays.asList("pricer.price tag=1 1.25"), r.entries);
+        assertEquals(1, result("f29-version-one").formatVersion);
+        assertTrue(r.streamHeaders.isEmpty());
+    }
+
+    @Test
+    public void f30_headerFrameInVersionOne_isAnUnknownFrame() {
+        Recording r = new Recording();
+        try {
+            BinaryLogReader.read(FlxaConformanceCorpus.committed("f30-header-frame-in-version-one"), r);
+            fail("version 1 defines no frame 0x03");
+        } catch (IOException reported) {
+            assertTrue(reported.getMessage(), reported.getMessage().contains("unknown frame type 0x3"));
+        }
+        assertTrue("nothing was delivered as a header", r.streamHeaders.isEmpty());
+        assertEquals(0, r.records.size());
+    }
+
+    @Test
+    public void f31_truncatedStreamHeader_isATruncatedTail() throws IOException {
+        Recording r = new Recording();
+        BinaryLogReader.Result res = BinaryLogReader.read(
+                FlxaConformanceCorpus.committed("f31-truncated-stream-header"), r);
+        assertEquals(0, res.records);
+        assertTrue("a cut header is never delivered half-read", r.streamHeaders.isEmpty());
+        assertEquals(BinaryLogFile.STREAM_HEADER_FIXED_BYTES + 20, res.truncatedBytes);
     }
 }

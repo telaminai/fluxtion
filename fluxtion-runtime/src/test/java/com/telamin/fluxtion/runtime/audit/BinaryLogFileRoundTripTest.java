@@ -41,6 +41,17 @@ public class BinaryLogFileRoundTripTest {
         return c;
     }
 
+    /** The offset of the first frame that is not a stream header. */
+    static int firstFrameAfterStreamHeaders(byte[] file) {
+        int p = BinaryLogFile.HEADER_BYTES;
+        while (file[p] == BinaryLogFile.FRAME_STREAM_HEADER) {
+            int len = ((file[p + 1] & 0xFF) << 24) | ((file[p + 2] & 0xFF) << 16)
+                    | ((file[p + 3] & 0xFF) << 8) | (file[p + 4] & 0xFF);
+            p += BinaryLogFile.STREAM_HEADER_FIXED_BYTES + len;
+        }
+        return p;
+    }
+
     /** Runs {@code events} through a binary-audited manager and returns the file bytes. */
     private static byte[] writeLog(int events) throws IOException {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -224,7 +235,7 @@ public class BinaryLogFileRoundTripTest {
     @Test
     public void truncationInsideADictionaryFrameIsSurvivable() throws IOException {
         byte[] full = writeLog(1);
-        byte[] cut = Arrays.copyOf(full, 12);   // header + part of the first dict frame
+        byte[] cut = Arrays.copyOf(full, 12);   // file header + part of the first frame (the stream header)
 
         BinaryLogReader.Result r = BinaryLogReader.read(cut, new Collector());
         assertEquals(0, r.records);
@@ -235,9 +246,11 @@ public class BinaryLogFileRoundTripTest {
     @Test
     public void anUnknownIdRendersRatherThanFailing() throws IOException {
         byte[] file = writeLog(1);
-        // blank the first dictionary frame's id so nothing resolves it
-        file[BinaryLogFile.HEADER_BYTES + 1] = (byte) 0xFF;
-        file[BinaryLogFile.HEADER_BYTES + 2] = (byte) 0xFE;
+        // blank the first dictionary frame's id so nothing resolves it; the stream header frame comes first
+        int dict = firstFrameAfterStreamHeaders(file);
+        assertEquals(BinaryLogFile.FRAME_DICT, file[dict]);
+        file[dict + 1] = (byte) 0xFF;
+        file[dict + 2] = (byte) 0xFE;
 
         Collector c = new Collector();
         BinaryLogReader.Result r = BinaryLogReader.read(file, c);

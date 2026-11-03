@@ -34,7 +34,12 @@ public class AuditNeedsNodeRegistrationTest {
     }
 
     private static EventLogManager managerWithSink(List<String> published) {
-        EventLogManager manager = new EventLogManager(r -> published.add(r.asCharSequence().toString()));
+        // records only: the stream header is covered by StreamHeaderTest
+        EventLogManager manager = new EventLogManager(r -> {
+            if (!(r instanceof StreamHeaderRecord)) {
+                published.add(r.asCharSequence().toString());
+            }
+        });
         manager.clock = new Clock();
         manager.clock.init();
         manager.init();

@@ -52,6 +52,18 @@ public class EventLogControlEvent implements Event {
      */
     @Getter
     private ObjLongConsumer<StringBuilder> timeFormatter;
+    /**
+     * The processor's descriptor, for the audit stream header. Set by {@code DataFlow.setAuditLogProcessor}, so a
+     * processor compiled before generated code handed its descriptor over still names itself in the header.
+     */
+    @Getter
+    private com.telamin.fluxtion.runtime.describe.ProcessorDescriptor descriptor;
+
+    /** Attaches the processor's descriptor; see {@link #getDescriptor()}. */
+    public EventLogControlEvent descriptor(com.telamin.fluxtion.runtime.describe.ProcessorDescriptor descriptor) {
+        this.descriptor = descriptor;
+        return this;
+    }
 
     public EventLogControlEvent() {
         this(LogLevel.INFO);

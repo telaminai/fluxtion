@@ -66,6 +66,14 @@ public final class BinaryLogReader {
          */
         default void onDictionaryEntry(int id, String name) {
         }
+
+        /**
+         * A stream header frame (format version 2+): the text form of an
+         * {@link com.telamin.fluxtion.runtime.audit.AuditStreamHeader}. It describes the records that follow it,
+         * until the next header. Delivered in file order, between records.
+         */
+        default void onStreamHeader(String headerText) {
+        }
     }
 
     /** What the read found, including what it could not use. */
@@ -94,6 +102,10 @@ public final class BinaryLogReader {
          * nanoseconds into the same fields, which is why this exists.
          */
         public int timeUnit = BinaryLogFile.TIME_UNIT_UNSPECIFIED;
+        /** The header's format version: 1 has no stream header frames, 2 may have them. 0 before the header is read. */
+        public int formatVersion;
+        /** Every stream header frame, in file order. Empty for a version-1 file or a stream that wrote none. */
+        public final List<String> streamHeaders = new ArrayList<>();
         public final List<String> dictionary = new ArrayList<>();
 
         @Override
@@ -223,10 +235,12 @@ public final class BinaryLogReader {
                 }
             }
             int version = u16(data, 4);
-            if (version != BinaryLogFile.FORMAT_VERSION) {
+            if (version < BinaryLogFile.MIN_READABLE_VERSION || version > BinaryLogFile.FORMAT_VERSION) {
                 throw new IOException("audit log format version " + version
-                        + ", this reader understands " + BinaryLogFile.FORMAT_VERSION);
+                        + ", this reader understands " + BinaryLogFile.MIN_READABLE_VERSION
+                        + " to " + BinaryLogFile.FORMAT_VERSION);
             }
+            result.formatVersion = version;
             result.timeUnit = u16(data, 6);
             visitor.onHeader(version, result.timeUnit);
             p = BinaryLogFile.HEADER_BYTES;
@@ -286,6 +300,21 @@ public final class BinaryLogReader {
                 }
                 result.entries += entries;
                 p = base + slotBytes;
+                cursor.consumed = p;
+            } else if (frame == BinaryLogFile.FRAME_STREAM_HEADER && result.formatVersion >= 2) {
+                if (p + BinaryLogFile.STREAM_HEADER_FIXED_BYTES > data.length) { break; }
+                long len = ((long) (data[p + 1] & 0xFF) << 24) | ((data[p + 2] & 0xFF) << 16)
+                        | ((data[p + 3] & 0xFF) << 8) | (data[p + 4] & 0xFF);
+                if (len > BinaryLogFile.MAX_STREAM_HEADER_BYTES) {
+                    throw new IOException("stream header of " + len + " bytes at byte " + p
+                            + " exceeds the format's " + BinaryLogFile.MAX_STREAM_HEADER_BYTES);
+                }
+                int start = p + BinaryLogFile.STREAM_HEADER_FIXED_BYTES;
+                if (start + len > data.length) { break; }
+                String text = new String(data, start, (int) len, java.nio.charset.StandardCharsets.UTF_8);
+                result.streamHeaders.add(text);
+                visitor.onStreamHeader(text);
+                p = start + (int) len;
                 cursor.consumed = p;
             } else {
                 throw new IOException("unknown frame type 0x" + Integer.toHexString(frame)
