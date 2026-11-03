@@ -344,7 +344,8 @@ public class EventLogManager implements Auditor {
 
     /**
      * Sets the host's run identity for the stream header, replacing any earlier context, and re-heads the stream:
-     * the next record published is preceded by a header carrying it. Keys are free-form; a hosting server uses
+     * the next record published is preceded by a header carrying it. A context equal to the current one changes
+     * nothing, so a host may apply it more than once. Keys are free-form; a hosting server uses
      * {@code serverId, runId, group, name, generation}. Null keys and values are dropped.
      */
     public EventLogManager setHeaderContext(Map<String, String> context) {
@@ -355,6 +356,9 @@ public class EventLogManager implements Auditor {
                     copy.put(e.getKey(), e.getValue());
                 }
             }
+        }
+        if (copy.equals(headerContext)) {
+            return this;    // the same run: a repeated call does not re-head the stream
         }
         this.headerContext = copy;
         headerPending = true;

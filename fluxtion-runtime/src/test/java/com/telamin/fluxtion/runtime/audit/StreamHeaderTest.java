@@ -181,6 +181,19 @@ public class StreamHeaderTest {
     }
 
     @Test
+    public void reapplyingTheSameContextDoesNotReHeadTheStream() {
+        List<String> out = new ArrayList<>();
+        EventLogManager m = textManager(out);
+        m.setHeaderContext(Collections.singletonMap("runId", "r1"));
+        Book book = new Book();
+        m.nodeRegistered(book, "book");
+        publish(m, book, 1);
+        m.setHeaderContext(Collections.singletonMap("runId", "r1"));
+        publish(m, book, 2);
+        assertEquals("one header, two records: " + out, 3, out.size());
+    }
+
+    @Test
     public void theDescriptorTravelsWithASinkInstalledByControlEvent() {
         List<String> out = new ArrayList<>();
         EventLogManager m = new EventLogManager();
