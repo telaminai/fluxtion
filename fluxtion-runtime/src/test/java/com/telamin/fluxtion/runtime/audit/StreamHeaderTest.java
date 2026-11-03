@@ -120,7 +120,7 @@ public class StreamHeaderTest {
         assertTrue(out.get(0), out.get(0).contains("\n    schema: 1"));
         assertTrue(out.get(0), out.get(0).contains("\n    processor: com.acme.TradeProcessor"));
         assertTrue(out.get(0), out.get(0).contains("\n    sourceFingerprint: abc123"));
-        assertTrue(out.get(0), out.get(0).contains("\n    toolchainVersion: 1.0.84"));
+        assertTrue(out.get(0), out.get(0).contains("\n    toolchainVersion: '1.0.84'"));
         assertTrue(out.get(0), out.get(0).contains("\n    host: {}"));
         assertTrue(out.get(1), out.get(1).startsWith("eventLogRecord:"));
         assertTrue(out.get(2), out.get(2).startsWith("eventLogRecord:"));
@@ -264,6 +264,98 @@ public class StreamHeaderTest {
         publish(m, book, 1);
         assertTrue(out.get(0), out.get(0).contains("\n    sourceFingerprint: null"));
         assertEquals(2, out.size());
+    }
+
+    @Test
+    public void aSinkThatThrowsOnTheHeaderIsOfferedItAgainBeforeTheNextRecord() {
+        List<String> out = new ArrayList<>();
+        boolean[] failOnce = {true};
+        EventLogManager m = new EventLogManager(r -> {
+            if (r instanceof StreamHeaderRecord && failOnce[0]) {
+                failOnce[0] = false;
+                throw new IllegalStateException("transient");
+            }
+            out.add(r.asCharSequence().toString());
+        });
+        m.clock = clock();
+        m.init();
+        Book book = new Book();
+        m.nodeRegistered(book, "book");
+        try {
+            publish(m, book, 1);
+            fail("the sink's failure propagates as a record's would");
+        } catch (IllegalStateException expected) {
+        }
+        publish(m, book, 2);
+        assertTrue("the header was retried first: " + out, out.get(0).startsWith("auditStreamHeader:"));
+        assertEquals(2, out.size());
+    }
+
+    @Test
+    public void anOversizedHostContextIsRefusedWhereItIsSet() {
+        EventLogManager m = textManager(new ArrayList<>());
+        StringBuilder big = new StringBuilder();
+        for (int i = 0; i < BinaryLogFile.MAX_STREAM_HEADER_BYTES; i++) {
+            big.append('x');
+        }
+        try {
+            m.setHeaderContext(Collections.singletonMap("serverId", big.toString()));
+            fail("refused on the caller's thread, not at the next publish");
+        } catch (IllegalArgumentException expected) {
+            assertTrue(expected.getMessage(), expected.getMessage().contains("format allows"));
+        }
+        assertTrue("the earlier context stands", m.getHeaderContext().isEmpty());
+    }
+
+    @Test
+    public void reinstallingTheSameSinkDoesNotReHeadTheStream() {
+        List<String> out = new ArrayList<>();
+        LogRecordListener sink = r -> out.add(r.asCharSequence().toString());
+        EventLogManager m = textManager(new ArrayList<>());
+        m.setLogSink(sink);
+        Book book = new Book();
+        m.nodeRegistered(book, "book");
+        publish(m, book, 1);
+        m.setLogSink(sink);
+        m.calculationLogConfig(new EventLogControlEvent(sink));
+        publish(m, book, 2);
+        assertEquals("one header, two records: " + out, 3, out.size());
+    }
+
+    @Test
+    public void aForwardingListenerHandsTheHeaderToAWrappedBinaryWriter() throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        List<Object> seen = new ArrayList<>();
+        EventLogManager m = new EventLogManager().binaryRecord(true);
+        m.clock = clock();
+        try (BinaryLogWriter writer = new BinaryLogWriter(bytes)) {
+            m.setLogSink(LogRecordListener.forwardingTo(writer, r -> seen.add((BinaryLogRecord) r)));
+            m.init();
+            Book book = new Book();
+            m.nodeRegistered(book, "book");
+            publish(m, book, 1);
+        }
+        BinaryLogReader.Result r = BinaryLogReader.read(bytes.toByteArray(), new Ignore());
+        assertEquals("the writer behind the tee got its header frame", 1, r.streamHeaders.size());
+        assertEquals("the casting lambda behind the same tee never saw it", 1, seen.size());
+    }
+
+    @Test
+    public void onlyValuesNoYamlReaderCanTypeArePlain() {
+        Map<String, String> host = new LinkedHashMap<>();
+        host.put("a", "1_000.5");
+        host.put("b", "2026-11-03");
+        host.put("c", "1_2.e3");
+        host.put("d", "1.1.4");
+        host.put("e", "pricing-1");
+        host.put("f", "0x1A");
+        host.put("g", "bell\u0007nul\u0000line\nend");
+        host.put(null, "dropped");
+        host.put("h", null);
+        String text = new AuditStreamHeader("p", "ab12", null, null, "t", host).toString();
+        assertTrue(text, text.contains("host: {a: '1_000.5', b: '2026-11-03', c: '1_2.e3', d: '1.1.4', 'e': pricing-1,"
+                + " f: '0x1A', g: 'bell\uFFFDnul\uFFFDline\uFFFDend'}"));
+        assertTrue("a hex fingerprint stays plain: " + text, text.contains("sourceFingerprint: ab12"));
     }
 
     @Test

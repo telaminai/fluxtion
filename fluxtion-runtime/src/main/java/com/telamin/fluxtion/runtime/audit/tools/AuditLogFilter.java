@@ -32,6 +32,10 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
 
         void entry(String node, String key, String value);
 
+        /** A stream header frame (FLXA v2), in file order; printed as its text document by the text sink. */
+        default void streamHeader(String headerText) {
+        }
+
         default void close() {
         }
     }
@@ -191,6 +195,12 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
         eventIds.set(id, matches(eventGlob, name));
         nodeIds.set(id, matches(nodeGlob, name));
         keyIds.set(id, matches(keyGlob, name));
+    }
+
+    /** Headers are stream metadata: never filtered by event, node, key or time, always passed to the sink. */
+    @Override
+    public void onStreamHeader(String headerText) {
+        sink.streamHeader(headerText);
     }
 
     @Override

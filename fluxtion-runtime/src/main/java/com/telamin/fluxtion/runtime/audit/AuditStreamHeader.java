@@ -62,9 +62,15 @@ public final class AuditStreamHeader {
         this.toolchainVersion = toolchainVersion;
         this.runtimeVersion = runtimeVersion;
         this.startedAt = startedAt;
-        this.host = host == null
-                ? Collections.<String, String>emptyMap()
-                : Collections.unmodifiableMap(new LinkedHashMap<>(host));
+        LinkedHashMap<String, String> copy = new LinkedHashMap<>();
+        if (host != null) {
+            for (Map.Entry<String, String> e : host.entrySet()) {
+                if (e.getKey() != null && e.getValue() != null) {
+                    copy.put(e.getKey(), e.getValue());
+                }
+            }
+        }
+        this.host = Collections.unmodifiableMap(copy);
     }
 
     /**
@@ -106,6 +112,22 @@ public final class AuditStreamHeader {
     /** Insertion-ordered and unmodifiable. */
     public Map<String, String> host() {
         return host;
+    }
+
+    /**
+     * Refuses a host context whose header would exceed {@link BinaryLogFile#MAX_STREAM_HEADER_BYTES}, the limit a
+     * binary reader enforces. Applied to text streams too, so the two formats accept the same contexts.
+     *
+     * @throws IllegalArgumentException naming the size and the limit
+     */
+    public static void checkSize(Map<String, String> host) {
+        // the fixed fields are bounded (class name, 64-hex fingerprint, versions, an instant); the host map is not
+        int bytes = new AuditStreamHeader(null, null, null, null, null, host).toString()
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8).length + 1024;
+        if (bytes > BinaryLogFile.MAX_STREAM_HEADER_BYTES) {
+            throw new IllegalArgumentException("audit stream header host context is about " + bytes
+                    + " bytes; the format allows " + BinaryLogFile.MAX_STREAM_HEADER_BYTES);
+        }
     }
 
     /** The version of the runtime on the classpath, or {@code null} when its build stamp cannot be read. */
@@ -152,25 +174,31 @@ public final class AuditStreamHeader {
     }
 
     /**
-     * A plain scalar when the value cannot be misread, otherwise single-quoted with {@code '} doubled. A value
-     * that YAML would read as something other than the string (null, a boolean, a number) is quoted too.
+     * A plain scalar only when no YAML 1.1 reader can type it as anything but a string; otherwise single-quoted, with
+     * {@code '} doubled. Plain requires: only {@code [A-Za-z0-9._/#$-]}, a first character that is a letter or digit,
+     * at least one letter other than {@code e}/{@code E} (so no number, exponent, date or timestamp is plain), no
+     * {@code 0x}/{@code 0o}/{@code 0b} prefix, and not a YAML boolean or null word. A version such as {@code 1.1.4}
+     * is therefore quoted, and a hex fingerprint is plain.
+     *
+     * <p><b>Control characters</b> (C0, DEL, C1, U+2028, U+2029) are replaced with U+FFFD: a YAML reader refuses
+     * some of them outright, and a header that does not parse is worse than one whose odd character is visibly
+     * replaced. The replacement is the stored value; a host should not put control characters in run identity.
      */
     static void scalar(StringBuilder sb, String value) {
         if (value == null) {
             sb.append("null");
             return;
         }
-        if (isPlain(value)) {
-            sb.append(value);
+        String clean = withoutControls(value);
+        if (isPlain(clean)) {
+            sb.append(clean);
             return;
         }
         sb.append('\'');
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
+        for (int i = 0; i < clean.length(); i++) {
+            char c = clean.charAt(i);
             if (c == '\'') {
                 sb.append("''");
-            } else if (c == '\n' || c == '\r') {
-                sb.append(' ');
             } else {
                 sb.append(c);
             }
@@ -178,37 +206,52 @@ public final class AuditStreamHeader {
         sb.append('\'');
     }
 
-    private static boolean isPlain(String value) {
-        if (value.isEmpty()) {
-            return false;
-        }
+    private static String withoutControls(String value) {
+        StringBuilder out = null;
         for (int i = 0; i < value.length(); i++) {
             char c = value.charAt(i);
-            boolean ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+            if (Character.isISOControl(c) || c == '\u2028' || c == '\u2029') {
+                if (out == null) {
+                    out = new StringBuilder(value.length()).append(value, 0, i);
+                }
+                out.append('\uFFFD');
+            } else if (out != null) {
+                out.append(c);
+            }
+        }
+        return out == null ? value : out.toString();
+    }
+
+    private static boolean isPlain(String value) {
+        if (value.isEmpty() || !Character.isLetterOrDigit(value.charAt(0))) {
+            return false;
+        }
+        boolean letter = false;
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            boolean alpha = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+            boolean ok = alpha || (c >= '0' && c <= '9')
                     || c == '.' || c == '_' || c == '-' || c == '/' || c == '#' || c == '$';
             if (!ok) {
                 return false;
             }
+            if (alpha && c != 'e' && c != 'E') {
+                letter = true;
+            }
         }
-        char first = value.charAt(0);
-        if (first == '-' || first == '#' || first == '.') {
+        if (!letter) {
             return false;
         }
-        // "1.1.4" or "2026-11-03T..." stay plain; a value YAML reads as a non-string does not.
         String lower = value.toLowerCase();
-        if (lower.equals("null") || lower.equals("true") || lower.equals("false") || lower.equals("yes")
-                || lower.equals("no") || lower.equals("on") || lower.equals("off") || lower.equals("~")) {
+        if (lower.startsWith("0x") || lower.startsWith("0o") || lower.startsWith("0b")) {
             return false;
         }
-        return !looksNumeric(value);
-    }
-
-    private static boolean looksNumeric(String value) {
-        try {
-            Double.parseDouble(value);
-            return true;
-        } catch (NumberFormatException e) {
-            return value.matches("0[xXoObB][0-9a-fA-F_]+") || value.matches("[0-9_]+");
+        switch (lower) {
+            case "null": case "true": case "false": case "yes": case "no": case "on": case "off":
+            case "y": case "n":
+                return false;
+            default:
+                return true;
         }
     }
 

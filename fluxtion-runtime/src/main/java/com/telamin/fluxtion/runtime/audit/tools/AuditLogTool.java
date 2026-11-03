@@ -82,6 +82,14 @@ public final class AuditLogTool {
         @Override
         public void entry(String node, String key, String value) {
             if (pending != null) {
+                for (String header : pendingHeaders) {
+                    if (anyPrinted) {
+                        out.println();
+                    }
+                    out.println(header);
+                    anyPrinted = true;
+                }
+                pendingHeaders.clear();
                 if (anyPrinted) {
                     out.println();
                 }
@@ -91,6 +99,18 @@ public final class AuditLogTool {
                 recordOpen = true;
             }
             out.println("        - " + node + ": { " + key + ": " + value + "}");
+        }
+
+        /**
+         * Headers waiting for the next printed record: a header describes the records after it, so one is printed
+         * only when a record it describes is, and a query that selects nothing prints nothing.
+         */
+        private final java.util.List<String> pendingHeaders = new java.util.ArrayList<>();
+
+        /** The stream header, as the text document a text stream carries; never filtered by the query. */
+        @Override
+        public void streamHeader(String headerText) {
+            pendingHeaders.add(headerText);
         }
 
         /** Prints the deferred {@code endTime} line for a record whose header was printed. */
@@ -221,6 +241,9 @@ public final class AuditLogTool {
             err.println("entries matched   : " + filter.matchedEntries());
             err.println("time unit         : " + timeUnitName(result.timeUnit));
             err.println("dictionary names  : " + result.dictionary.size());
+            err.println("stream headers    : " + result.streamHeaders.size()
+                    + (result.formatVersion >= 2 && result.streamHeaders.isEmpty()
+                    ? "   <- a version-2 file whose producer stated no run or graph" : ""));
             err.println("unresolved ids    : " + result.unresolvedIds
                     + (result.unresolvedIds > 0 ? "   <- names the log never described" : ""));
             err.println("unreadable bytes  : " + result.truncatedBytes

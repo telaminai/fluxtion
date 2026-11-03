@@ -6,6 +6,7 @@ package com.telamin.fluxtion.builder.replay;
 
 import com.telamin.fluxtion.runtime.audit.LogRecord;
 import com.telamin.fluxtion.runtime.audit.LogRecordListener;
+import com.telamin.fluxtion.runtime.audit.StreamHeaderRecord;
 import com.telamin.fluxtion.runtime.audit.StructuredLogRecord;
 import org.yaml.snakeyaml.Yaml;
 
@@ -23,6 +24,7 @@ import java.util.Map;
 public class YamlLogRecordListener implements LogRecordListener {
 
     private final List<StructuredLogRecord> eventList = new ArrayList<>();
+    private final List<String> streamHeaders = new ArrayList<>();
     private final Yaml yaml;
 
     public List<StructuredLogRecord> getEventList() {
@@ -44,11 +46,30 @@ public class YamlLogRecordListener implements LogRecordListener {
         });
     }
 
+    /** The stream headers seen, as their text documents, in arrival order. They are not records. */
+    public List<String> getStreamHeaders() {
+        return streamHeaders;
+    }
+
+    /** A header is stream metadata: kept apart, never parsed into the record list. */
+    @Override
+    public void processStreamHeader(StreamHeaderRecord header) {
+        streamHeaders.add(header.asCharSequence().toString());
+    }
+
     @Override
     public void processLogRecord(LogRecord logRecord) {
+        if (logRecord instanceof StreamHeaderRecord) {
+            processStreamHeader((StreamHeaderRecord) logRecord);
+            return;
+        }
         yaml.loadAll(logRecord.asCharSequence().toString()).forEach(m -> {
-            Map e = (Map) ((Map) m).get("eventLogRecord");
-            eventList.add(new StructuredLogRecord(e));
+            if (m instanceof Map) {
+                Map e = (Map) ((Map) m).get("eventLogRecord");
+                if (e != null) {
+                    eventList.add(new StructuredLogRecord(e));
+                }
+            }
         });
     }
 

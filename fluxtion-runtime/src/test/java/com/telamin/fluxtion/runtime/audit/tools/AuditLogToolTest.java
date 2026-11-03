@@ -469,4 +469,17 @@ public class AuditLogToolTest {
         assertTrue("a currently matching name that never matched during any selected record: " + none.err,
                 none.err.contains("nothing matching --node wanted"));
     }
+
+    // ---- the stream header (FLXA v2) ----
+
+    @Test
+    public void theStreamHeaderPrecedesTheRecordsItDescribesAndIsCounted() throws IOException {
+        Run all = runOn(log, "--stats");
+        assertTrue(all.out, all.out.startsWith("auditStreamHeader:"));
+        assertTrue(all.out, all.out.indexOf("auditStreamHeader:") < all.out.indexOf("eventLogRecord:"));
+        assertTrue(all.err, all.err.contains("stream headers    : 1"));
+        Run none = runOn(log, "--event", "NoSuchEvent*", "--stats");
+        assertEquals("a header is printed only with a record it describes", "", none.out);
+        assertTrue(none.err, none.err.contains("stream headers    : 1"));
+    }
 }

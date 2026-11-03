@@ -31,6 +31,30 @@ public interface LogRecordListener {
     }
 
     /**
+     * A listener that forwards every record AND every header to each target, each target applying its own rule for a
+     * header. Use it, not a lambda, to wrap or tee a {@link BinaryLogWriter}: a lambda inherits the default above, so
+     * a binary stream's header never reaches the writer and the file carries no header frame.
+     */
+    static LogRecordListener forwardingTo(LogRecordListener... targets) {
+        final LogRecordListener[] copy = targets.clone();
+        return new LogRecordListener() {
+            @Override
+            public void processLogRecord(LogRecord logRecord) {
+                for (LogRecordListener t : copy) {
+                    t.processLogRecord(logRecord);
+                }
+            }
+
+            @Override
+            public void processStreamHeader(StreamHeaderRecord header) {
+                for (LogRecordListener t : copy) {
+                    t.processStreamHeader(header);
+                }
+            }
+        };
+    }
+
+    /**
      * The byte-facing path: take the record's encoded form without downcasting to reach it.
      *
      * <p>M52.3, spec-binary-audit-encoding §6.1(2). A sink that ships records onward — to a queue, a

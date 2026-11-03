@@ -270,11 +270,13 @@ public class EventLogManager implements Auditor {
 
     @OnEventHandler(propagate = false)
     public void calculationLogConfig(EventLogControlEvent newConfig) {
-        if (newConfig.getDescriptor() != null) {
+        if (newConfig.getDescriptor() != null && newConfig.getDescriptor() != descriptor) {
             this.descriptor = newConfig.getDescriptor();
             headerPending = true;
         }
-        if (newConfig.getLogRecordProcessor() != null) {
+        // re-installing the SAME sink is not a new stream: a host that installs its listener twice while
+        // building a processor must not open two headers on it
+        if (newConfig.getLogRecordProcessor() != null && newConfig.getLogRecordProcessor() != sink) {
             this.sink = newConfig.getLogRecordProcessor();
             headerPending = true;
         }
@@ -325,8 +327,10 @@ public class EventLogManager implements Auditor {
     }
 
     public void setLogSink(LogRecordListener sink) {
-        this.sink = sink;
-        headerPending = true;
+        if (sink != this.sink) {
+            this.sink = sink;
+            headerPending = true;
+        }
     }
 
     /**
@@ -360,6 +364,9 @@ public class EventLogManager implements Auditor {
         if (copy.equals(headerContext)) {
             return this;    // the same run: a repeated call does not re-head the stream
         }
+        // refused HERE, on the caller's thread, rather than as a failed header on the processor's thread at the next
+        // publish, where it would cost that cycle and leave the stream without a header
+        AuditStreamHeader.checkSize(copy);
         this.headerContext = copy;
         headerPending = true;
         return this;
@@ -381,14 +388,15 @@ public class EventLogManager implements Auditor {
      * {@code processor: null}, which a reader shows as "graph not verified", never as a guess.
      */
     private ProcessorDescriptor resolveDescriptor() {
-        if (descriptor == null && dataFlowContext != null) {
+        DataFlowContext context = dataFlowContext;     // read once: a concurrent currentHeader() may race this
+        if (descriptor == null && context != null) {
             try {
-                DataFlow parent = dataFlowContext.getParentDataFlow();
+                DataFlow parent = context.getParentDataFlow();
                 descriptor = parent == null ? null : parent.getDescriptor();
+                dataFlowContext = null;   // answered: asked once
             } catch (RuntimeException e) {
-                descriptor = null;
+                // the processor could not answer now; keep the context and ask again at the next header
             }
-            dataFlowContext = null;   // asked once
         }
         return descriptor;
     }
@@ -396,12 +404,15 @@ public class EventLogManager implements Auditor {
     /**
      * Writes the stream header to the sink if this stream has not had one. Called before every publish, so the
      * header always precedes the stream's first record and is never written for a stream that publishes
-     * nothing. A sink that throws on the header has the same failure path as one that throws on a record.
+     * nothing. A sink that throws on the header has the same failure path as one that throws on a record, and the
+     * header stays pending: it is offered again before the next record.
      */
     private void writeHeaderIfPending() {
         if (headerPending) {
-            headerPending = false;
             sink.processStreamHeader(new StreamHeaderRecord(currentHeader(), logRecord instanceof BinaryLogRecord));
+            // cleared only once the sink has taken it: a sink that throws on the header gets it again before the
+            // next record, so a transient failure never leaves the stream without one
+            headerPending = false;
         }
     }
 
