@@ -5,8 +5,10 @@
 package com.telamin.fluxtion.runtime.audit;
 
 import com.telamin.fluxtion.runtime.annotations.OnEventHandler;
+import com.telamin.fluxtion.runtime.DataFlow;
 import com.telamin.fluxtion.runtime.annotations.builder.Inject;
 import com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel;
+import com.telamin.fluxtion.runtime.context.DataFlowContext;
 import com.telamin.fluxtion.runtime.describe.ProcessorDescriptor;
 import com.telamin.fluxtion.runtime.event.Event;
 import com.telamin.fluxtion.runtime.node.ForkedTrigger;
@@ -76,8 +78,17 @@ public class EventLogManager implements Auditor {
      */
     public boolean recordEndTime = true;
     private LogLevel logLevel = LogLevel.INFO;
-    /** Names the processor in the stream header; handed over by generated code or the host, else null. */
+    /**
+     * Names the processor in the stream header. Set by a host or by the sink-installing control event; when
+     * neither has, it is read from the processor itself through {@link #dataFlowContext} when the first header is
+     * written.
+     */
     private transient ProcessorDescriptor descriptor;
+    /**
+     * The processor's context, registered with every auditor by generated code ({@code "context"}). It reaches
+     * the processor, and so its compiled descriptor, whichever builder generated it.
+     */
+    private transient DataFlowContext dataFlowContext;
     /** Host-supplied run identity for the stream header (server, run, group, name, generation...). */
     private transient Map<String, String> headerContext = new LinkedHashMap<>();
     /**
@@ -169,6 +180,9 @@ public class EventLogManager implements Auditor {
 
     @Override
     public void nodeRegistered(Object node, String nodeName) {
+        if (node instanceof DataFlowContext) {
+            dataFlowContext = (DataFlowContext) node;
+        }
         EventLogger logger = newLogger(nodeName);
         logger.setLevel(logLevel);
         if (node instanceof EventLogSource) {
@@ -316,9 +330,8 @@ public class EventLogManager implements Auditor {
     }
 
     /**
-     * Names the processor in the stream header. Generated processors call this from their constructor with their
-     * compiled descriptor; a host may call it for a processor generated before that call existed. Takes effect
-     * at the next header: a stream already started is not re-headed unless its sink or context changes.
+     * Names the processor in the stream header, overriding the descriptor the processor would supply itself. Takes
+     * effect at the next header: a stream already started is not re-headed unless its sink or context changes.
      */
     public EventLogManager setDescriptor(ProcessorDescriptor descriptor) {
         this.descriptor = descriptor;
@@ -350,7 +363,25 @@ public class EventLogManager implements Auditor {
 
     /** The header the next stream would begin with, built now. */
     public AuditStreamHeader currentHeader() {
-        return AuditStreamHeader.of(descriptor, headerContext);
+        return AuditStreamHeader.of(resolveDescriptor(), headerContext);
+    }
+
+    /**
+     * The descriptor set on this manager, else the processor's own, read once through its context. A processor
+     * that cannot answer (a hand-written DataFlow, a context with no parent) leaves it null: the header then says
+     * {@code processor: null}, which a reader shows as "graph not verified", never as a guess.
+     */
+    private ProcessorDescriptor resolveDescriptor() {
+        if (descriptor == null && dataFlowContext != null) {
+            try {
+                DataFlow parent = dataFlowContext.getParentDataFlow();
+                descriptor = parent == null ? null : parent.getDescriptor();
+            } catch (RuntimeException e) {
+                descriptor = null;
+            }
+            dataFlowContext = null;   // asked once
+        }
+        return descriptor;
     }
 
     /**

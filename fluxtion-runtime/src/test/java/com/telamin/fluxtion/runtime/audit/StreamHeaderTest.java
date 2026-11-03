@@ -193,6 +193,65 @@ public class StreamHeaderTest {
         assertTrue(out.get(0), out.get(0).contains("\n    sourceFingerprint: feed01"));
     }
 
+    /**
+     * Generated code registers its context with every auditor; the manager reads the processor's own descriptor
+     * through it, so a processor from any builder names itself with no generated call and no host help.
+     */
+    @Test
+    public void theProcessorsOwnDescriptorIsReadThroughItsRegisteredContext() {
+        Described described = new Described("ctx777");
+        Object[] self = new Object[1];
+        Object processor = java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),
+                new Class<?>[]{DataFlow.class, com.telamin.fluxtion.runtime.callback.InternalEventProcessor.class},
+                (proxy, method, args) -> {
+                    switch (method.getName()) {
+                        case "getDescriptor": return described;
+                        case "exportedService": return self[0];
+                        case "hashCode": return 1;
+                        case "equals": return proxy == args[0];
+                        default: return method.getReturnType() == boolean.class ? false : null;
+                    }
+                });
+        self[0] = processor;
+        com.telamin.fluxtion.runtime.node.MutableDataFlowContext context =
+                new com.telamin.fluxtion.runtime.node.MutableDataFlowContext(
+                        null, new com.telamin.fluxtion.runtime.callback.CallbackDispatcherImpl(), null, null);
+        context.setEventProcessorCallback((com.telamin.fluxtion.runtime.callback.InternalEventProcessor) processor);
+
+        List<String> out = new ArrayList<>();
+        EventLogManager m = textManager(out);
+        m.nodeRegistered(context, "context");
+        Book book = new Book();
+        m.nodeRegistered(book, "book");
+        publish(m, book, 1);
+        assertTrue(out.get(0), out.get(0).contains("\n    processor: com.acme.TradeProcessor"));
+        assertTrue(out.get(0), out.get(0).contains("\n    sourceFingerprint: ctx777"));
+    }
+
+    @Test
+    public void aDescriptorSetOnTheManagerWinsOverTheProcessorsOwn() {
+        List<String> out = new ArrayList<>();
+        EventLogManager m = textManager(out);
+        m.setDescriptor(new Described("host-set"));
+        m.nodeRegistered(new com.telamin.fluxtion.runtime.node.MutableDataFlowContext(), "context");
+        Book book = new Book();
+        m.nodeRegistered(book, "book");
+        publish(m, book, 1);
+        assertTrue(out.get(0), out.get(0).contains("\n    sourceFingerprint: host-set"));
+    }
+
+    @Test
+    public void aContextWithNoProcessorLeavesTheHeaderUnverifiedRatherThanFailing() {
+        List<String> out = new ArrayList<>();
+        EventLogManager m = textManager(out);
+        m.nodeRegistered(new com.telamin.fluxtion.runtime.node.MutableDataFlowContext(), "context");
+        Book book = new Book();
+        m.nodeRegistered(book, "book");
+        publish(m, book, 1);
+        assertTrue(out.get(0), out.get(0).contains("\n    sourceFingerprint: null"));
+        assertEquals(2, out.size());
+    }
+
     @Test
     public void valuesThatYamlWouldMisreadAreQuoted() {
         Map<String, String> host = new LinkedHashMap<>();
