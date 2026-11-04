@@ -234,6 +234,123 @@ public class TextEncodingMarkerTest {
         assertMarked(second.toString());
     }
 
+    @Test
+    public void typicalToStringHeadersStayPlainAndUnmarked() {
+        String[] plain = {"Trade[id=1, px=2.0]", "X(a=1, b=2)", "OrderEvent{id='o1', qty=100}", "a:b", "x#y",
+                "k=v, [list], {map}", "unbalanced(", "ok?", "MyEvent"};
+        for (String v : plain) {
+            LogRecord record = newRecord();
+            record.printEventToString(true);
+            record.triggerEvent(new Filtered(v, null));
+            logger(record, "gate").info("n", 1);
+            record.terminateRecord();
+            String text = record.toString();
+            assertUnmarked(text);
+            assertTrue(text, text.contains("\n    eventToString: " + v + "\n"));
+        }
+    }
+
+    @Test
+    public void headerValuesThatWouldBreakTheLineAreQuoted() {
+        String[] quoted = {"a: b", "x #y", "ends:", " lead", "trail ", "\u3000wide", "nbsp\u00a0", "123",
+                "\u0661\u0662", "true", "null", "[leading", "{leading", "-dash", "\"q", "two\nlines",
+                "tab\tx", "lone \uD800"};
+        for (String v : quoted) {
+            LogRecord record = newRecord();
+            record.printEventToString(true);
+            record.triggerEvent(new Filtered(v, null));
+            logger(record, "gate").info("n", 1);
+            record.terminateRecord();
+            String text = record.toString();
+            assertMarked(text);
+            assertTrue(text, text.contains("\n    eventToString: \""));
+        }
+    }
+
+    @Test
+    public void anonymousEventClassKeepsBareEventField() {
+        LogRecord record = newRecord();
+        record.triggerObject(new Object() { });
+        logger(record, "gate").info("n", 1);
+        record.terminateRecord();
+        String text = record.toString();
+        assertUnmarked(text);
+        assertTrue(text, text.contains("\n    event: \n    nodeLogs: "));
+    }
+
+    /** A subclass writing its own header, without calling markRecordStart. */
+    static final class OwnHeaderRecord extends LogRecord {
+        final boolean mark;
+
+        OwnHeaderRecord(boolean mark) {
+            super(clock(), LogLevel.INFO);
+            this.mark = mark;
+        }
+
+        @Override
+        public void triggerObject(Object event) {
+            if (mark) {
+                markRecordStart();
+            }
+            sb.append("eventLogRecord: \n    custom: yes-ish\n    nodeLogs: ");
+        }
+    }
+
+    @Test
+    public void subclassHeaderIsMarkedWithAndWithoutMarkRecordStart() {
+        for (boolean mark : new boolean[]{false, true}) {
+            OwnHeaderRecord record = new OwnHeaderRecord(mark);
+            EventLogger logger = logger(record, "gate");
+            record.triggerObject(new Tick());
+            logger.info("v", "plain");
+            record.terminateRecord();
+            assertFalse(record.toString(), record.toString().contains("textEncoding"));
+            record.clear();
+            record.triggerObject(new Tick());
+            // the key text inside a value must not be taken for the record start
+            logger.info("v", "x\neventLogRecord: y");
+            logger.info("w", "eventLogRecord: z");
+            record.terminateRecord();
+            String text = record.toString();
+            assertTrue(text, text.startsWith("eventLogRecord: \n    textEncoding: QUOTED_SCALARS\n"
+                    + "    custom: yes-ish\n"));
+            assertEquals(text, 1, count(text, "textEncoding"));
+        }
+    }
+
+    static final class AuditedNode extends EventLogNode {
+        void log(String k, Object v) {
+            auditLog.info(k, v);
+        }
+    }
+
+    @Test
+    public void recordSwapMidRecordKeepsOpenEntryAndMarker() {
+        Clock clock = clock();
+        java.util.List<String> out = new java.util.ArrayList<>();
+        EventLogManager manager = new EventLogManager();
+        manager.clock = clock;
+        manager.setLogSink(r -> out.add(r.asCharSequence().toString()));
+        manager.init();
+        AuditedNode node = new AuditedNode();
+        manager.nodeRegistered(node, "a");
+
+        Object e = new Object();
+        clock.eventReceived(e);
+        manager.eventReceived(e);
+        node.log("before", "p, q");
+        LogRecord replacement = new LogRecord(clock);
+        manager.calculationLogConfig(new EventLogControlEvent(replacement));
+        node.log("after", 2);
+        manager.processingComplete();
+
+        assertEquals(1, out.size());
+        String text = out.get(0);
+        assertMarked(text);
+        assertTrue(text, text.contains("\n        - a: { before: \"p, q\", after: 2}\n"));
+        assertEquals(text, 1, count(text, "- a:"));
+    }
+
     private static void assertMarked(String text) {
         assertTrue(text, text.startsWith(MARKER));
         assertEquals(text, 1, count(text, "\n    textEncoding: QUOTED_SCALARS\n"));

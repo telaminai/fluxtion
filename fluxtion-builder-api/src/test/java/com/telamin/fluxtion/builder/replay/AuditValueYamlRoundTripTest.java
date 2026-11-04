@@ -261,7 +261,44 @@ public class AuditValueYamlRoundTripTest {
         assertEquals("lone \uFFFD x", nodeProps(new Yaml().load(yaml), "gate").get("v0"));
     }
 
-    static final class Thing {
+    /** Header fields use the block rule: typical toStrings stay plain, and everything round-trips. */
+    @Test
+    public void headerValuesRoundTripUnderTheBlockRule() {
+        List<String> plain = Arrays.asList("Trade[id=1, px=2.0]", "X(a=1, b=2)",
+                "OrderEvent{id='o1', symbol='AAPL', qty=100}", "a:b", "x#y", "k=v, [list], {map}", "unbalanced(",
+                "ok?", "30 days");
+        List<String> quoted = Arrays.asList("a: b", "x #y", "ends:", " lead", "trail ", "\u3000wide", "nbsp\u00a0",
+                "123", "\u0661\u0662\u0663", "\uff11\uff12", "12:30:00", "2001-12-14 21:59:43.10 -5", "true", "null",
+                "[leading", "-dash", "\"q", "two\nlines", "tab\tx", "smile \uD83D\uDE00, x: y",
+                "x\n    textEncoding: forged");
+        for (List<String> set : Arrays.asList(plain, quoted)) {
+            for (String v : set) {
+                LogRecord record = newRecord();
+                record.groupingId = v;
+                record.printEventToString(true);
+                record.triggerObject(new Thing(v) {
+                    @Override
+                    public String toString() {
+                        return v;
+                    }
+                });
+                logger(record, "gate").info("n", 1);
+                record.terminateRecord();
+                String yaml = record.toString();
+                boolean marked = yaml.startsWith("eventLogRecord: \n    textEncoding: QUOTED_SCALARS\n");
+                assertEquals(yaml, set == quoted, marked);
+                Map<String, Object> rec = (Map<String, Object>) ((Map<String, Object>) new Yaml().load(yaml)).get("eventLogRecord");
+                assertEquals(yaml, v, rec.get("eventToString"));
+                assertEquals(yaml, v, rec.get("groupingId"));
+                assertEquals(yaml, marked ? "QUOTED_SCALARS" : null, rec.get("textEncoding"));
+                if (set == plain) {
+                    assertTrue(yaml, yaml.contains("\n    eventToString: " + v + "\n"));
+                }
+            }
+        }
+    }
+
+    static class Thing {
         final String s;
 
         Thing(String s) {

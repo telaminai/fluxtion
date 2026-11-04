@@ -265,18 +265,28 @@ a directory, a deployment record — and a dispute that turns on it cannot be se
 A consumer that renders a file as the text record format (the analyser's `BinaryAuditReader`) is
 writing typed values into a grammar that types by inspection. These rules keep the wire's types:
 
-1. **Encoding is selected from the reader's declared context; logged content MUST NOT select or
-   change it.** The consumer's reader declares the quoted-scalar grammar at its adapter boundary
-   (the analyser: `AuditLogReader.textEncoding()`), and its parser applies that declaration to every
-   record the reader delivers. Nothing in the text may switch grammar — an earlier draft put a
-   declaration scalar in each record, and a multiline legacy value containing that line was
-   promoted into a control field. Text that carries no such declaration is legacy, in which a quote
-   mark is the producer's character.
+1. **Encoding is declared per record, in one position only; logged content MUST NOT be able to
+   produce the declaration.** A record containing at least one quoted scalar (rule 3) carries
+   `textEncoding: QUOTED_SCALARS` as the **first line** of its `eventLogRecord` mapping, at the
+   4-space header indent (Analyser Format 1 rev 1.2, §3a). A reader honours it only in that position;
+   anywhere else it is an ordinary field. A record without it is legacy, in which a quote mark is the
+   producer's character, and is byte-for-byte what earlier writers produced. The declaration cannot
+   be forged: every value that could carry a line break is quoted, and a quoted line break is the
+   escape `\n`, so no logged text can begin a line. (An earlier draft that accepted the declaration
+   anywhere in the record let a multiline legacy value promote itself into a control field.) The
+   text `LogRecord` and `AuditLogTool`'s text output both write it; a reader that also declares the
+   grammar at its adapter boundary (the analyser: `AuditLogReader.textEncoding()`) may apply that
+   declaration to every record it delivers.
 2. DOUBLE, LONG, INT and BOOL are written bare: their renderings cannot be syntax and the text
    grammar types them as the wire did.
 3. **Everything else is text** — CHARSEQ, OBJECT, CHAR, and an unknown tag's diagnostic — and is
    written in the quoted form whenever the bare form would split, nest, end the line, strip, or
-   type as a number, boolean or null. `"` is the quote; the escapes are `\\` `\"` `\n` `\r` `\t`.
+   type as a number, boolean or null. `"` is the quote; the escapes are exactly `\\` `\x22` `\n`
+   `\r` `\t` `\0` and `\uXXXX` (BMP). The quote itself is written `\x22`, never `\"`, so a legacy
+   scanner that ends a quoted span at `\"` still finds every entry boundary. A valid surrogate pair is
+   written as-is; an unpaired surrogate is written `\ufffd`. A value in a `{ … }` entry uses the flow
+   rule; a header field, which runs to the end of its line, uses the narrower block rule, so commas,
+   brackets, braces and parentheses inside a typical `toString()` stay plain there.
 4. A `null` value (id `0`) is the bare literal `null`; the **string** `null` is quoted.
 5. Keys and node names outside `[A-Za-z0-9_$.-]` are quoted.
 6. `event:` carries the simple class name and `eventType:` the full one; neither may contain a line
@@ -315,9 +325,10 @@ no entry manufactured and none lost.
    partially readable input: the comparison of the readable prefix MAY be shown, labelled as exactly
    that, and the verdict is *untrustworthy* (the score command's exit 2), for a cut tail and for
    undefined names alike, on either side. Salvage for inspection is a different promise from a PASS.
-9. **What survives export.** Constructed record text is not self-describing: the grammar lives in
-   the reader's declaration (rule 1), not in the text, so a text dump of it re-opened by the text
-   reader reads every quoted String as its quoted characters. A consumer MUST NOT offer such a dump
+9. **What survives export.** Constructed record text is self-describing only where it carries the
+   rule 1 declaration on each record that needs it; text constructed under an adapter-level
+   declaration alone does not, and a dump of it re-opened by the text reader reads every quoted
+   String as its quoted characters. A consumer MUST NOT offer such a dump
    as a re-loadable export; it MUST refuse, or write an artefact that carries its own context. For a
    binary log the lossless artefact is the `.flxa` file itself. Index-column exports (CSV) carry
    values already interpreted and are unaffected. This covers every path that hands record text out
@@ -336,11 +347,12 @@ query evidence, not current match state: "nothing matching the pattern appeared"
 selected record's id matched *at the moment it was seen*; joining the ids ever seen with their final
 names called a non-empty result empty, and would call a name renamed to match after its last use a
 match. `--declare-unit` is §7.4's
-declaration. Its text output is **raw inspection**, for people and
-`grep`: it has the text runtime's shape with every value written bare, and the difference from
-analyser input is semantic, not cosmetic — a logged String `"ok, invented: 42.0"` parses back as a
-second, numeric entry. Open the `.flxa` file in the analyser for typed reading; do not pipe the
-tool's output into it. The tool's help says so.
+declaration. Its text output is **inspection**, for people and `grep`: it has the text runtime's
+shape and its quoting — a value whose tag is CHARSEQ, OBJECT or CHAR is written by rule 3, and a
+record holding a quoted value carries the rule 1 declaration. Numbers, booleans and `null` are bare.
+One loss is inherent in the wire: a boxed number logged through the `Object` overload arrives as
+OBJECT text and is written as a quoted string. Open the `.flxa` file in the analyser for typed
+reading.
 
 ## 13. Conformance
 

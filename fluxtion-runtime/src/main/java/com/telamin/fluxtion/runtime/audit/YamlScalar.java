@@ -92,10 +92,10 @@ public final class YamlScalar {
         if (len == 1) {
             return needsQuoting(first);
         }
-        if (isIndicatorStart(first) || first == ' ' || value.charAt(len - 1) == ' ') {
+        if (isIndicatorStart(first) || isEdgeSpace(first) || isEdgeSpace(value.charAt(len - 1))) {
             return true;
         }
-        boolean numberLike = first >= '0' && first <= '9';
+        boolean numberLike = Character.isDigit(first);
         int parenDepth = 0;
         for (int i = 0; i < len; i++) {
             final char c = value.charAt(i);
@@ -124,9 +124,83 @@ public final class YamlScalar {
 
     /** {@link #needsQuoting(CharSequence)} for a one-character value. */
     public static boolean needsQuoting(char c) {
-        return isIndicatorStart(c) || isSpecial(c) || c == ' ' || (c >= '0' && c <= '9')
+        return isIndicatorStart(c) || isSpecial(c) || isEdgeSpace(c) || Character.isDigit(c)
                 || c == '(' || c == ')'
                 || c == '~' || c == 'y' || c == 'Y' || c == 'n' || c == 'N';
+    }
+
+    /**
+     * Appends {@code value} as a <b>block-context</b> YAML scalar - a record header field such as
+     * {@code eventToString: ...}, which runs to the end of its line. Same quoting and escapes as
+     * {@link #append(StringBuilder, CharSequence)}, with the block rule {@link #needsQuotingBlock}:
+     * commas, brackets, braces and parentheses mid-value are legal plain there, so a typical
+     * {@code toString()} such as {@code Trade[id=1, px=2.0]} or {@code X(a=1, b=2)} stays plain.
+     *
+     * @return true when the value was written in double-quoted form
+     */
+    public static boolean appendBlock(StringBuilder sb, CharSequence value) {
+        if (value == null) {
+            sb.append("null");
+            return false;
+        } else if (needsQuotingBlock(value)) {
+            appendQuoted(sb, value);
+            return true;
+        } else {
+            sb.append(value);
+            return false;
+        }
+    }
+
+    /**
+     * True when {@code value}, written bare as a block-context scalar to the end of its line, would not
+     * read back as the same String: it is empty; contains a line break, control, non-printable or
+     * unpaired surrogate; starts with a YAML indicator; starts or ends with whitespace (any Unicode
+     * space); contains {@code ": "} or {@code " #"}; ends with {@code :}; or spells a non-string
+     * scalar ({@code null}, a boolean, a number, a date).
+     */
+    public static boolean needsQuotingBlock(CharSequence value) {
+        final int len = value.length();
+        if (len == 0) {
+            return true;
+        }
+        final char first = value.charAt(0);
+        if (len == 1) {
+            return needsQuoting(first);
+        }
+        final char last = value.charAt(len - 1);
+        if (isIndicatorStart(first) || isEdgeSpace(first) || isEdgeSpace(last) || last == ':') {
+            return true;
+        }
+        boolean numberLike = Character.isDigit(first);
+        for (int i = 0; i < len; i++) {
+            final char c = value.charAt(i);
+            if (Character.isSurrogate(c)) {
+                if (Character.isHighSurrogate(c) && i + 1 < len && Character.isLowSurrogate(value.charAt(i + 1))) {
+                    i++;
+                    numberLike = false;
+                    continue;
+                }
+                return true;
+            }
+            if (c < ' ' || isNonPrintable(c)
+                    || (c == ':' && value.charAt(i + 1) == ' ')       // i + 1 < len: last is not ':'
+                    || (c == '#' && value.charAt(i - 1) == ' ')) {    // i > 0: first is not '#'
+                return true;
+            }
+            if (numberLike && !isNumberChar(c)) {
+                numberLike = false;
+            }
+        }
+        return numberLike || (len <= 8 && isReservedWord(value, len));
+    }
+
+    /**
+     * Whitespace a YAML reader strips from the ends of a plain scalar - or that a reader may: any
+     * {@link Character#isWhitespace} or {@link Character#isSpaceChar} character, so U+00A0, U+2003 and
+     * U+3000 count as well as the ASCII space.
+     */
+    private static boolean isEdgeSpace(char c) {
+        return c == ' ' || Character.isWhitespace(c) || Character.isSpaceChar(c);
     }
 
     /** Appends {@code value} in YAML double-quoted style, escaping as described on this class. */
@@ -191,19 +265,24 @@ public final class YamlScalar {
 
     private static boolean isNonPrintable(char c) {
         return (c < ' ' && c != '\t') || (c >= 0x7F && c <= 0x9F)
-                || c == ' ' || c == ' '
-                || c == '﻿' || c == '￾' || c == '￿';
+                || c == 0x2028 || c == 0x2029   // line and paragraph separators
+                || c == 0xFEFF || c == 0xFFFE || c == 0xFFFF;   // BOM and the two noncharacters
     }
 
     /**
      * Characters that can make up a number, date or sexagesimal value starting with a digit
      * (YAML 1.1 int/float/timestamp, Java hex/float spellings). A digit-led value made only of these is
-     * quoted; anything else, such as {@code 30 days}, stays plain.
+     * quoted; anything else, such as {@code 30 days}, stays plain. Any Unicode digit counts: a
+     * reader typing numbers with {@code Long.parseLong} accepts Arabic-Indic or fullwidth
+     * digits as well as ASCII ones.
      */
     private static boolean isNumberChar(char c) {
-        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+        return Character.isDigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
                 || c == 'x' || c == 'X' || c == 'o' || c == 'O' || c == 'p' || c == 'P'
-                || c == '_' || c == '.' || c == '+' || c == '-';
+                || c == '_' || c == '.' || c == '+' || c == '-'
+                // sexagesimal and timestamps (12:30:00, 2001-12-14 21:59:43.10 -5, ...T...Z): a ':' is
+                // already special in flow context, but legal plain in a block header field
+                || c == ':' || c == ' ' || c == 'T' || c == 't' || c == 'Z' || c == 'z';
     }
 
     /** YAML 1.1 booleans and null, plus the spellings an audit reader types as numbers. */

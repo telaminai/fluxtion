@@ -105,4 +105,41 @@ public class YamlScalarTest {
         assertEquals(false, YamlScalar.append(sb, 'a'));
         assertEquals(true, YamlScalar.append(sb, ','));
     }
+
+    private static String b(CharSequence v) {
+        StringBuilder sb = new StringBuilder();
+        YamlScalar.appendBlock(sb, v);
+        return sb.toString();
+    }
+
+    @Test
+    public void blockRuleKeepsTypicalToStringsPlain() {
+        for (String v : new String[]{"Trade[id=1, px=2.0]", "X(a=1, b=2)", "OrderEvent{id='o1', qty=100}",
+                "a:b", "x#y", "k=v, [list], {map}", "open(", "ok?", "MyEvent", "30 days", "it's", "say \"hi\""}) {
+            assertEquals(v, b(v));
+        }
+        assertEquals("null", b(null));
+    }
+
+    @Test
+    public void blockRuleQuotesWhatWouldBreakOrRetypeTheLine() {
+        for (String v : new String[]{"", "a: b", "x #y", "ends:", " lead", "trail ", "\u3000wide", "wide\u2003",
+                "nbsp\u00a0", "123", "\u0661\u0662", "\uff11\uff12", "12:30:00", "2001-12-14 21:59:43.10 -5",
+                "true", "No", "null", "~", "[x", "{x", "-x", "\"q", "'q", "#c", "two\nlines", "tab\tx",
+                "lone \uD800", "sep\u2028x"}) {
+            assertEquals(v, '"', b(v).charAt(0));
+        }
+        assertEquals("\"a: b\"", b("a: b"));
+    }
+
+    @Test
+    public void unicodeEdgeSpaceAndDigitsQuotedInFlowToo() {
+        for (String v : new String[]{"\u3000wide", "wide\u3000", "\u2003em", "nbsp\u00a0", "\u00a0x",
+                "\u0661\u0662\u0663", "\uff11\uff12"}) {
+            assertEquals(v, '"', w(v).charAt(0));
+        }
+        assertEquals('"', w('\u3000').charAt(0));
+        assertEquals('"', w('\u0661').charAt(0));
+        assertEquals("mid\u00a0space", w("mid\u00a0space"));
+    }
 }
