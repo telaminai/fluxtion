@@ -280,14 +280,20 @@ writing typed values into a grammar that types by inspection. These rules keep t
 2. DOUBLE, LONG, INT and BOOL are written bare: their renderings cannot be syntax and the text
    grammar types them as the wire did.
 3. **Everything else is text** — CHARSEQ, OBJECT, CHAR, and an unknown tag's diagnostic — and is
-   written in the quoted form whenever the bare form would split, nest, end the line, strip, or
-   type as a number, boolean or null. `"` is the quote; the escapes are exactly `\\` `\x22` `\n`
+   written in the quoted form whenever the bare form would break the record's structure: split,
+   nest, end the line or strip. **Typed-looking strings are written bare and read with YAML/Analyser
+   typing, as before; only structurally unsafe text is quoted.** A String `5000`, `true`, `null`,
+   `0x1F` or a date is written bare, exactly as runtime 1.1.3 wrote it, so it reads as the number,
+   boolean or null it always read as (only bare numbers are graphable, Analyser spec §3); the empty
+   string is bare too and reads as null, as in 1.1.3. `"` is the quote; the escapes are exactly `\\` `\x22` `\n`
    `\r` `\t` `\0` and `\uXXXX` (BMP). The quote itself is written `\x22`, never `\"`, so a legacy
    scanner that ends a quoted span at `\"` still finds every entry boundary. A valid surrogate pair is
    written as-is; an unpaired surrogate is written `\ufffd`. A value in a `{ … }` entry uses the flow
    rule; a header field, which runs to the end of its line, uses the narrower block rule, so commas,
    brackets, braces and parentheses inside a typical `toString()` stay plain there.
-4. A `null` value (id `0`) is the bare literal `null`; the **string** `null` is quoted.
+4. A `null` value (id `0`) is the bare literal `null`. The runtime writers (`LogRecord`,
+   `AuditLogTool`) write the **string** `null` bare as well (rule 3), so the two are not
+   distinguished in their text, as in 1.1.3.
 5. Keys and node names outside `[A-Za-z0-9_$.-]` are quoted.
 6. `event:` carries the simple class name and `eventType:` the full one; neither may contain a line
    break, so one in the dictionary is made visible rather than allowed to start a scalar.
@@ -350,8 +356,8 @@ match. `--declare-unit` is §7.4's
 declaration. Its text output is **inspection**, for people and `grep`: it has the text runtime's
 shape and its quoting — a value whose tag is CHARSEQ, OBJECT or CHAR is written by rule 3, and a
 record holding a quoted value carries the rule 1 declaration. Numbers, booleans and `null` are bare.
-One loss is inherent in the wire: a boxed number logged through the `Object` overload arrives as
-OBJECT text and is written as a quoted string. Open the `.flxa` file in the analyser for typed
+Typed-looking text is bare (rule 3), so a boxed number logged through the `Object` overload,
+which arrives as OBJECT text, is written bare as the text record writes it. Open the `.flxa` file in the analyser for typed
 reading.
 
 ## 13. Conformance

@@ -47,7 +47,9 @@ import java.util.function.ObjLongConsumer;
  * string, YAML double-quoted otherwise. nodeLogs values sit in a flow map and use the flow rule
  * ({@link YamlScalar#append}); the header's groupingId, event, eventToString, thread and eventFilter
  * run to the end of their line and use the narrower block rule ({@link YamlScalar#appendBlock}), so a
- * typical {@code toString()} such as {@code Trade[id=1, px=2.0]} stays plain. A record holding <b>at least one</b> double-quoted scalar carries one
+ * typical {@code toString()} such as {@code Trade[id=1, px=2.0]} stays plain.
+ * Typed-looking strings ({@code 5000}, {@code true}, {@code null}, {@code 0x1F}, a date) are written
+ * bare and read with YAML/Analyser typing, as before; only structurally unsafe text is quoted. A record holding <b>at least one</b> double-quoted scalar carries one
  * extra line, always the first line of its {@code eventLogRecord} mapping:
  *
  * <pre>

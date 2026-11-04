@@ -46,15 +46,11 @@ public class YamlScalarTest {
         assertEquals("\"it's\"", w("it's"));
         assertEquals("\"a\\nb\\tc\\r\\\\\"", w("a\nb\tc\r\\"));
         assertEquals("\"\\u0001\"", w("\u0001"));
-        assertEquals("\"\"", w(""));
         assertEquals("\" pad \"", w(" pad "));
-        assertEquals("\"null\"", w("null"));
-        assertEquals("\"true\"", w("true"));
-        assertEquals("\"123\"", w("123"));
-        assertEquals("\"-5\"", w("-5"));
+        assertEquals("\"- item\"", w("- item"));
         assertEquals("\"#x\"", w("#x"));
         assertEquals("\",\"", w(','));
-        assertEquals("\"7\"", w('7'));
+        assertEquals("\"-\"", w('-'));
         assertEquals("\"\\x22\"", w('"'));
     }
 
@@ -123,9 +119,8 @@ public class YamlScalarTest {
 
     @Test
     public void blockRuleQuotesWhatWouldBreakOrRetypeTheLine() {
-        for (String v : new String[]{"", "a: b", "x #y", "ends:", " lead", "trail ", "\u3000wide", "wide\u2003",
-                "nbsp\u00a0", "123", "\u0661\u0662", "\uff11\uff12", "12:30:00", "2001-12-14 21:59:43.10 -5",
-                "true", "No", "null", "~", "[x", "{x", "-x", "\"q", "'q", "#c", "two\nlines", "tab\tx",
+        for (String v : new String[]{"a: b", "x #y", "ends:", " lead", "trail ", "\u3000wide", "wide\u2003",
+                "nbsp\u00a0", "[x", "{x", "- x", "\"q", "'q", "#c", "two\nlines", "tab\tx",
                 "lone \uD800", "sep\u2028x"}) {
             assertEquals(v, '"', b(v).charAt(0));
         }
@@ -133,13 +128,31 @@ public class YamlScalarTest {
     }
 
     @Test
-    public void unicodeEdgeSpaceAndDigitsQuotedInFlowToo() {
-        for (String v : new String[]{"\u3000wide", "wide\u3000", "\u2003em", "nbsp\u00a0", "\u00a0x",
-                "\u0661\u0662\u0663", "\uff11\uff12"}) {
+    public void unicodeEdgeSpaceQuotedInFlowToo() {
+        for (String v : new String[]{"\u3000wide", "wide\u3000", "\u2003em", "nbsp\u00a0", "\u00a0x"}) {
             assertEquals(v, '"', w(v).charAt(0));
         }
         assertEquals('"', w('\u3000').charAt(0));
-        assertEquals('"', w('\u0661').charAt(0));
         assertEquals("mid\u00a0space", w("mid\u00a0space"));
+    }
+
+    /** Typed-looking strings are written bare in both rules, byte-identical to runtime 1.1.3. */
+    @Test
+    public void typedLookingStringsAreBare() {
+        for (String v : new String[]{"", "123", "-5", "+12", ".5", "1e3", "1_000", "0x1F", "0o17", "0b101", "1.5",
+                "true", "false", "True", "yes", "No", "on", "OFF", "null", "Null", "~", "NaN", ".inf", "-.inf",
+                "Infinity", "2024-01-01", "\u0661\u0662\u0663", "\uff11\uff12", "-dash"}) {
+            assertEquals(v, v, w(v));
+            assertEquals(v, v, b(v));
+            assertEquals(false, YamlScalar.append(new StringBuilder(), v));
+        }
+        for (char c : new char[]{'7', 'y', 'n', 'N', 'Y', '~', '.', '+', '\u0661'}) {
+            assertEquals(String.valueOf(c), w(c));
+        }
+        // block rule only: ':' is structural in a flow map but not in a header line
+        for (String v : new String[]{"12:30:00", "2001-12-14 21:59:43.10 -5", "2001-12-14t21:59:43.10-05:00"}) {
+            assertEquals(v, b(v));
+            assertEquals('"', w(v).charAt(0));
+        }
     }
 }

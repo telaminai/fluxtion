@@ -8,18 +8,22 @@ package com.telamin.fluxtion.runtime.audit;
  * Writes a string-valued audit entry as a YAML scalar that reads back as the same string.
  *
  * <p>Text audit values sit inside a YAML flow map ({@code - node: { key: value}}). Written bare, a
- * value containing a flow indicator is cut short or re-typed by any YAML reader: the String
- * {@code membership not active, balance due 30.0} came back as {@code membership not active}, and the
- * String {@code 123} came back as an integer. A value that would be misread is written in YAML
- * double-quoted style; every other value is written plain, exactly as before, so existing logs and
- * diffs of simple values do not move.
+ * value containing a flow indicator breaks the record's structure: the String
+ * {@code membership not active, balance due 30.0} came back as {@code membership not active} plus a
+ * second, invented entry. Such a value is written in YAML double-quoted style; every other value is
+ * written plain, exactly as runtime 1.1.3 wrote it.
+ *
+ * <p><b>Only structurally unsafe text is quoted.</b> Typed-looking strings - {@code 5000},
+ * {@code 1e3}, {@code 0x1F}, {@code true}, {@code null}, {@code ~}, a date - are written bare and read
+ * with YAML/Analyser typing, as before: a String {@code "5000"} has always read back as the number
+ * 5000, the Analyser graphs only bare numbers, and exports depend on that typing. The empty string
+ * is also written bare, as 1.1.3 did (it reads as null); it cannot break the structure.
  *
  * <p>The check is a single pass of {@code charAt} with no allocation and no regex — this runs on the
- * audit hot path for every string-valued entry. It is deliberately conservative: quoting a value that
- * did not strictly need it is harmless, writing one bare that did is data loss. Besides the YAML
- * rules, a value is quoted when it contains {@code ?} anywhere (SnakeYAML rejects {@code { k: ok?}}
- * and loses the whole record) or has unbalanced parentheses (the Fluxtion Audit Log Analyser's
- * tokenizer nests on them); {@code MutableOrder(id=1)} stays plain.
+ * audit hot path for every string-valued entry. Besides the YAML flow indicators, a value is quoted
+ * when it contains {@code ?} anywhere (SnakeYAML rejects {@code { k: ok?}} and loses the whole record)
+ * or has unbalanced parentheses (the Analyser's tokenizer nests on them); {@code MutableOrder(id=1)}
+ * stays plain.
  *
  * <h2>Escapes</h2>
  * Inside a double-quoted scalar exactly these escapes are emitted, all standard YAML 1.1/1.2:
@@ -43,7 +47,8 @@ public final class YamlScalar {
 
     /**
      * Appends {@code value} as a flow-context YAML scalar. A {@code null} is written as the YAML null
-     * {@code null}; a String spelling {@code null} is quoted so the two stay distinct.
+     * {@code null}. A String spelling {@code null}, {@code true} or a number is written bare too, and
+     * reads with YAML typing, as it did before this class existed.
      *
      * @return true when the value was written in double-quoted form
      */
@@ -78,31 +83,29 @@ public final class YamlScalar {
     }
 
     /**
-     * True when {@code value}, written bare inside a YAML flow map, would not read back as the same
-     * String: it is empty, has leading/trailing whitespace, contains a flow indicator, comment, quote,
-     * {@code ?}, control character or unpaired surrogate, has unbalanced parentheses, starts with a
-     * YAML indicator, or spells a non-string scalar ({@code null}, a boolean, a number, a date).
+     * True when {@code value}, written bare inside a YAML flow map, would break the record's structure:
+     * it has leading/trailing whitespace (any Unicode space), contains a flow indicator, comment,
+     * quote, {@code ?}, control character or unpaired surrogate, has unbalanced parentheses, or starts
+     * with a YAML indicator. A value that merely looks like a number, boolean or null is NOT quoted.
      */
     public static boolean needsQuoting(CharSequence value) {
         final int len = value.length();
         if (len == 0) {
-            return true;
+            return false;   // bare, as 1.1.3 wrote it
         }
         final char first = value.charAt(0);
         if (len == 1) {
             return needsQuoting(first);
         }
-        if (isIndicatorStart(first) || isEdgeSpace(first) || isEdgeSpace(value.charAt(len - 1))) {
+        if (startsWithIndicator(value) || isEdgeSpace(first) || isEdgeSpace(value.charAt(len - 1))) {
             return true;
         }
-        boolean numberLike = Character.isDigit(first);
         int parenDepth = 0;
         for (int i = 0; i < len; i++) {
             final char c = value.charAt(i);
             if (Character.isSurrogate(c)) {
                 if (Character.isHighSurrogate(c) && i + 1 < len && Character.isLowSurrogate(value.charAt(i + 1))) {
                     i++;
-                    numberLike = false;
                     continue;
                 }
                 return true;
@@ -115,18 +118,13 @@ public final class YamlScalar {
             } else if (c == ')' && --parenDepth < 0) {
                 return true;
             }
-            if (numberLike && !isNumberChar(c)) {
-                numberLike = false;
-            }
         }
-        return parenDepth != 0 || numberLike || (len <= 8 && isReservedWord(value, len));
+        return parenDepth != 0;
     }
 
     /** {@link #needsQuoting(CharSequence)} for a one-character value. */
     public static boolean needsQuoting(char c) {
-        return isIndicatorStart(c) || isSpecial(c) || isEdgeSpace(c) || Character.isDigit(c)
-                || c == '(' || c == ')'
-                || c == '~' || c == 'y' || c == 'Y' || c == 'n' || c == 'N';
+        return isIndicatorStart(c) || isSpecial(c) || isEdgeSpace(c) || c == '(' || c == ')';
     }
 
     /**
@@ -152,32 +150,30 @@ public final class YamlScalar {
     }
 
     /**
-     * True when {@code value}, written bare as a block-context scalar to the end of its line, would not
-     * read back as the same String: it is empty; contains a line break, control, non-printable or
-     * unpaired surrogate; starts with a YAML indicator; starts or ends with whitespace (any Unicode
-     * space); contains {@code ": "} or {@code " #"}; ends with {@code :}; or spells a non-string
-     * scalar ({@code null}, a boolean, a number, a date).
+     * True when {@code value}, written bare as a block-context scalar to the end of its line, would
+     * break the record's structure: it contains a line break, control, non-printable or unpaired
+     * surrogate; starts with a YAML indicator; starts or ends with whitespace (any Unicode space);
+     * contains {@code ": "} or {@code " #"}; or ends with {@code :}. A value that merely looks like a
+     * number, boolean, null or timestamp is NOT quoted.
      */
     public static boolean needsQuotingBlock(CharSequence value) {
         final int len = value.length();
         if (len == 0) {
-            return true;
+            return false;   // bare, as 1.1.3 wrote it
         }
         final char first = value.charAt(0);
         if (len == 1) {
             return needsQuoting(first);
         }
         final char last = value.charAt(len - 1);
-        if (isIndicatorStart(first) || isEdgeSpace(first) || isEdgeSpace(last) || last == ':') {
+        if (startsWithIndicator(value) || isEdgeSpace(first) || isEdgeSpace(last) || last == ':') {
             return true;
         }
-        boolean numberLike = Character.isDigit(first);
         for (int i = 0; i < len; i++) {
             final char c = value.charAt(i);
             if (Character.isSurrogate(c)) {
                 if (Character.isHighSurrogate(c) && i + 1 < len && Character.isLowSurrogate(value.charAt(i + 1))) {
                     i++;
-                    numberLike = false;
                     continue;
                 }
                 return true;
@@ -187,11 +183,20 @@ public final class YamlScalar {
                     || (c == '#' && value.charAt(i - 1) == ' ')) {    // i > 0: first is not '#'
                 return true;
             }
-            if (numberLike && !isNumberChar(c)) {
-                numberLike = false;
-            }
         }
-        return numberLike || (len <= 8 && isReservedWord(value, len));
+        return false;
+    }
+
+    /**
+     * A value of two or more characters starting with a YAML indicator. {@code -} is one only when a
+     * space follows it ({@code - item}); {@code -5} and {@code -dash} are ordinary plain scalars.
+     */
+    private static boolean startsWithIndicator(CharSequence value) {
+        final char first = value.charAt(0);
+        if (first == '-') {
+            return isEdgeSpace(value.charAt(1));
+        }
+        return isIndicatorStart(first);
     }
 
     /**
@@ -256,7 +261,7 @@ public final class YamlScalar {
         switch (c) {
             case '-': case '?': case ':': case ',': case '[': case ']': case '{': case '}':
             case '#': case '&': case '*': case '!': case '|': case '>': case '\'': case '"':
-            case '%': case '@': case '`': case '+': case '.': case '=': case '<': case '~':
+            case '%': case '@': case '`': case '=': case '<':
                 return true;
             default:
                 return false;
@@ -267,44 +272,5 @@ public final class YamlScalar {
         return (c < ' ' && c != '\t') || (c >= 0x7F && c <= 0x9F)
                 || c == 0x2028 || c == 0x2029   // line and paragraph separators
                 || c == 0xFEFF || c == 0xFFFE || c == 0xFFFF;   // BOM and the two noncharacters
-    }
-
-    /**
-     * Characters that can make up a number, date or sexagesimal value starting with a digit
-     * (YAML 1.1 int/float/timestamp, Java hex/float spellings). A digit-led value made only of these is
-     * quoted; anything else, such as {@code 30 days}, stays plain. Any Unicode digit counts: a
-     * reader typing numbers with {@code Long.parseLong} accepts Arabic-Indic or fullwidth
-     * digits as well as ASCII ones.
-     */
-    private static boolean isNumberChar(char c) {
-        return Character.isDigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
-                || c == 'x' || c == 'X' || c == 'o' || c == 'O' || c == 'p' || c == 'P'
-                || c == '_' || c == '.' || c == '+' || c == '-'
-                // sexagesimal and timestamps (12:30:00, 2001-12-14 21:59:43.10 -5, ...T...Z): a ':' is
-                // already special in flow context, but legal plain in a block header field
-                || c == ':' || c == ' ' || c == 'T' || c == 't' || c == 'Z' || c == 'z';
-    }
-
-    /** YAML 1.1 booleans and null, plus the spellings an audit reader types as numbers. */
-    private static boolean isReservedWord(CharSequence v, int len) {
-        switch (Character.toLowerCase(v.charAt(0))) {
-            case 'y': return len == 3 && eqIgnoreCase(v, "yes");
-            case 'n': return (len == 2 && eqIgnoreCase(v, "no")) || (len == 4 && eqIgnoreCase(v, "null"))
-                    || (len == 3 && eqIgnoreCase(v, "nan"));
-            case 't': return len == 4 && eqIgnoreCase(v, "true");
-            case 'f': return len == 5 && eqIgnoreCase(v, "false");
-            case 'o': return (len == 2 && eqIgnoreCase(v, "on")) || (len == 3 && eqIgnoreCase(v, "off"));
-            case 'i': return len == 8 && eqIgnoreCase(v, "infinity");
-            default: return false;
-        }
-    }
-
-    private static boolean eqIgnoreCase(CharSequence v, String word) {
-        for (int i = 0; i < word.length(); i++) {
-            if (Character.toLowerCase(v.charAt(i)) != word.charAt(i)) {
-                return false;
-            }
-        }
-        return true;
     }
 }

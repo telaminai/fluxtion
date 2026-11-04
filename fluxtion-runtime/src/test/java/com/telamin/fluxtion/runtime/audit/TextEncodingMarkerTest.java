@@ -80,7 +80,7 @@ public class TextEncodingMarkerTest {
 
     @Test
     public void everyTextPathMarks() {
-        Object[] values = {',', (Object) Character.valueOf('#'), new StringBuilder("a, b"), "123",
+        Object[] values = {',', (Object) Character.valueOf('#'), new StringBuilder("a, b"), "- item",
                 new Thing("x, y"), "open(", "lone \uD800"};
         for (Object v : values) {
             LogRecord record = newRecord();
@@ -252,9 +252,8 @@ public class TextEncodingMarkerTest {
 
     @Test
     public void headerValuesThatWouldBreakTheLineAreQuoted() {
-        String[] quoted = {"a: b", "x #y", "ends:", " lead", "trail ", "\u3000wide", "nbsp\u00a0", "123",
-                "\u0661\u0662", "true", "null", "[leading", "{leading", "-dash", "\"q", "two\nlines",
-                "tab\tx", "lone \uD800"};
+        String[] quoted = {"a: b", "x #y", "ends:", " lead", "trail ", "\u3000wide", "nbsp\u00a0",
+                "[leading", "{leading", "- dash", "\"q", "two\nlines", "tab\tx", "lone \uD800"};
         for (String v : quoted) {
             LogRecord record = newRecord();
             record.printEventToString(true);
@@ -265,6 +264,37 @@ public class TextEncodingMarkerTest {
             assertMarked(text);
             assertTrue(text, text.contains("\n    eventToString: \""));
         }
+    }
+
+    /**
+     * Typed-looking strings are written bare and the record is unmarked: byte-identical to what runtime
+     * 1.1.3 wrote, which appended every value as-is.
+     */
+    @Test
+    public void typedLookingStringsAreByteIdenticalTo113() {
+        String[] typed = {"5000", "123", "true", "null", "1e3", "0x1F", "-5", "~", "", "2024-01-01", "No"};
+        LogRecord record = newRecord();
+        record.groupingId = "42";
+        record.printEventToString(true);
+        record.triggerEvent(new Filtered("12:30:00", "true"));
+        EventLogger logger = logger(record, "gate");
+        StringBuilder expected = new StringBuilder("eventLogRecord: \n"
+                + "    eventTime: T\n"
+                + "    logTime: T\n"
+                + "    groupingId: 42\n"
+                + "    event: Filtered\n"
+                + "    eventToString: 12:30:00\n"
+                + "    eventFilter: true\n"
+                + "    nodeLogs: \n"
+                + "        - gate: {");
+        for (int i = 0; i < typed.length; i++) {
+            logger.info("v" + i, typed[i]);
+            expected.append(i == 0 ? "" : ",").append(" v").append(i).append(": ").append(typed[i]);
+        }
+        record.terminateRecord();
+        expected.append("}\n    endTime: T");
+        assertEquals(expected.toString(), record.toString());
+        assertUnmarked(record.toString());
     }
 
     @Test

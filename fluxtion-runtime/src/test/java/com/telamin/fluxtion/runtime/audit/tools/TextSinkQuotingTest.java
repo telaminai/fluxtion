@@ -37,6 +37,7 @@ public class TextSinkQuotingTest {
 
     @Test
     public void sinkQuotesTextValuesAndMarksOnlyThoseRecords() {
+        // the third record's text "true" is typed-looking, not structurally unsafe: bare, unmarked
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         AuditLogTool.TextSink sink = new AuditLogTool.TextSink(new PrintStream(bytes, true));
         sink.record("Tick", 1, 2, 3);
@@ -70,13 +71,12 @@ public class TextSinkQuotingTest {
                 "    endTime: 6",
                 "",
                 "eventLogRecord: ",
-                "    textEncoding: QUOTED_SCALARS",
                 "    eventTime: 7",
                 "    logTime: 8",
                 "    event: Tick",
                 "    nodeLogs: ",
                 "        - gate: { flag: true}",
-                "        - gate: { s: \"true\"}",
+                "        - gate: { s: true}",
                 "    endTime: 9") + NL;
         assertEquals(expected, bytes.toString());
     }

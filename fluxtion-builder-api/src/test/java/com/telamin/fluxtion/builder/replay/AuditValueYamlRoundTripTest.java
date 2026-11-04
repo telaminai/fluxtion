@@ -56,11 +56,7 @@ public class AuditValueYamlRoundTripTest {
             " leading",
             "trailing ",
             " ",
-            "",
-            "true", "false", "True", "yes", "No", "on", "OFF",
-            "null", "Null", "~",
-            "123", "-5", "+7", "1.5", "1e10", ".5", "0x1F", "1_000", "12:30:00", "2024-01-01",
-            ".inf", "-.inf", ".nan", "NaN", "Infinity",
+            "12:30:00",
             "-", "- item", "? q", "&anchor", "*alias", "!tag", "|", ">", "%", "@at", "`tick`", "=", "<<",
             "ctrl\u0001char", "del\u007f", "nel\u0085", "unicode \u00e9 \u2713 \u65e5\u672c",
             "MutableOrder(id=1, venue=null)",
@@ -68,6 +64,16 @@ public class AuditValueYamlRoundTripTest {
             "open(", "close)", "a)b(c", "f(g(x)", "(", ")",
             "a \"b, c", "quote\"inside", "smile \uD83D\uDE00, ok", "\uD83D\uDE00",
             "sep\u2028x", "bom\uFEFF", "x\n    textEncoding: QUOTED_SCALARS"
+    );
+
+    /**
+     * Strings that merely LOOK typed are written bare, exactly as runtime 1.1.3 wrote them, and read
+     * back with YAML typing as they always did: "5000" is the number 5000, which the Analyser graphs.
+     */
+    static final List<String> TYPED = Arrays.asList(
+            "5000", "true", "false", "True", "yes", "No", "on", "OFF", "null", "Null", "~", "",
+            "123", "-5", "+7", "1.5", "1e3", "1e10", ".5", "0x1F", "1_000", "2024-01-01",
+            ".inf", "-.inf", ".nan", "NaN", "Infinity", "\u0661\u0662\u0663"
     );
 
     /** Simple values must stay plain so existing logs, and diffs of them, do not move. */
@@ -119,6 +125,19 @@ public class AuditValueYamlRoundTripTest {
     }
 
     @Test
+    public void typedLookingStringsAreWrittenBareAsIn113() {
+        for (String value : TYPED) {
+            String yaml = writeRecord(Arrays.asList(value));
+            assertTrue("expected bare output: " + yaml, yaml.contains("\n        - gate: { v0: " + value + "}\n"));
+            assertFalse(yaml, yaml.contains("textEncoding"));
+            Object asIn113 = ((Map<?, ?>) new Yaml().load("{ v0: " + value + "}")).get("v0");
+            assertEquals(yaml, asIn113, nodeProps(new Yaml().load(yaml), "gate").get("v0"));
+        }
+        // the regression that prompted this: a String "5000" reads as the number, as it always did
+        assertEquals(5000, nodeProps(new Yaml().load(writeRecord(Arrays.asList("5000"))), "gate").get("v0"));
+    }
+
+    @Test
     public void simpleStringValuesStayPlain() {
         for (String value : PLAIN) {
             String yaml = writeRecord(Arrays.asList(value));
@@ -163,7 +182,7 @@ public class AuditValueYamlRoundTripTest {
         assertNull(props.get("nullStr"));
         assertEquals("a", props.get("ch"));
         assertEquals(",", props.get("chComma"));
-        assertEquals("7", props.get("chDigit"));
+        assertEquals("a digit char is bare, as in 1.1.3", 7, props.get("chDigit"));
         assertEquals("Thing[x, y: z]", props.get("obj"));
         assertEquals("a, b", props.get("sb"));
     }
@@ -261,6 +280,24 @@ public class AuditValueYamlRoundTripTest {
         assertEquals("lone \uFFFD x", nodeProps(new Yaml().load(yaml), "gate").get("v0"));
     }
 
+    /** Typed-looking header values are bare and unmarked, reading with YAML typing as in 1.1.3. */
+    @Test
+    public void typedLookingHeaderValuesAreBare() {
+        for (String v : Arrays.asList("123", "12:30:00", "2001-12-14 21:59:43.10 -5", "true", "null", "-dash", "0x1F")) {
+            LogRecord record = newRecord();
+            record.groupingId = v;
+            record.triggerObject(new Object());
+            logger(record, "gate").info("n", 1);
+            record.terminateRecord();
+            String yaml = record.toString();
+            assertTrue(yaml, yaml.contains("\n    groupingId: " + v + "\n"));
+            assertFalse(yaml, yaml.contains("textEncoding"));
+            Object asIn113 = ((Map<?, ?>) new Yaml().load("groupingId: " + v)).get("groupingId");
+            Map<String, Object> rec = (Map<String, Object>) ((Map<String, Object>) new Yaml().load(yaml)).get("eventLogRecord");
+            assertEquals(yaml, asIn113, rec.get("groupingId"));
+        }
+    }
+
     /** Header fields use the block rule: typical toStrings stay plain, and everything round-trips. */
     @Test
     public void headerValuesRoundTripUnderTheBlockRule() {
@@ -268,8 +305,7 @@ public class AuditValueYamlRoundTripTest {
                 "OrderEvent{id='o1', symbol='AAPL', qty=100}", "a:b", "x#y", "k=v, [list], {map}", "unbalanced(",
                 "ok?", "30 days");
         List<String> quoted = Arrays.asList("a: b", "x #y", "ends:", " lead", "trail ", "\u3000wide", "nbsp\u00a0",
-                "123", "\u0661\u0662\u0663", "\uff11\uff12", "12:30:00", "2001-12-14 21:59:43.10 -5", "true", "null",
-                "[leading", "-dash", "\"q", "two\nlines", "tab\tx", "smile \uD83D\uDE00, x: y",
+                "[leading", "- dash", "\"q", "two\nlines", "tab\tx", "smile \uD83D\uDE00, x: y",
                 "x\n    textEncoding: forged");
         for (List<String> set : Arrays.asList(plain, quoted)) {
             for (String v : set) {

@@ -60,10 +60,9 @@ public final class AuditLogTool {
      * through {@link YamlScalar} exactly as the text {@link LogRecord} writes them, and a record holding
      * a quoted value carries the same {@code textEncoding: QUOTED_SCALARS} first line. A record is
      * therefore buffered until it closes, since the marker precedes entries not yet seen. Numbers,
-     * booleans and nulls stay bare. One divergence remains: a boxed number logged through the
-     * {@code Object} overload is stored in the binary log as its {@code toString()} text, so its type
-     * is gone and it is written here as a string (quoted, e.g. {@code "9"}), where the text record
-     * writes it bare.
+     * booleans and nulls stay bare, and so does typed-looking text: a boxed number logged through the
+     * {@code Object} overload arrives as its {@code toString()} text and is written bare ({@code 9}),
+     * as the text record writes it. Only structurally unsafe text is quoted.
      */
     static final class TextSink implements AuditLogFilter.Sink {
         private final PrintStream out;
