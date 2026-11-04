@@ -214,12 +214,17 @@ public class LogRecord {
 
     public void addRecord(String sourceId, String propertyKey, char value) {
         addSourceId(sourceId, propertyKey);
-        sb.append(value);
+        YamlScalar.append(sb, value);
     }
 
+    /**
+     * A string value is written plain when that reads back as the same string, and YAML double-quoted
+     * otherwise - see {@link YamlScalar}. Written bare, {@code "not active, balance due 30.0"} was cut at
+     * the comma by every YAML reader and {@code "123"} came back as a number.
+     */
     public void addRecord(String sourceId, String propertyKey, CharSequence value) {
         addSourceId(sourceId, propertyKey);
-        sb.append(value);
+        YamlScalar.append(sb, value);
     }
 
     public void addRecord(String sourceId, String propertyKey, Object value) {
@@ -229,7 +234,18 @@ public class LogRecord {
         // CharSequence overload already wrote lowercase, so the two null paths disagreed with each other
         // as well as with the reader. Existing logs carrying "NULL" are unchanged and still parse as the
         // String they always parsed as; only new output moves.
-        sb.append(value == null ? "null" : value);
+        if (value == null) {
+            sb.append("null");
+        } else if (value instanceof Number || value instanceof Boolean) {
+            // logged as a number or boolean: stays an unquoted YAML number/boolean
+            sb.append(value);
+        } else if (value instanceof Character) {
+            YamlScalar.append(sb, (char) (Character) value);
+        } else if (value instanceof CharSequence) {
+            YamlScalar.append(sb, (CharSequence) value);
+        } else {
+            YamlScalar.append(sb, value.toString());
+        }
     }
 
     public void addRecord(String sourceId, String propertyKey, boolean value) {

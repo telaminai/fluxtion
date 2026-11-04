@@ -218,7 +218,7 @@ public class EventLogManager implements Auditor {
             logger.log("thread", Thread.currentThread().getName(), traceLevel);
         }
         if (node instanceof ForkedTrigger) {
-            logger.log("forkedExecution", "true", traceLevel);
+            logger.log("forkedExecution", true, traceLevel);
             logger.log("asyncMethod", methodName, traceLevel);
         } else {
             logger.log("method", methodName, traceLevel);
