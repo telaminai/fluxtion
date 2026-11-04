@@ -279,26 +279,36 @@ writing typed values into a grammar that types by inspection. These rules keep t
    declaration to every record it delivers.
 2. DOUBLE, LONG, INT and BOOL are written bare: their renderings cannot be syntax and the text
    grammar types them as the wire did.
-3. **Everything else is text** — CHARSEQ, OBJECT, CHAR, and an unknown tag's diagnostic — and is
-   written in the quoted form whenever the bare form would break the record's structure: split,
-   nest, end the line or strip. **Typed-looking strings are written bare and read with YAML/Analyser
-   typing, as before; only structurally unsafe text is quoted.** A String `5000`, `true`, `null`,
-   `0x1F` or a date is written bare, exactly as runtime 1.1.3 wrote it, so it reads as the number,
-   boolean or null it always read as (only bare numbers are graphable, Analyser spec §3); the empty
-   string is bare too and reads as null, as in 1.1.3. A producer that needs a String typed as one
-   whatever it looks like (an op id `472.1`, which as a number equals `472.10`) logs it with
-   `EventLogger.infoText` / `logText` and the level variants: the text record then quotes it when it
-   looks like a number, boolean or null, or is empty. A library detects the API with
-   `EventLogger.class.getMethod("infoText", String.class, CharSequence.class)`. On the wire such a
-   value is an ordinary CHARSEQ; the binary format is unchanged. `"` is the quote; the escapes are exactly `\\` `\x22` `\n`
-   `\r` `\t` `\0` and `\uXXXX` (BMP). The quote itself is written `\x22`, never `\"`, so a legacy
-   scanner that ends a quoted span at `\"` still finds every entry boundary. A valid surrogate pair is
-   written as-is; an unpaired surrogate is written `\ufffd`. A value in a `{ … }` entry uses the flow
-   rule; a header field, which runs to the end of its line, uses the narrower block rule, so commas,
-   brackets, braces and parentheses inside a typical `toString()` stay plain there.
-4. A `null` value (id `0`) is the bare literal `null`. The runtime writers (`LogRecord`,
-   `AuditLogTool`) write the **string** `null` bare as well (rule 3), so the two are not
-   distinguished in their text, as in 1.1.3.
+3. **Everything else is text** — CHARSEQ, OBJECT, CHAR, and an unknown tag's diagnostic. A
+   CHARSEQ is a String on the wire, and a constructor writes it so it reads back as one: quoted
+   whenever the bare form would break the record's structure (split, nest, end the line, strip),
+   **and** whenever it looks typed — a number, boolean, null or timestamp spelling, or the empty
+   String (f22). `AuditLogTool`'s text output and the analyser's `BinaryAuditReader` both do this.
+   OBJECT (a `toString()`, which may be a boxed number's) and CHAR are written by `AuditLogTool` as
+   the text runtime writes them (below): quoted only when structurally unsafe.
+
+   **The text runtime is not a constructor and keeps 1.1.3's typing.** `LogRecord` has no wire
+   types; for a value logged with `info(key, value)` it prevents structural breakage only.
+   Typed-looking strings are written bare and read with YAML/Analyser typing, as before: a String
+   `5000`, `true`, `null`, `0x1F`, `12:30:00` or `2026-11-04T10:00:00Z` is written exactly as runtime
+   1.1.3 wrote it, so it reads as the number, boolean, null or timestamp it always read as (only bare
+   numbers are graphable, Analyser spec §3); the empty String is bare too and reads as null. A `:`
+   is structural only before a space, at the end, or first, so times, timestamps and URLs stay bare.
+   A producer that needs a String typed as one whatever it looks like (an op id `472.1`, which as a
+   number equals `472.10`) logs it with `EventLogger.infoText` / `logText` and the level variants,
+   and the text runtime then quotes it as a constructor would quote a CHARSEQ. A library detects the
+   API with `EventLogger.class.getMethod("infoText", String.class, CharSequence.class)`. On the wire
+   such a value is an ordinary CHARSEQ; the binary format is unchanged.
+
+   `"` is the quote; the escapes are exactly `\\` `\x22` `\n` `\r` `\t` `\0` and `\uXXXX` (BMP).
+   The quote itself is written `\x22`, never `\"`, so a legacy scanner that ends a quoted span at
+   `\"` still finds every entry boundary. A valid surrogate pair is written as-is; an unpaired
+   surrogate is written `\ufffd`. A value in a `{ … }` entry uses the flow rule; a header field,
+   which runs to the end of its line, uses the narrower block rule, so commas, brackets, braces and
+   parentheses inside a typical `toString()` stay plain there.
+4. A `null` value (id `0`) is the bare literal `null`; the **string** `null` (a CHARSEQ) is quoted by
+   a constructor (rule 3), so the two stay distinct. Only the text runtime's `info` path writes the
+   string `null` bare, as 1.1.3 did, where it reads as null.
 5. Keys and node names outside `[A-Za-z0-9_$.-]` are quoted.
 6. `event:` carries the simple class name and `eventType:` the full one; neither may contain a line
    break, so one in the dictionary is made visible rather than allowed to start a scalar.
@@ -361,11 +371,11 @@ match. `--declare-unit` is §7.4's
 declaration. Its text output is **inspection**, for people and `grep`: it has the text runtime's
 shape and its quoting — a value whose tag is CHARSEQ, OBJECT or CHAR is written by rule 3, and a
 record holding a quoted value carries the rule 1 declaration. Numbers, booleans and `null` are bare.
-A CHARSEQ value is a String on the wire, so it is written to read back as one, quoted when it
-looks typed; the wire does not distinguish `info` from `infoText`, so here `5000` logged as a
-CharSequence is `"5000"`, where the text record writes an `info` value bare. OBJECT and CHAR follow
-the text record: a boxed number logged through the `Object` overload is written bare. Open the `.flxa` file in the analyser for typed
-reading.
+As a constructor it writes a CHARSEQ to read back as a String, quoted when it looks typed (§11
+rule 3); the wire does not distinguish `info` from `infoText`, so here `5000` logged as a
+CharSequence is `"5000"`, where the text runtime writes an `info` value bare. OBJECT and CHAR
+follow the text runtime: a boxed number logged through the `Object` overload is written bare. Open
+the `.flxa` file in the analyser for typed reading.
 
 ## 13. Conformance
 

@@ -272,7 +272,8 @@ public class TextEncodingMarkerTest {
      */
     @Test
     public void typedLookingStringsAreByteIdenticalTo113() {
-        String[] typed = {"5000", "123", "true", "null", "1e3", "0x1F", "-5", "~", "", "2024-01-01", "No"};
+        String[] typed = {"5000", "123", "true", "null", "1e3", "0x1F", "-5", "~", "", "2024-01-01", "No",
+                "12:30:00", "2026-11-04T10:00:00Z", "2026-11-04T10:00:00.123456789Z", "http://x:8/a"};
         LogRecord record = newRecord();
         record.groupingId = "42";
         record.printEventToString(true);

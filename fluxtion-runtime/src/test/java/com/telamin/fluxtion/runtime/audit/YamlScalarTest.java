@@ -151,10 +151,16 @@ public class YamlScalarTest {
         for (char c : new char[]{'7', 'y', 'n', 'N', 'Y', '~', '.', '+', '\u0661'}) {
             assertEquals(String.valueOf(c), w(c));
         }
-        // block rule only: ':' is structural in a flow map but not in a header line
-        for (String v : new String[]{"12:30:00", "2001-12-14 21:59:43.10 -5", "2001-12-14t21:59:43.10-05:00"}) {
+        // a ':' not before a space or at the end does not break either rule: times, timestamps, URLs
+        for (String v : new String[]{"12:30:00", "2001-12-14 21:59:43.10 -5", "2001-12-14t21:59:43.10-05:00",
+                "2026-11-04T10:00:00Z", "http://x:8/a", "a:b", "C:\\temp", "fe80::1"}) {
             assertEquals(v, b(v));
-            assertEquals('"', w(v).charAt(0));
+            assertEquals(v, w(v));
+        }
+        // and where it does, it is quoted in both
+        for (String v : new String[]{"a: b", "ends:", ":lead", "::1"}) {
+            assertEquals(v, '"', b(v).charAt(0));
+            assertEquals(v, '"', w(v).charAt(0));
         }
     }
 

@@ -84,9 +84,11 @@ public final class YamlScalar {
 
     /**
      * True when {@code value}, written bare inside a YAML flow map, would break the record's structure:
-     * it has leading/trailing whitespace (any Unicode space), contains a flow indicator, comment,
-     * quote, {@code ?}, control character or unpaired surrogate, has unbalanced parentheses, or starts
-     * with a YAML indicator. A value that merely looks like a number, boolean or null is NOT quoted.
+     * it has leading/trailing whitespace (any Unicode space), contains a flow indicator
+     * ({@code , [ ] { }}), comment, quote, {@code ?}, control character or unpaired surrogate, contains
+     * {@code ": "} or ends with {@code :}, has unbalanced parentheses, or starts with a YAML indicator.
+     * A {@code :} inside a time, timestamp or URL ({@code 12:30:00}, {@code 2026-11-04T10:00:00Z},
+     * {@code http://x:8/a}) does not break the structure and stays bare. A value that merely looks like a number, boolean or null is NOT quoted.
      */
     public static boolean needsQuoting(CharSequence value) {
         final int len = value.length();
@@ -111,6 +113,14 @@ public final class YamlScalar {
                 return true;
             }
             if (isSpecial(c)) {
+                return true;
+            }
+            if (c == ':' && (i + 1 == len || value.charAt(i + 1) == ' ')) {
+                // ": " ends a key and a trailing ':' reads as one. A ':' followed by anything else is
+                // plain text in a flow scalar - 12:30:00, 2026-11-04T10:00:00Z, http://x:8/a - and is
+                // left bare as 1.1.3 wrote it ('?', ',' and the flow brackets after it are special
+                // anyway). Checked against SnakeYAML 1.33/2.4, snakeyaml-engine 2.7, js-yaml 4.1.1
+                // and the Analyser's NodeLogTokenizer.
                 return true;
             }
             if (c == '(') {
@@ -332,10 +342,14 @@ public final class YamlScalar {
         }
     }
 
-    /** A character that cannot appear in a plain flow scalar, or that a reader would strip or split on. */
+    /**
+     * A character that cannot appear in a plain flow scalar, or that a reader would strip or split on.
+     * {@code :} is not here: it is unsafe only before a space or at the end (see
+     * {@link #needsQuoting(CharSequence)}), or first (an indicator).
+     */
     private static boolean isSpecial(char c) {
         switch (c) {
-            case ',': case ':': case '{': case '}': case '[': case ']':
+            case ',': case '{': case '}': case '[': case ']':
             case '#': case '"': case '\'': case '?':
                 return true;
             default:

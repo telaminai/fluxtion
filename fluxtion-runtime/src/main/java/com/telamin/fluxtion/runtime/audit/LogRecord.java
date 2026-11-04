@@ -294,9 +294,12 @@ public class LogRecord {
     }
 
     /**
-     * A string value is written plain when that reads back as the same string, and YAML double-quoted
-     * otherwise - see {@link YamlScalar}. Written bare, {@code "not active, balance due 30.0"} was cut at
-     * the comma by every YAML reader and {@code "123"} came back as a number.
+     * A string value is written as runtime 1.1.3 wrote it - bare - unless that would break the record's
+     * structure, and then YAML double-quoted - see {@link YamlScalar}. Written bare,
+     * {@code "not active, balance due 30.0"} was cut at the comma by every YAML reader. Only structural
+     * breakage is prevented: typed-looking text such as {@code 123}, {@code true} or {@code 12:30:00}
+     * stays bare and reads with YAML typing, as before. For a value that must read back as a String,
+     * use {@link #addTextRecord} ({@link EventLogger#infoText} and friends).
      */
     public void addRecord(String sourceId, String propertyKey, CharSequence value) {
         addSourceId(sourceId, propertyKey);

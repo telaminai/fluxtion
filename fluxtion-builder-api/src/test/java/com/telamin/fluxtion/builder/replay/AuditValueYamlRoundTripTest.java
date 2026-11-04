@@ -56,7 +56,6 @@ public class AuditValueYamlRoundTripTest {
             " leading",
             "trailing ",
             " ",
-            "12:30:00",
             "-", "- item", "? q", "&anchor", "*alias", "!tag", "|", ">", "%", "@at", "`tick`", "=", "<<",
             "ctrl\u0001char", "del\u007f", "nel\u0085", "unicode \u00e9 \u2713 \u65e5\u672c",
             "MutableOrder(id=1, venue=null)",
@@ -73,7 +72,10 @@ public class AuditValueYamlRoundTripTest {
     static final List<String> TYPED = Arrays.asList(
             "5000", "true", "false", "True", "yes", "No", "on", "OFF", "null", "Null", "~", "",
             "123", "-5", "+7", "1.5", "1e3", "1e10", ".5", "0x1F", "1_000", "2024-01-01",
-            ".inf", "-.inf", ".nan", "NaN", "Infinity", "\u0661\u0662\u0663"
+            ".inf", "-.inf", ".nan", "NaN", "Infinity", "\u0661\u0662\u0663",
+            // a ':' not before a space or at the end is plain in a flow scalar: times, timestamps, URLs
+            "12:30:00", "10:00", "2026-11-04T10:00:00Z", "2026-11-04T10:00:00.123456789Z",
+            "2026-11-04T10:00:00+01:00", "2026-11-04T10:00", "http://x:8/a", "C:\\temp", "fe80::1"
     );
 
     /** Simple values must stay plain so existing logs, and diffs of them, do not move. */
@@ -132,6 +134,21 @@ public class AuditValueYamlRoundTripTest {
             assertFalse(yaml, yaml.contains("textEncoding"));
             Object asIn113 = ((Map<?, ?>) new Yaml().load("{ v0: " + value + "}")).get("v0");
             assertEquals(yaml, asIn113, nodeProps(new Yaml().load(yaml), "gate").get("v0"));
+        }
+        // and with infoText the time-shaped ones are quoted and read back as Strings
+        LogRecord record = newRecord();
+        record.triggerObject(new Object());
+        EventLogger text = logger(record, "gate");
+        List<String> times = Arrays.asList("12:30:00", "2026-11-04T10:00:00Z", "2026-11-04 10:00:00");
+        for (int i = 0; i < times.size(); i++) {
+            text.infoText("v" + i, times.get(i));
+        }
+        record.terminateRecord();
+        String marked = record.toString();
+        assertTrue(marked, marked.startsWith("eventLogRecord: \n    textEncoding: QUOTED_SCALARS\n"));
+        Map<String, Object> props = nodeProps(new Yaml().load(marked), "gate");
+        for (int i = 0; i < times.size(); i++) {
+            assertEquals(marked, times.get(i), props.get("v" + i));
         }
         // the regression that prompted this: a String "5000" reads as the number, as it always did
         assertEquals(5000, nodeProps(new Yaml().load(writeRecord(Arrays.asList("5000"))), "gate").get("v0"));
