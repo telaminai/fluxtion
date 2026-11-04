@@ -33,11 +33,11 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
         void entry(String node, String key, String value);
 
         /**
-         * As {@link #entry(String, String, String)}, also saying whether {@code value} was logged as
-         * text (see {@link BinaryRecordDecoder#isTextValue}), so a YAML sink can quote it. The filter
-         * calls this one; the default drops the flag.
+         * As {@link #entry(String, String, String)}, also carrying the wire tag and raw value slot, so a
+         * YAML sink can type the value as the wire did (a CHARSEQ is a String). The filter calls this
+         * one; the default drops them.
          */
-        default void entry(String node, String key, String value, boolean text) {
+        default void entry(String node, String key, String value, int tag, long rawBits) {
             entry(node, key, value);
         }
 
@@ -264,8 +264,7 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
             sink.record(pendingEventType, pendingEventTime, pendingLogTime, pendingEndTime);
         }
         matchedEntries++;
-        sink.entry(node, key, BinaryRecordDecoder.renderValue(tag, rawBits, this::nameById),
-                BinaryRecordDecoder.isTextValue(tag, rawBits));
+        sink.entry(node, key, BinaryRecordDecoder.renderValue(tag, rawBits, this::nameById), tag, rawBits);
     }
 
     /** Resolves a dictionary id for the value renderer; {@code null} when the id has no entry. */

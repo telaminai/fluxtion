@@ -280,6 +280,47 @@ public class AuditValueYamlRoundTripTest {
         assertEquals("lone \uFFFD x", nodeProps(new Yaml().load(yaml), "gate").get("v0"));
     }
 
+    /**
+     * Values logged with {@code infoText} read back as exactly the logged String in SnakeYAML and
+     * YamlLogRecordListener, even when they look like numbers; the same values via {@code info} keep
+     * YAML typing. The Analyser reads a marked record's quoted scalars as Strings the same way (Format 1
+     * rev 1.2, section 3a), so 472.1 and 472.10 stay distinct ids there too.
+     */
+    @Test
+    public void textApiValuesReadBackAsStrings() {
+        List<String> values = Arrays.asList("472.1", "472.10", "true", "null", "", "5000", "0x1F", "~", "a, b");
+        LogRecord record = newRecord();
+        record.triggerObject(new Object());
+        EventLogger text = logger(record, "ctl");
+        EventLogger plain = logger(record, "plain");
+        for (int i = 0; i < values.size(); i++) {
+            text.infoText("v" + i, values.get(i));
+        }
+        for (int i = 0; i < values.size(); i++) {
+            plain.info("v" + i, values.get(i));
+        }
+        record.terminateRecord();
+        String yaml = record.toString();
+        assertTrue(yaml, yaml.startsWith("eventLogRecord: \n    textEncoding: QUOTED_SCALARS\n"));
+
+        Map<String, Object> textProps = nodeProps(new Yaml().load(yaml), "ctl");
+        Map<String, Object> plainProps = nodeProps(new Yaml().load(yaml), "plain");
+        for (int i = 0; i < values.size(); i++) {
+            assertEquals(yaml, values.get(i), textProps.get("v" + i));
+        }
+        assertEquals(472.1, plainProps.get("v0"));
+        assertEquals(472.1, plainProps.get("v1"));   // the collision infoText exists to avoid
+        assertEquals(5000, plainProps.get("v5"));
+        assertNull(plainProps.get("v3"));
+
+        YamlLogRecordListener listener = new YamlLogRecordListener();
+        listener.processLogRecord(record);
+        Map<?, ?> parsed = listener.getEventList().get(0).getAuditLogs().get(0).getPropertyMap();
+        for (int i = 0; i < values.size(); i++) {
+            assertEquals(values.get(i), parsed.get("v" + i));
+        }
+    }
+
     /** Typed-looking header values are bare and unmarked, reading with YAML typing as in 1.1.3. */
     @Test
     public void typedLookingHeaderValuesAreBare() {

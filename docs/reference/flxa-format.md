@@ -285,7 +285,12 @@ writing typed values into a grammar that types by inspection. These rules keep t
    typing, as before; only structurally unsafe text is quoted.** A String `5000`, `true`, `null`,
    `0x1F` or a date is written bare, exactly as runtime 1.1.3 wrote it, so it reads as the number,
    boolean or null it always read as (only bare numbers are graphable, Analyser spec §3); the empty
-   string is bare too and reads as null, as in 1.1.3. `"` is the quote; the escapes are exactly `\\` `\x22` `\n`
+   string is bare too and reads as null, as in 1.1.3. A producer that needs a String typed as one
+   whatever it looks like (an op id `472.1`, which as a number equals `472.10`) logs it with
+   `EventLogger.infoText` / `logText` and the level variants: the text record then quotes it when it
+   looks like a number, boolean or null, or is empty. A library detects the API with
+   `EventLogger.class.getMethod("infoText", String.class, CharSequence.class)`. On the wire such a
+   value is an ordinary CHARSEQ; the binary format is unchanged. `"` is the quote; the escapes are exactly `\\` `\x22` `\n`
    `\r` `\t` `\0` and `\uXXXX` (BMP). The quote itself is written `\x22`, never `\"`, so a legacy
    scanner that ends a quoted span at `\"` still finds every entry boundary. A valid surrogate pair is
    written as-is; an unpaired surrogate is written `\ufffd`. A value in a `{ … }` entry uses the flow
@@ -356,8 +361,10 @@ match. `--declare-unit` is §7.4's
 declaration. Its text output is **inspection**, for people and `grep`: it has the text runtime's
 shape and its quoting — a value whose tag is CHARSEQ, OBJECT or CHAR is written by rule 3, and a
 record holding a quoted value carries the rule 1 declaration. Numbers, booleans and `null` are bare.
-Typed-looking text is bare (rule 3), so a boxed number logged through the `Object` overload,
-which arrives as OBJECT text, is written bare as the text record writes it. Open the `.flxa` file in the analyser for typed
+A CHARSEQ value is a String on the wire, so it is written to read back as one, quoted when it
+looks typed; the wire does not distinguish `info` from `infoText`, so here `5000` logged as a
+CharSequence is `"5000"`, where the text record writes an `info` value bare. OBJECT and CHAR follow
+the text record: a boxed number logged through the `Object` overload is written bare. Open the `.flxa` file in the analyser for typed
 reading.
 
 ## 13. Conformance

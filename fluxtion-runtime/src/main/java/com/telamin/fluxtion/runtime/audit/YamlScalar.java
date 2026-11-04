@@ -128,6 +128,93 @@ public final class YamlScalar {
     }
 
     /**
+     * Appends {@code value} as a flow-context YAML scalar that every reader types as a <b>String</b>:
+     * the path behind {@link EventLogger#infoText} and friends. Quoted for every structural reason
+     * {@link #append(StringBuilder, CharSequence)} quotes for, and also when the text merely looks
+     * typed ({@link #looksTyped}) - {@code 472.1}, {@code 5000}, {@code true}, {@code null}, the empty
+     * string - which the ordinary path writes bare. A {@code null} reference is still the YAML null.
+     *
+     * @return true when the value was written in double-quoted form
+     */
+    public static boolean appendText(StringBuilder sb, CharSequence value) {
+        if (value == null) {
+            sb.append("null");
+            return false;
+        } else if (needsQuoting(value) || looksTyped(value)) {
+            appendQuoted(sb, value);
+            return true;
+        } else {
+            sb.append(value);
+            return false;
+        }
+    }
+
+    /**
+     * True when {@code value} written bare could be read as something other than a String by a YAML
+     * 1.1/1.2 reader or the Fluxtion Audit Log Analyser: empty; a YAML null/boolean word in any case
+     * ({@code null ~ true false yes no on off y n}); a NaN/infinity spelling ({@code nan .nan inf .inf
+     * infinity}, optionally signed); or, after an optional sign, a value starting with a digit or
+     * {@code .} made only of number, date and time characters - which covers {@code 472.1},
+     * {@code 1e3}, {@code 0x1F}, {@code 1_000}, {@code 2024-01-01}, {@code 12:30:00}, and Unicode digits
+     * ({@code Long.parseLong} accepts them). Deliberately broad: a false positive only quotes a string.
+     */
+    public static boolean looksTyped(CharSequence value) {
+        final int len = value.length();
+        if (len == 0) {
+            return true;
+        }
+        int start = 0;
+        char c0 = value.charAt(0);
+        if (c0 == '+' || c0 == '-') {
+            if (len == 1) {
+                return false;
+            }
+            start = 1;
+            c0 = value.charAt(1);
+        }
+        if (isTypedWord(value, start, len)) {
+            return true;
+        }
+        if (!Character.isDigit(c0) && c0 != '.') {
+            return false;
+        }
+        for (int i = start; i < len; i++) {
+            if (!isNumberChar(value.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static final String[] TYPED_WORDS = {"null", "~", "true", "false", "yes", "no", "on", "off",
+            "y", "n", "nan", ".nan", "inf", ".inf", "infinity"};
+
+    private static boolean isTypedWord(CharSequence v, int start, int len) {
+        final int n = len - start;
+        outer:
+        for (String w : TYPED_WORDS) {
+            if (w.length() != n) {
+                continue;
+            }
+            for (int i = 0; i < n; i++) {
+                if (Character.toLowerCase(v.charAt(start + i)) != w.charAt(i)) {
+                    continue outer;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /** Characters of a number, date, time or sexagesimal spelling, in any of the forms readers accept. */
+    private static boolean isNumberChar(char c) {
+        return Character.isDigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+                || c == 'x' || c == 'X' || c == 'o' || c == 'O' || c == 'p' || c == 'P'
+                || c == '_' || c == '.' || c == '+' || c == '-' || c == ':' || c == ' '
+                || c == 'T' || c == 't' || c == 'Z' || c == 'z';
+    }
+
+    /**
      * Appends {@code value} as a <b>block-context</b> YAML scalar - a record header field such as
      * {@code eventToString: ...}, which runs to the end of its line. Same quoting and escapes as
      * {@link #append(StringBuilder, CharSequence)}, with the block rule {@link #needsQuotingBlock}:

@@ -7,6 +7,8 @@ package com.telamin.fluxtion.runtime.audit;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 /**
  * The exact text {@link YamlScalar} writes. Plain values must not move (existing logs and diffs stay
@@ -154,5 +156,29 @@ public class YamlScalarTest {
             assertEquals(v, b(v));
             assertEquals('"', w(v).charAt(0));
         }
+    }
+
+    private static String t(CharSequence v) {
+        StringBuilder sb = new StringBuilder();
+        YamlScalar.appendText(sb, v);
+        return sb.toString();
+    }
+
+    @Test
+    public void textPathQuotesTypedLookingValues() {
+        for (String v : new String[]{"472.1", "472.10", "5000", "", "true", "False", "null", "NULL", "~", "y", "N",
+                "yes", "off", "1e3", "-5", "+12", ".5", "0x1F", "1_000", "2024-01-01", "12:30:00",
+                "2001-12-14 21:59:43.10 -5", "nan", ".NaN", "-.inf", "Infinity", "-Infinity", "\u0661\u0662"}) {
+            assertEquals(v, "\"" + v + "\"", t(v));
+            assertTrue(v, YamlScalar.looksTyped(v));
+        }
+        for (String v : new String[]{"abc", "op-472", "472.1q", "30 days", "MutableOrder(id=1)", "-", "+", "nully"}) {
+            assertFalse(v, YamlScalar.looksTyped(v));
+        }
+        // still structural, and escaped as usual
+        assertEquals("\"a, b\"", t("a, b"));
+        assertEquals("\"x\\x22y\"", t("x\"y"));
+        assertEquals("plain", t("plain"));
+        assertEquals("null", t(null));
     }
 }

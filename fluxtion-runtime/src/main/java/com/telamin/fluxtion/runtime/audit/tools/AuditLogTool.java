@@ -5,6 +5,7 @@
 package com.telamin.fluxtion.runtime.audit.tools;
 
 import com.telamin.fluxtion.runtime.audit.BinaryLogReader;
+import com.telamin.fluxtion.runtime.audit.BinaryRecordDecoder;
 import com.telamin.fluxtion.runtime.audit.LogRecord;
 import com.telamin.fluxtion.runtime.audit.YamlScalar;
 
@@ -56,13 +57,19 @@ public final class AuditLogTool {
      * filter that excluded everything looks like a log full of empty events. Entry-level filters are
      * the common case, and this is what makes their output readable.
      *
-     * <p>Values logged as text (CharSequence, Object, char - the binary tag says which) are written
-     * through {@link YamlScalar} exactly as the text {@link LogRecord} writes them, and a record holding
+     * <p>Values logged as text are written through {@link YamlScalar}, and a record holding
      * a quoted value carries the same {@code textEncoding: QUOTED_SCALARS} first line. A record is
      * therefore buffered until it closes, since the marker precedes entries not yet seen. Numbers,
-     * booleans and nulls stay bare, and so does typed-looking text: a boxed number logged through the
-     * {@code Object} overload arrives as its {@code toString()} text and is written bare ({@code 9}),
-     * as the text record writes it. Only structurally unsafe text is quoted.
+     * booleans and nulls stay bare. The binary tag decides how text is typed:
+     * <ul>
+     * <li>CHARSEQ is a String on the wire, so it is written to read back as a String
+     * ({@link YamlScalar#appendText}): {@code 472.1} or {@code 5000} logged as a CharSequence is
+     * quoted. The wire does not record whether it came through {@code infoText} or {@code info}, and
+     * a String is a String; this is where the inspection output differs from the text record, which
+     * writes an {@code info} value of {@code 5000} bare as 1.1.3 did.
+     * <li>OBJECT (a {@code toString()}, which may be a boxed number) and CHAR are written as the text
+     * record writes them: bare unless structurally unsafe.
+     * </ul>
      */
     static final class TextSink implements AuditLogFilter.Sink {
         private final PrintStream out;
@@ -95,11 +102,11 @@ public final class AuditLogTool {
 
         @Override
         public void entry(String node, String key, String value) {
-            entry(node, key, value, false);
+            entry(node, key, value, 0, 0L);
         }
 
         @Override
-        public void entry(String node, String key, String value, boolean text) {
+        public void entry(String node, String key, String value, int tag, long rawBits) {
             if (pending != null) {
                 record.setLength(0);
                 record.append(pending).append('\n');
@@ -107,7 +114,11 @@ public final class AuditLogTool {
                 recordOpen = true;
             }
             record.append("        - ").append(node).append(": { ").append(key).append(": ");
-            if (text) {
+            if (tag == BinaryRecordDecoder.TAG_CHARSEQ && rawBits != 0) {
+                // the wire says String: typed as one even when it looks like a number
+                quoted |= YamlScalar.appendText(record, value);
+            } else if (BinaryRecordDecoder.isTextValue(tag, rawBits)) {
+                // OBJECT (a toString, possibly of a boxed number) and CHAR: as the text record writes them
                 quoted |= YamlScalar.append(record, value);
             } else {
                 record.append(value);

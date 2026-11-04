@@ -303,6 +303,20 @@ public class LogRecord {
         quotedScalars |= YamlScalar.append(sb, value);
     }
 
+    /**
+     * A value the producer declared to be <b>text</b>: written so every reader types it as a String,
+     * even when it looks like a number, boolean or null ({@code 472.1}, {@code 5000}, {@code true},
+     * the empty string) - see {@link YamlScalar#appendText}. A quoted value marks the record as usual.
+     * {@link #addRecord(String, String, CharSequence)} keeps the 1.1.3 rule: typed-looking text bare.
+     *
+     * <p>A subclass that overrides {@link #addRecord(String, String, CharSequence)} to write somewhere
+     * other than this record's YAML buffer must override this too, as {@code BinaryLogRecord} does.
+     */
+    public void addTextRecord(String sourceId, String propertyKey, CharSequence value) {
+        addSourceId(sourceId, propertyKey);
+        quotedScalars |= YamlScalar.appendText(sb, value);
+    }
+
     public void addRecord(String sourceId, String propertyKey, Object value) {
         addSourceId(sourceId, propertyKey);
         // "null", not "NULL". The analyser's format spec reads the lowercase literal as a null value and

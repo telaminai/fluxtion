@@ -7,6 +7,7 @@ package com.telamin.fluxtion.runtime.audit.tools;
 import com.telamin.fluxtion.runtime.audit.BinaryEventLogger;
 import com.telamin.fluxtion.runtime.audit.BinaryLogRecord;
 import com.telamin.fluxtion.runtime.audit.BinaryLogWriter;
+import com.telamin.fluxtion.runtime.audit.BinaryRecordDecoder;
 import com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel;
 import com.telamin.fluxtion.runtime.audit.EventLogger;
 import com.telamin.fluxtion.runtime.time.Clock;
@@ -35,20 +36,25 @@ public class TextSinkQuotingTest {
 
     private static final String NL = System.lineSeparator();
 
+    private static final int STR = BinaryRecordDecoder.TAG_CHARSEQ, OBJ = BinaryRecordDecoder.TAG_OBJECT,
+            INT = BinaryRecordDecoder.TAG_INT, BOOL = BinaryRecordDecoder.TAG_BOOL;
+
     @Test
     public void sinkQuotesTextValuesAndMarksOnlyThoseRecords() {
-        // the third record's text "true" is typed-looking, not structurally unsafe: bare, unmarked
+        // the third record: a CHARSEQ "true" is a String on the wire, so it is quoted and marks the
+        // record; an OBJECT "9" (a boxed number's toString) stays bare as the text record writes it
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         AuditLogTool.TextSink sink = new AuditLogTool.TextSink(new PrintStream(bytes, true));
         sink.record("Tick", 1, 2, 3);
-        sink.entry("gate", "reason", "not active, due 30.0", true);
-        sink.entry("gate", "count", "3", false);
+        sink.entry("gate", "reason", "not active, due 30.0", STR, 1);
+        sink.entry("gate", "count", "3", INT, 3);
         sink.record("Tick", 4, 5, 6);
-        sink.entry("gate", "reason", "active", true);
-        sink.entry("gate", "count", "4", false);
+        sink.entry("gate", "reason", "active", STR, 2);
+        sink.entry("gate", "count", "4", INT, 4);
         sink.record("Tick", 7, 8, 9);
-        sink.entry("gate", "flag", "true", false);
-        sink.entry("gate", "s", "true", true);
+        sink.entry("gate", "flag", "true", BOOL, 1);
+        sink.entry("gate", "s", "true", STR, 3);
+        sink.entry("gate", "o", "9", OBJ, 4);
         sink.close();
         String expected = String.join(NL,
                 "eventLogRecord: ",
@@ -71,12 +77,14 @@ public class TextSinkQuotingTest {
                 "    endTime: 6",
                 "",
                 "eventLogRecord: ",
+                "    textEncoding: QUOTED_SCALARS",
                 "    eventTime: 7",
                 "    logTime: 8",
                 "    event: Tick",
                 "    nodeLogs: ",
                 "        - gate: { flag: true}",
-                "        - gate: { s: true}",
+                "        - gate: { s: \"true\"}",
+                "        - gate: { o: 9}",
                 "    endTime: 9") + NL;
         assertEquals(expected, bytes.toString());
     }
@@ -96,6 +104,9 @@ public class TextSinkQuotingTest {
             logger.info("n", 3);
             logger.info("c", ',');
             logger.info("nil", (CharSequence) null);
+            logger.infoText("op", "472.1");
+            logger.info("plainId", "472.10");
+            logger.info("boxed", (Object) Integer.valueOf(9));
             record.terminateRecord();
             writer.processLogRecord(record);
 
@@ -117,6 +128,10 @@ public class TextSinkQuotingTest {
         assertTrue(text, records[0].contains("{ n: 3}"));
         assertTrue(text, records[0].contains("{ c: \",\"}"));
         assertTrue(text, records[0].contains("{ nil: null}"));
+        // CHARSEQ is a String on the wire however it was logged: both ids stay distinct strings
+        assertTrue(text, records[0].contains("{ op: \"472.1\"}"));
+        assertTrue(text, records[0].contains("{ plainId: \"472.10\"}"));
+        assertTrue(text, records[0].contains("{ boxed: 9}"));
         assertFalse(text, records[1].contains("textEncoding"));
         assertTrue(text, records[1].contains("{ reason: active}"));
     }
