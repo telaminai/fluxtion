@@ -32,6 +32,15 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
 
         void entry(String node, String key, String value);
 
+        /**
+         * As {@link #entry(String, String, String)}, also saying whether {@code value} was logged as
+         * text (see {@link BinaryRecordDecoder#isTextValue}), so a YAML sink can quote it. The filter
+         * calls this one; the default drops the flag.
+         */
+        default void entry(String node, String key, String value, boolean text) {
+            entry(node, key, value);
+        }
+
         default void close() {
         }
     }
@@ -255,7 +264,8 @@ public final class AuditLogFilter implements BinaryLogReader.Visitor {
             sink.record(pendingEventType, pendingEventTime, pendingLogTime, pendingEndTime);
         }
         matchedEntries++;
-        sink.entry(node, key, BinaryRecordDecoder.renderValue(tag, rawBits, this::nameById));
+        sink.entry(node, key, BinaryRecordDecoder.renderValue(tag, rawBits, this::nameById),
+                BinaryRecordDecoder.isTextValue(tag, rawBits));
     }
 
     /** Resolves a dictionary id for the value renderer; {@code null} when the id has no entry. */

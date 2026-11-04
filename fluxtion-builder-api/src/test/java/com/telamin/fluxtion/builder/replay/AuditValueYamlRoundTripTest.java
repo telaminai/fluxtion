@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -31,6 +32,7 @@ import static org.junit.Assert.assertTrue;
  * contain every YAML-significant character through the real {@link LogRecord} path, then reads them
  * back with SnakeYAML and with {@link YamlLogRecordListener}.
  */
+@SuppressWarnings("unchecked")
 public class AuditValueYamlRoundTripTest {
 
     static final List<String> HOSTILE = Arrays.asList(
@@ -61,13 +63,18 @@ public class AuditValueYamlRoundTripTest {
             ".inf", "-.inf", ".nan", "NaN", "Infinity",
             "-", "- item", "? q", "&anchor", "*alias", "!tag", "|", ">", "%", "@at", "`tick`", "=", "<<",
             "ctrl\u0001char", "del\u007f", "nel\u0085", "unicode \u00e9 \u2713 \u65e5\u672c",
-            "MutableOrder(id=1, venue=null)"
+            "MutableOrder(id=1, venue=null)",
+            "ok?", "is it ok?", "url?x=1", "?",
+            "open(", "close)", "a)b(c", "f(g(x)", "(", ")",
+            "a \"b, c", "quote\"inside", "smile \uD83D\uDE00, ok", "\uD83D\uDE00",
+            "sep\u2028x", "bom\uFEFF", "x\n    textEncoding: QUOTED_SCALARS"
     );
 
     /** Simple values must stay plain so existing logs, and diffs of them, do not move. */
     static final List<String> PLAIN = Arrays.asList(
             "simple", "ok", "membership active", "Tick->getPrice", "30 days", "abc123",
-            "MutableOrder(id=1)", "a-b_c.d", "path/to/x", "100%ok", "unicode \u00e9", "back\\slash"
+            "MutableOrder(id=1)", "a-b_c.d", "path/to/x", "100%ok", "unicode \u00e9", "back\\slash",
+            "f(g(x))", "smile \uD83D\uDE00"
     );
 
     @Test
@@ -159,6 +166,99 @@ public class AuditValueYamlRoundTripTest {
         assertEquals("7", props.get("chDigit"));
         assertEquals("Thing[x, y: z]", props.get("obj"));
         assertEquals("a, b", props.get("sb"));
+    }
+
+    @Test
+    public void markerPresentIffQuotedAndReadersIgnoreIt() {
+        // three records in one stream: quoted, plain, quoted - state must reset per record
+        LogRecord record = newRecord();
+        EventLogger gate = logger(record, "gate");
+        EventLogger other = logger(record, "other");
+        StringBuilder stream = new StringBuilder();
+
+        record.triggerObject(new Object());
+        gate.info("a", "plain");
+        other.info("reason", "not active, balance due 30.0");
+        other.info("n", 1);
+        record.terminateRecord();
+        String first = record.toString();
+        stream.append(first).append("\n---\n");
+        record.clear();
+
+        record.triggerObject(new Object());
+        gate.info("a", "plain");
+        other.info("n", 2);
+        record.terminateRecord();
+        String second = record.toString();
+        stream.append(second).append("\n---\n");
+        record.clear();
+
+        record.triggerObject(new Object());
+        gate.info("q", "say \"hi\", ok?");
+        record.terminateRecord();
+        String third = record.toString();
+        stream.append(third).append("\n---\n");
+
+        assertTrue(first, first.startsWith("eventLogRecord: \n    textEncoding: QUOTED_SCALARS\n"));
+        assertFalse(second, second.contains("textEncoding"));
+        assertTrue(third, third.startsWith("eventLogRecord: \n    textEncoding: QUOTED_SCALARS\n"));
+
+        // SnakeYAML: the marker is a header key; nodeLogs values are exact and do not include it
+        Map<String, Object> rec = (Map<String, Object>) ((Map<String, Object>) new Yaml().load(first)).get("eventLogRecord");
+        assertEquals("QUOTED_SCALARS", rec.get("textEncoding"));
+        assertEquals("not active, balance due 30.0", nodeProps(new Yaml().load(first), "other").get("reason"));
+        assertFalse(nodeProps(new Yaml().load(first), "other").containsKey("textEncoding"));
+        assertEquals("say \"hi\", ok?", nodeProps(new Yaml().load(third), "gate").get("q"));
+
+        // YamlLogRecordListener, file path: three records, marker does not leak into nodeLogs
+        YamlLogRecordListener listener = new YamlLogRecordListener();
+        listener.loadFromFile(new StringReader(stream.toString()));
+        List<StructuredLogRecord> events = listener.getEventList();
+        assertEquals(3, events.size());
+        for (StructuredLogRecord e : events) {
+            for (StructuredLogRecord.AuditRecord audit : e.getAuditLogs()) {
+                assertFalse(audit.getPropertyMap().containsKey("textEncoding"));
+                assertTrue(audit.getNodeId(), audit.getNodeId().equals("gate") || audit.getNodeId().equals("other"));
+            }
+            assertEquals("Object", e.getEventType());
+        }
+        assertEquals(2, events.get(0).getAuditLogs().size());
+        assertEquals("not active, balance due 30.0", events.get(0).getAuditLogs().get(1).getPropertyMap().get("reason"));
+        assertEquals(2, events.get(1).getAuditLogs().get(1).getPropertyMap().get("n"));
+        assertEquals("say \"hi\", ok?", events.get(2).getAuditLogs().get(0).getPropertyMap().get("q"));
+        assertTrue(events.get(0).getLogTime() >= 0);
+
+        // and the in-process path
+        YamlLogRecordListener direct = new YamlLogRecordListener();
+        direct.processLogRecord(record);
+        assertEquals("say \"hi\", ok?", direct.getEventList().get(0).getAuditLogs().get(0).getPropertyMap().get("q"));
+    }
+
+    @Test
+    public void quotedHeaderFieldsRoundTrip() {
+        LogRecord record = newRecord();
+        record.groupingId = "grp: 1, #2";
+        record.printEventToString(true);
+        record.setPrintThreadName(true);
+        record.triggerObject(new Thing("x\n    textEncoding: forged, a: b"));
+        logger(record, "gate").info("v", 1);
+        record.terminateRecord();
+        String yaml = record.toString();
+        Map<String, Object> rec = (Map<String, Object>) ((Map<String, Object>) new Yaml().load(yaml)).get("eventLogRecord");
+        assertEquals(yaml, "QUOTED_SCALARS", rec.get("textEncoding"));
+        assertEquals("grp: 1, #2", rec.get("groupingId"));
+        assertEquals("Thing[x\n    textEncoding: forged, a: b]", rec.get("eventToString"));
+        assertEquals(Thread.currentThread().getName(), rec.get("thread"));
+        YamlLogRecordListener listener = new YamlLogRecordListener();
+        listener.processLogRecord(record);
+        assertEquals("grp: 1, #2", listener.getEventList().get(0).getGroupingId());
+    }
+
+    @Test
+    public void loneSurrogateBecomesReplacementCharacter() {
+        String yaml = writeRecord(Arrays.asList("lone \uD800 x"));
+        assertTrue(yaml, yaml.startsWith("eventLogRecord: \n    textEncoding: QUOTED_SCALARS\n"));
+        assertEquals("lone \uFFFD x", nodeProps(new Yaml().load(yaml), "gate").get("v0"));
     }
 
     static final class Thing {

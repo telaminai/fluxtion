@@ -16,9 +16,27 @@ package com.telamin.fluxtion.runtime.audit;
  *
  * <p>The check is a single pass of {@code charAt} with no allocation and no regex — this runs on the
  * audit hot path for every string-valued entry. It is deliberately conservative: quoting a value that
- * did not strictly need it is harmless, writing one bare that did is data loss.
+ * did not strictly need it is harmless, writing one bare that did is data loss. Besides the YAML
+ * rules, a value is quoted when it contains {@code ?} anywhere (SnakeYAML rejects {@code { k: ok?}}
+ * and loses the whole record) or has unbalanced parentheses (the Fluxtion Audit Log Analyser's
+ * tokenizer nests on them); {@code MutableOrder(id=1)} stays plain.
+ *
+ * <h2>Escapes</h2>
+ * Inside a double-quoted scalar exactly these escapes are emitted, all standard YAML 1.1/1.2:
+ * <ul>
+ * <li>{@code \\} backslash, {@code \x22} double quote, {@code \n}, {@code \r}, {@code \t}, {@code \0}
+ * <li>{@code \}{@code uXXXX} (lowercase hex, BMP) for every other non-printable character: C0
+ * controls, DEL and C1 controls, U+2028, U+2029, U+FEFF, U+FFFE, U+FFFF
+ * </ul>
+ * The double quote is written {@code \x22}, never {@code \"}: the analyser's legacy text scanner reads
+ * {@code \"} as a closing quote, and would lose the entry boundary. A valid surrogate pair (a
+ * supplementary character) is written as-is, unescaped. An <b>unpaired</b> surrogate cannot be
+ * encoded in UTF-8 at all, so it forces quoting and is written as {@code \}{@code ufffd} (U+FFFD,
+ * the replacement character) — lossy by necessity, but visible rather than a silent {@code ?}.
  */
 public final class YamlScalar {
+
+    private static final char[] HEX = "0123456789abcdef".toCharArray();
 
     private YamlScalar() {
     }
@@ -26,33 +44,44 @@ public final class YamlScalar {
     /**
      * Appends {@code value} as a flow-context YAML scalar. A {@code null} is written as the YAML null
      * {@code null}; a String spelling {@code null} is quoted so the two stay distinct.
+     *
+     * @return true when the value was written in double-quoted form
      */
-    public static void append(StringBuilder sb, CharSequence value) {
+    public static boolean append(StringBuilder sb, CharSequence value) {
         if (value == null) {
             sb.append("null");
+            return false;
         } else if (needsQuoting(value)) {
             appendQuoted(sb, value);
+            return true;
         } else {
             sb.append(value);
+            return false;
         }
     }
 
-    /** Appends a single character as a flow-context YAML scalar that reads back as a one-char string. */
-    public static void append(StringBuilder sb, char value) {
+    /**
+     * Appends a single character as a flow-context YAML scalar that reads back as a one-char string.
+     *
+     * @return true when the value was written in double-quoted form
+     */
+    public static boolean append(StringBuilder sb, char value) {
         if (needsQuoting(value)) {
             sb.append('"');
             appendEscaped(sb, value);
             sb.append('"');
+            return true;
         } else {
             sb.append(value);
+            return false;
         }
     }
 
     /**
      * True when {@code value}, written bare inside a YAML flow map, would not read back as the same
-     * String: it is empty, has leading/trailing whitespace, contains a flow indicator, comment, quote
-     * or control character, starts with a YAML indicator, or spells a non-string scalar
-     * ({@code null}, a boolean, a number, a date).
+     * String: it is empty, has leading/trailing whitespace, contains a flow indicator, comment, quote,
+     * {@code ?}, control character or unpaired surrogate, has unbalanced parentheses, starts with a
+     * YAML indicator, or spells a non-string scalar ({@code null}, a boolean, a number, a date).
      */
     public static boolean needsQuoting(CharSequence value) {
         final int len = value.length();
@@ -67,49 +96,70 @@ public final class YamlScalar {
             return true;
         }
         boolean numberLike = first >= '0' && first <= '9';
+        int parenDepth = 0;
         for (int i = 0; i < len; i++) {
             final char c = value.charAt(i);
+            if (Character.isSurrogate(c)) {
+                if (Character.isHighSurrogate(c) && i + 1 < len && Character.isLowSurrogate(value.charAt(i + 1))) {
+                    i++;
+                    numberLike = false;
+                    continue;
+                }
+                return true;
+            }
             if (isSpecial(c)) {
+                return true;
+            }
+            if (c == '(') {
+                parenDepth++;
+            } else if (c == ')' && --parenDepth < 0) {
                 return true;
             }
             if (numberLike && !isNumberChar(c)) {
                 numberLike = false;
             }
         }
-        return numberLike || (len <= 8 && isReservedWord(value, len));
+        return parenDepth != 0 || numberLike || (len <= 8 && isReservedWord(value, len));
     }
 
     /** {@link #needsQuoting(CharSequence)} for a one-character value. */
     public static boolean needsQuoting(char c) {
         return isIndicatorStart(c) || isSpecial(c) || c == ' ' || (c >= '0' && c <= '9')
+                || c == '(' || c == ')'
                 || c == '~' || c == 'y' || c == 'Y' || c == 'n' || c == 'N';
     }
 
-    /** Appends {@code value} in YAML double-quoted style, escaping as the YAML spec requires. */
+    /** Appends {@code value} in YAML double-quoted style, escaping as described on this class. */
     public static void appendQuoted(StringBuilder sb, CharSequence value) {
         sb.append('"');
         for (int i = 0, len = value.length(); i < len; i++) {
-            appendEscaped(sb, value.charAt(i));
+            final char c = value.charAt(i);
+            if (Character.isHighSurrogate(c) && i + 1 < len && Character.isLowSurrogate(value.charAt(i + 1))) {
+                // a valid supplementary character: written as-is
+                sb.append(c).append(value.charAt(++i));
+            } else {
+                appendEscaped(sb, c);
+            }
         }
         sb.append('"');
     }
 
     private static void appendEscaped(StringBuilder sb, char c) {
         switch (c) {
-            case '"': sb.append("\\\""); return;
+            case '"': sb.append("\\x22"); return;
             case '\\': sb.append("\\\\"); return;
             case '\n': sb.append("\\n"); return;
             case '\r': sb.append("\\r"); return;
             case '\t': sb.append("\\t"); return;
             case '\0': sb.append("\\0"); return;
             default:
-                if (isNonPrintable(c)) {
-                    sb.append("\\u");
-                    String hex = Integer.toHexString(c);
-                    for (int pad = hex.length(); pad < 4; pad++) {
-                        sb.append('0');
-                    }
-                    sb.append(hex);
+                if (Character.isSurrogate(c)) {
+                    // unpaired: not encodable, written as the replacement character
+                    sb.append("\\ufffd");
+                } else if (isNonPrintable(c)) {
+                    sb.append("\\u")
+                            .append(HEX[(c >>> 12) & 0xF]).append(HEX[(c >>> 8) & 0xF])
+                            .append(HEX[(c >>> 4) & 0xF]).append(HEX[c & 0xF]);
                 } else {
                     sb.append(c);
                 }
@@ -120,10 +170,10 @@ public final class YamlScalar {
     private static boolean isSpecial(char c) {
         switch (c) {
             case ',': case ':': case '{': case '}': case '[': case ']':
-            case '#': case '"': case '\'':
+            case '#': case '"': case '\'': case '?':
                 return true;
             default:
-                return c < ' ' || isNonPrintable(c);
+                return c < ' ' || isNonPrintable(c) || Character.isSurrogate(c);
         }
     }
 
@@ -140,7 +190,8 @@ public final class YamlScalar {
     }
 
     private static boolean isNonPrintable(char c) {
-        return (c < ' ' && c != '\t') || (c >= 0x7F && c <= 0x9F) || c == ' ' || c == ' '
+        return (c < ' ' && c != '\t') || (c >= 0x7F && c <= 0x9F)
+                || c == ' ' || c == ' '
                 || c == '﻿' || c == '￾' || c == '￿';
     }
 

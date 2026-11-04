@@ -42,6 +42,37 @@ import java.util.function.ObjLongConsumer;
  * The key of a node is the instance name in the java code, followed by a set of key/value properties the node logs.
  * </ul>
  *
+ * <h2>Text encoding marker</h2>
+ * String-valued fields (nodeLogs values and the header's groupingId, event, eventToString, thread and
+ * eventFilter) are written through {@link YamlScalar}: plain when that reads back as the same string,
+ * YAML double-quoted otherwise. A record holding <b>at least one</b> double-quoted scalar carries one
+ * extra line, always the first line of its {@code eventLogRecord} mapping:
+ *
+ * <pre>
+ * eventLogRecord:
+ *     textEncoding: QUOTED_SCALARS
+ *     eventTime: 1578236915413
+ *     ...
+ *     nodeLogs:
+ *         - gate: { reason: "not active, balance due 30.0"}
+ * </pre>
+ *
+ * It tells a reader whose legacy grammar treats quote marks as literal characters that this record's
+ * quoted scalars must be decoded. A reader honours it only in that first position, so a logged value
+ * (which is always quoted if it contains {@code :}, a newline or {@code #}) can never forge it. A record
+ * with no quoted value is byte-for-byte what earlier releases wrote: no marker.
+ *
+ * <p><b>Placement cost.</b> The header is written by {@code triggerEvent}/{@code triggerObject}
+ * before any value is known, so the marker is inserted at the header's recorded offset by
+ * {@link #terminateRecord()} — one {@code StringBuilder.insert} of a constant, done only on a record
+ * that needs it. The common path pays one boolean OR per string value and allocates nothing extra.
+ *
+ * <p><b>Escapes.</b> Inside a double-quoted scalar exactly these are emitted: {@code \\},
+ * {@code \x22} (the double quote; never {@code \"}), {@code \n}, {@code \r}, {@code \t}, {@code \0},
+ * and {@code \}{@code uXXXX} (BMP, lowercase hex) for any other non-printable character. A valid
+ * surrogate pair is written as-is; an unpaired surrogate is written as {@code \}{@code ufffd}. See
+ * {@link YamlScalar}.
+ *
  * @author Greg Higgins (greg.higgins@v12technology.com)
  */
 public class LogRecord {
@@ -56,6 +87,14 @@ public class LogRecord {
     protected final StringBuilder sb;
     protected String sourceId;
     protected boolean firstProp;
+    /** The header line every text record starts with; the marker is inserted directly after it. */
+    static final String RECORD_KEY = "eventLogRecord: ";
+    /** The marker line, written only on a record holding at least one double-quoted scalar. */
+    public static final String TEXT_ENCODING_MARKER = "\n    textEncoding: QUOTED_SCALARS";
+    /** True once the current record has written a value in double-quoted form. */
+    protected boolean quotedScalars;
+    /** Offset in {@link #sb} of the current record's {@code eventLogRecord:} key; -1 when no header. */
+    protected int recordStart = -1;
     /**
      * Whether to take a second clock reading for {@code endTime}. <b>On by default.</b>
      *
@@ -124,6 +163,7 @@ public class LogRecord {
         this.logLevel = newLogLevel == null ? EventLogControlEvent.LogLevel.NONE : newLogLevel;
         if (!loggingEnabled()) {
             sb.setLength(0);
+            resetRecordState();
         }
     }
 
@@ -139,6 +179,22 @@ public class LogRecord {
     public void replaceBuffer(CharSequence newBuffer) {
         sb.setLength(0);
         sb.append(newBuffer);
+        resetRecordState();
+    }
+
+    /**
+     * Carries the in-progress record's marker state from {@code previous}, whose buffer this record
+     * has just taken with {@link #replaceBuffer}, so a quoted value written before the swap still
+     * marks the record.
+     */
+    void adoptRecordState(LogRecord previous) {
+        this.quotedScalars = previous.quotedScalars;
+        this.recordStart = previous.recordStart;
+    }
+
+    private void resetRecordState() {
+        quotedScalars = false;
+        recordStart = -1;
     }
 
     /**
@@ -214,7 +270,7 @@ public class LogRecord {
 
     public void addRecord(String sourceId, String propertyKey, char value) {
         addSourceId(sourceId, propertyKey);
-        YamlScalar.append(sb, value);
+        quotedScalars |= YamlScalar.append(sb, value);
     }
 
     /**
@@ -224,7 +280,7 @@ public class LogRecord {
      */
     public void addRecord(String sourceId, String propertyKey, CharSequence value) {
         addSourceId(sourceId, propertyKey);
-        YamlScalar.append(sb, value);
+        quotedScalars |= YamlScalar.append(sb, value);
     }
 
     public void addRecord(String sourceId, String propertyKey, Object value) {
@@ -240,11 +296,11 @@ public class LogRecord {
             // logged as a number or boolean: stays an unquoted YAML number/boolean
             sb.append(value);
         } else if (value instanceof Character) {
-            YamlScalar.append(sb, (char) (Character) value);
+            quotedScalars |= YamlScalar.append(sb, (char) (Character) value);
         } else if (value instanceof CharSequence) {
-            YamlScalar.append(sb, (CharSequence) value);
+            quotedScalars |= YamlScalar.append(sb, (CharSequence) value);
         } else {
-            YamlScalar.append(sb, value.toString());
+            quotedScalars |= YamlScalar.append(sb, value.toString());
         }
     }
 
@@ -319,6 +375,7 @@ public class LogRecord {
         firstProp = true;
         sourceId = null;
         sb.setLength(0);
+        resetRecordState();
     }
 
     public CharSequence asCharSequence() {
@@ -328,23 +385,18 @@ public class LogRecord {
     public void triggerEvent(Event event) {
         if (loggingEnabled()) {
             Class<? extends Event> aClass = event.getClass();
-            sb.append("eventLogRecord: ");
+            recordStart = sb.length();
+            sb.append(RECORD_KEY);
             sb.append("\n    eventTime: ");
             timeFormatter.accept(sb, clock.getEventTime());
 
             sb.append("\n    logTime: ");
             timeFormatter.accept(sb, logTime());
 
-            sb.append("\n    groupingId: ").append(groupingId);
-            sb.append("\n    event: ").append(aClass.getSimpleName());
-            if (printEventToString) {
-                sb.append("\n    eventToString: ").append(event.toString());
-            }
-            if (printThreadName) {
-                sb.append("\n    thread: ").append(Thread.currentThread().getName());
-            }
+            appendHeaderFields(event, aClass);
             if (event.filterString() != null && !event.filterString().isEmpty()) {
-                sb.append("\n    eventFilter: ").append(event.filterString());
+                sb.append("\n    eventFilter: ");
+                quotedScalars |= YamlScalar.append(sb, event.filterString());
             }
             sb.append("\n    nodeLogs: ");
         }
@@ -356,24 +408,33 @@ public class LogRecord {
                 triggerEvent((Event) event);
             } else {
                 Class<?> aClass = event.getClass();
-                sb.append("eventLogRecord: ");
+                recordStart = sb.length();
+                sb.append(RECORD_KEY);
                 sb.append("\n    eventTime: ");
                 timeFormatter.accept(sb, clock.getEventTime());
 
                 sb.append("\n    logTime: ");
                 timeFormatter.accept(sb, logTime());
 
-                sb.append("\n    groupingId: ").append(groupingId);
-
-                sb.append("\n    event: ").append(aClass.getSimpleName());
-                if (printEventToString) {
-                    sb.append("\n    eventToString: ").append(event.toString());
-                }
-                if (printThreadName) {
-                    sb.append("\n    thread: ").append(Thread.currentThread().getName());
-                }
+                appendHeaderFields(event, aClass);
                 sb.append("\n    nodeLogs: ");
             }
+        }
+    }
+
+    /** groupingId, event, eventToString and thread, each written through {@link YamlScalar}. */
+    private void appendHeaderFields(Object event, Class<?> aClass) {
+        sb.append("\n    groupingId: ");
+        quotedScalars |= YamlScalar.append(sb, groupingId);
+        sb.append("\n    event: ");
+        quotedScalars |= YamlScalar.append(sb, aClass.getSimpleName());
+        if (printEventToString) {
+            sb.append("\n    eventToString: ");
+            quotedScalars |= YamlScalar.append(sb, event.toString());
+        }
+        if (printThreadName) {
+            sb.append("\n    thread: ");
+            quotedScalars |= YamlScalar.append(sb, Thread.currentThread().getName());
         }
     }
 
@@ -393,9 +454,15 @@ public class LogRecord {
                 sb.append("\n    endTime: ");
                 timeFormatter.accept(sb, clock.getWallClockTime());
             }
+            if (quotedScalars && recordStart >= 0) {
+                // Rare path only: the header was written before any value was known, so the marker
+                // goes in at its fixed offset now. Records with no quoted value never reach here.
+                sb.insert(recordStart + RECORD_KEY.length(), TEXT_ENCODING_MARKER);
+            }
         }
         firstProp = true;
         sourceId = null;
+        resetRecordState();
         return logged;
     }
 

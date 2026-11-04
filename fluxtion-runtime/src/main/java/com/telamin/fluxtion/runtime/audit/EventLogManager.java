@@ -253,6 +253,7 @@ public class EventLogManager implements Auditor {
         if (newLogRecord != null) {
             newLogRecord.updateLogLevel(logRecord.getLogLevel());
             newLogRecord.replaceBuffer(logRecord.sb);
+            newLogRecord.adoptRecordState(logRecord);
             this.logRecord = newLogRecord;
             this.logRecord.setClock(clock);
             // PRECEDENCE: the manager's recordEndTime governs the records the MANAGER builds; a record
