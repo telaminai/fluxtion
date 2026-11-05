@@ -4,6 +4,9 @@
 Quickstart tutorial to get developers up and running in 1 minute leveraging jbang. Calculates the average speed
 of s stream of cars grouped by manufacturer in a sliding window of 2 seconds with a 500 millisecond bucket size.
 
+!!! note "Generation is remote and needs an API key"
+    {{fluxtion_remote_build_note}} {{fluxtion_api_key_line}}
+
 ### 1. Install jbang
 
 Open a new terminal or command shell to install jbang
@@ -39,7 +42,8 @@ notepad.exe GroupByWindowExample.java
 ```
 
 ```java
-//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
+//REPOS mavencentral,fluxtion={{fluxtion_repository}}
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_builder_version}}
 //COMPILE_OPTIONS -proc:full
 //JAVA 25
 
@@ -105,7 +109,7 @@ Console output:
 ```console
 %> jbang GroupByWindowExample.java
 [jbang] Resolving dependencies...
-[jbang]    com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
+[jbang]    com.telamin.fluxtion:fluxtion-builder:{{fluxtion_builder_version}}
 [jbang] Dependencies resolved
 [jbang] Building jar for GroupByWindowExample.java...
 building DataFlow::avgSpeedByMake...

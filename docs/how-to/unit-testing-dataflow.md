@@ -45,16 +45,23 @@ This separation means your tests run in milliseconds without external dependenci
 Add JUnit 5 and Mockito to your `pom.xml`:
 
 ```xml
+<repositories>
+    <repository>
+        <id>fluxtion-public</id>
+        <url>{{fluxtion_repository}}</url>
+    </repository>
+</repositories>
+
 <dependencies>
     <dependency>
         <groupId>com.telamin.fluxtion</groupId>
         <artifactId>fluxtion-builder</artifactId>
-        <version>${fluxtion.version}</version>
+        <version>{{fluxtion_builder_version}}</version>
     </dependency>
     <dependency>
         <groupId>com.telamin.fluxtion</groupId>
         <artifactId>fluxtion-runtime</artifactId>
-        <version>${fluxtion.version}</version>
+        <version>{{fluxtion_runtime_version}}</version>
     </dependency>
     
     <!-- Testing dependencies -->

@@ -27,6 +27,9 @@ jobs:
         run: |
           pip install mkdocs mkdocs-macros-plugin mkdocs-material mkdocs-mermaid2-plugin mkdocs-awesome-pages-plugin
 
+      - name: Check Fluxtion versions in docs and READMEs
+        run: python3 scripts/check-doc-versions.py
+
       - name: Build site
         run: mkdocs build
 

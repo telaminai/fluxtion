@@ -23,7 +23,7 @@ jbang https://github.com/telaminai/dataflow-examples/blob/main/getstarted/src/ma
 
 ```console
 [jbang] Resolving dependencies...
-[jbang]    com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
+[jbang]    com.telamin.fluxtion:fluxtion-builder:{{fluxtion_builder_version}}
 [jbang]    org.projectlombok:lombok:1.18.36
 [jbang] Dependencies resolved
 [jbang] Building jar for MultiFeedJoinExample.java...

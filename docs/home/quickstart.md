@@ -26,12 +26,16 @@ More details: [https://www.jbang.dev](https://www.jbang.dev)
 
 ---
 
+!!! note "Generation is remote and needs an API key"
+    {{fluxtion_remote_build_note}} {{fluxtion_api_key_line}}
+
 ## 1. Hello world
 
 Create a simple event pipeline.
 
 ```java
-//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
+//REPOS mavencentral,fluxtion={{fluxtion_repository}}
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_builder_version}}
 //JAVA 25
 
 import com.telamin.fluxtion.builder.DataFlowBuilder;
@@ -70,7 +74,8 @@ Fluxtion automatically determines the execution order for the pipeline and gener
 Compute a sliding window average from a real-time event stream.
 
 ```java
-//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
+//REPOS mavencentral,fluxtion={{fluxtion_repository}}
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_builder_version}}
 //JAVA 25
 
 import com.telamin.fluxtion.builder.DataFlowBuilder;
@@ -135,7 +140,8 @@ Fluxtion maintains the sliding window and automatically triggers downstream calc
 Fluxtion integrates directly with ordinary Java objects.
 
 ```java
-//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
+//REPOS mavencentral,fluxtion={{fluxtion_repository}}
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_builder_version}}
 //JAVA 25
 
 import com.telamin.fluxtion.builder.DataFlowBuilder;
@@ -200,7 +206,8 @@ Stateful objects participate directly in the event graph.
 Real systems often combine multiple event streams. Fluxtion can also combine multiple event streams using joins.
 
 ```java
-//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
+//REPOS mavencentral,fluxtion={{fluxtion_repository}}
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_builder_version}}
 //JAVA 25
 
 import com.telamin.fluxtion.builder.DataFlowBuilder;
@@ -282,7 +289,8 @@ Fluxtion is well suited for deterministic control systems such as drones or robo
 This example reacts to altitude events and triggers a safety warning.
 
 ```java
-//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_version}}
+//REPOS mavencentral,fluxtion={{fluxtion_repository}}
+//DEPS com.telamin.fluxtion:fluxtion-builder:{{fluxtion_builder_version}}
 //JAVA 25
 
 import com.telamin.fluxtion.builder.DataFlowBuilder;
