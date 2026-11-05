@@ -107,6 +107,7 @@ Below is the actual YAML-style record structure captured in the audit-logging-de
 
 ```yaml
 eventLogRecord:
+    textEncoding: QUOTED_SCALARS
     eventTime: 2025-10-10T12:28:20.572+01:00
     logTime: 2025-10-10T12:28:20.572+01:00
     groupingId: null
@@ -114,7 +115,7 @@ eventLogRecord:
     eventToString: OrderEvent{id='o1', symbol='AAPL', qty=100, price=210.5}
     thread: main
     nodeLogs:
-        - enricher: { event: OrderEvent{id='o1', symbol='AAPL', qty=100, price=210.5}, symbol: AAPL, notional: 21050.0, enrichedNotional: 21050.0}
+        - enricher: { event: "OrderEvent{id='o1', symbol='AAPL', qty=100, price=210.5}", symbol: AAPL, notional: 21050.0, enrichedNotional: 21050.0}
         - riskChecker: { calc: risk, orderId: o1, notional: 21050.0, limit.ok: true}
         - simulatedFailer: { calc: fail-check, orderId: o1}
     endTime: 2025-10-10T12:28:20.573+01:00
@@ -123,6 +124,7 @@ eventLogRecord:
 How to read this YAML:
 
 - eventLogRecord: Root object for one processed event’s audit data.
+- textEncoding: Present, as the first line, only on a record holding a double-quoted value. A string value that a YAML reader would misread written bare — here the enricher's `event`, whose commas would split the entry — is written as a YAML double-quoted scalar (escapes `\\` `\x22` `\n` `\r` `\t` `\0` `\uXXXX`), and the marker tells a reader to decode it. Typed-looking strings (`5000`, `true`, `null`, a date, a time such as `12:30:00`, an ISO timestamp) are written bare and read with YAML/Analyser typing, as before; only structurally unsafe text is quoted. A `:` breaks structure only before a space or at the end, so times, timestamps and URLs stay bare. To log a value that must stay a String however it looks — an id such as `472.1`, which as a number would equal `472.10` — use `auditLog.infoText("opId", id)` (also `errorText`, `warnText`, `debugText`, `traceText`, `logText`); don't pre-quote it. Libraries supporting runtimes from before this API can detect it with `EventLogger.class.getMethod("infoText", String.class, CharSequence.class)`. Records with no quoted value omit the line and are unchanged from earlier releases. Header fields such as `eventToString` run to the end of their line, so commas and braces there stay plain.
 - eventTime: Timestamp near the start of processing for this event (format depends on the configured time formatter).
 - logTime: Timestamp when the record was written by the logging pipeline.
 - groupingId: Optional correlation/group id if provided by your application; null when not set.
