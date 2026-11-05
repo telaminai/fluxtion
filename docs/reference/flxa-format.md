@@ -294,6 +294,10 @@ writing typed values into a grammar that types by inspection. These rules keep t
    1.1.3 wrote it, so it reads as the number, boolean, null or timestamp it always read as (only bare
    numbers are graphable, Analyser spec §3); the empty String is bare too and reads as null. A `:`
    is structural only before a space, at the end, or first, so times, timestamps and URLs stay bare.
+   The test is deliberately conservative in a few places a YAML reader would accept bare: `#`, `'` and
+   `?` anywhere (not only after a space), and a leading `=`, `<`, `%`, `@` or `` ` ``. A value such as
+   `Order#123` or `<none>`, bare in 1.1.3, is therefore quoted and its record carries the declaration;
+   every reader decodes it to the same text, so only the record's bytes differ from 1.1.3.
    A producer that needs a String typed as one whatever it looks like (an op id `472.1`, which as a
    number equals `472.10`) logs it with `EventLogger.infoText` / `logText` and the level variants,
    and the text runtime then quotes it as a constructor would quote a CHARSEQ. A library detects the
