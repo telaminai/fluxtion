@@ -24,44 +24,56 @@ More details: [https://www.jbang.dev](https://www.jbang.dev)
 
 ---
 
-## 1. Getting an API Key
+<a id="1-getting-an-api-key"></a>
 
-!!! note "Generation is remote and needs an API key"
-    {{fluxtion_remote_build_note}} {{fluxtion_api_key_line}}
+## 1. Sign in to the compiler
 
-To use the Fluxtion cloud-hosted AOT compiler, you need a RapidAPI key.
+!!! note "Generation is remote and needs a compiler sign-in"
+    {{fluxtion_remote_build_note}} {{fluxtion_sign_in_line}}
 
-1.  Visit [RapidAPI](https://rapidapi.com/).
-2.  Search for **Fluxtion Source Generator**.
-3.  Subscribe to a plan (free tier is available for testing).
-4.  Navigate to the **Endpoints** tab in the RapidAPI dashboard for the Fluxtion API.
-5.  Locate the **X-RapidAPI-Key** field—this is your API secret.
-6.  Copy this key and paste it into your `fluxtion.apiKeyFile`.
+The hosted Fluxtion compiler generates your processor for a signed-in account. A new account starts with a
+one-time allowance of compile and interpret credits.
 
-### Configuration
+**Sign in once, on your machine.** From any directory:
 
-By default, the fluxtion client looks for a configuration file at:
-`~/.fluxtion/fluxtion.apiKeyFile`
-
-The location of this file can be overridden by setting the following system property:
-`-Dfluxtion.apiKeyFile=/path/to/your/config.file`
-
-Create the configuration file with the following content:
-
-```properties
-# Fluxtion configuration
-host=https://fluxtion-source-gen.p.rapidapi.com
-port=443
-apiKey=YOUR_RAPIDAPI_KEY_HERE
+```bash
+mvn com.telamin.fluxtion:fluxtion-maven-plugin:{{fluxtion_maven_plugin_version}}:login
 ```
 
-Replace `YOUR_RAPIDAPI_KEY_HERE` with the actual key you obtained from RapidAPI.
+The goal prints a short code and an address. Open the address, enter the code and approve in your browser
+(Google, Microsoft or GitHub); the plugin saves the sign-in for this machine and prints your plan and remaining
+credits. Maven, Gradle, JBang and a plain `main` (the examples on this page) then find the saved sign-in, with no
+flags or environment variables. This needs `fluxtion-builder` {{fluxtion_builder_version}} or later and, for Maven
+builds, `fluxtion-maven-plugin` {{fluxtion_maven_plugin_version}} or later. Inside a project that declares the plugin,
+`mvn fluxtion:login` is the short form; `mvn fluxtion:logout` revokes and removes the saved sign-in.
 
-The first build creates this file for you with a placeholder (`apiKey=MISSING_KEY`); edit that line. You can
-also pass the key as `-Dfluxtion.apiKey=...`. Without a key the build stops before sending anything
-("Fluxtion API key is not configured"); a key the service rejects fails with HTTP 401/403. What a build sends
-is listed in the README section
-[Cloud generation and your API key](https://github.com/telaminai/fluxtion#cloud-generation-and-your-api-key).
+**In CI.** CI never signs in interactively, and the login goal refuses to run there. Store an automation credential
+created for the account in the CI secret store and expose it to the build as `FLUXTION_API_TOKEN`. This works for
+Maven, Gradle, JBang and plain-JVM builds alike:
+
+```yaml
+# GitHub Actions
+env:
+  FLUXTION_API_TOKEN: ${{ '{{' }} secrets.FLUXTION_API_TOKEN {{ '}}' }}
+```
+
+Set `FLUXTION_COMPILER_URL` only when the account is on a compiler other than the managed one,
+{{fluxtion_compiler_url}}. Never put a credential in a POM or a committed file: the plugin refuses a build that does.
+
+**In the browser.** The [Fluxtion playground](https://fluxtion-playground.dev) builds and runs graphs for a
+signed-in account, with nothing to install.
+
+**Without a sign-in**, a build that must generate stops before sending anything, with
+[FLX-1023](../troubleshooting/errors/FLX-1023.md). A project that commits its generated processor and builds in
+ensure mode needs no sign-in while its compile request is unchanged.
+
+!!! warning "The API-key route is retired"
+    The earlier route, a marketplace API key kept in a key file under `~/.fluxtion`, was retired on 2026-11-05.
+    From `fluxtion-builder` 1.0.90 no key file is read, and signing in is the only way to generate. Links in older
+    builders' messages still land on this section.
+
+What a build sends is listed in the README section
+[Cloud generation and your compiler sign-in](https://github.com/telaminai/fluxtion#cloud-generation-and-your-compiler-sign-in).
 
 ---
 
@@ -129,7 +141,7 @@ Received event: Hello, World!
 When you call `Fluxtion.compileAot`, the following steps occur:
 
 1.  **Analysis**: Fluxtion analyzes the relationship between your nodes (`StringHandler` in this case).
-2.  **Remote Generation**: The analysis is sent to the cloud-hosted Fluxtion generator using your RapidAPI key.
+2.  **Remote Generation**: The analysis is sent to the cloud-hosted Fluxtion compiler under your compiler sign-in.
 3.  **Code Generation**: The generator produces optimized Java source code.
 4.  **Local Compilation**: The generated source is compiled locally and loaded into your JVM.
 5.  **Artifact Generation**: By default, several artifacts are created in your project:
