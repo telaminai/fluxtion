@@ -63,8 +63,8 @@ void main() {
 
 **Run:** `jbang TradeFilter.java`
 
-Building the graph needs an API key and sends the graph model to a hosted generator — see
-[Cloud generation and your API key](#cloud-generation-and-your-api-key).
+Building the graph needs a compiler sign-in and sends the graph model to a hosted generator — see
+[Cloud generation and your compiler sign-in](#cloud-generation-and-your-compiler-sign-in).
 
 ---
 
@@ -108,7 +108,7 @@ Current runtime, builder-api, builder, BOM and starter releases are published to
 Import the Fluxtion BOM, then declare the
 artifacts you need. Generated processors only need `fluxtion-runtime` at runtime. The
 `fluxtion-builder` build-time artifact builds graphs (by default through the hosted generator,
-see [Cloud generation and your API key](#cloud-generation-and-your-api-key)); authoring APIs live in `fluxtion-builder-api`.
+see [Cloud generation and your compiler sign-in](#cloud-generation-and-your-compiler-sign-in)); authoring APIs live in `fluxtion-builder-api`.
 
 ```xml
 <repositories>
@@ -151,20 +151,28 @@ implementation("com.telamin.fluxtion:fluxtion-runtime")
 
 ---
 
-## Cloud generation and your API key
+<a id="cloud-generation-and-your-api-key"></a>
+
+## Cloud generation and your compiler sign-in
 
 <!-- fluxtion:remote-build-note - generated from mkdocs.yml extra: by scripts/check-doc-versions.py --write; edit there -->
-**Generation is remote.** Building a graph (`DataFlowBuilder...build()`, `interpret()`, `Fluxtion.compile*` / `compileAot` or the `fluxtion-maven-plugin`) sends the graph model - not your source files - to the hosted Fluxtion generator by default, and needs an API key. Without a key the build stops before sending anything ("Fluxtion API key is not configured"); a rejected key fails with HTTP 401/403. Put the key in `~/.fluxtion/fluxtion.apiKeyFile` as `apiKey=YOUR_KEY` (the first build creates the file). A generated processor runs with `fluxtion-runtime` alone and makes no network call. How to get a key: [Getting an API key](https://telaminai.github.io/fluxtion/home/quickstart-aot/#1-getting-an-api-key) (subscribe to "Fluxtion Source Generator" on [RapidAPI](https://rapidapi.com/hub)).
+**Generation is remote.** Building a graph (`DataFlowBuilder...build()`, `interpret()`, `Fluxtion.compile*` / `compileAot` or the `fluxtion-maven-plugin`) sends the graph model - not your source files - to the hosted Fluxtion compiler, and needs a compiler sign-in. On your machine run `mvn fluxtion:login` (fluxtion-maven-plugin 1.3.1 or later); in CI set `FLUXTION_API_TOKEN` from the secret store; or build in the browser, signed in, at https://fluxtion-playground.dev. The API-key route was retired on 2026-11-05 and signing in is the only way to generate; from fluxtion-builder 1.0.90 key files are no longer read. A generated processor runs with `fluxtion-runtime` alone and makes no network call. How to sign in: [Sign in to the compiler](https://telaminai.github.io/fluxtion/home/quickstart-aot/#1-sign-in-to-the-compiler).
 <!-- /fluxtion:remote-build-note -->
 
 The published `fluxtion-builder` ships only a remote generator: `DataFlowBuilder...build()`, `Fluxtion.compile(...)`,
-`Fluxtion.interpret(...)`, `compileAot(...)` and the Maven/Spring generation paths POST the graph model to
-`https://fluxtion-source-gen.p.rapidapi.com` (a RapidAPI gateway in front of the Fluxtion generator) and receive the
-generated model or Java source back. Nothing is generated on your machine unless a local generator is on the classpath.
+`Fluxtion.interpret(...)`, `compileAot(...)` and the Maven/Spring generation paths POST the graph model to the
+hosted Fluxtion compiler's `/v1` routes and receive the generated model or Java source back. Nothing is generated on
+your machine unless a local generator is on the classpath.
 
-- **Key:** `apiKey=` in `~/.fluxtion/fluxtion.apiKeyFile` (created with a placeholder on first use), or
-  `-Dfluxtion.apiKey=...`. Without a key the build stops with "Fluxtion API key is not configured" before
-  anything is sent.
+- **Sign-in:** `mvn fluxtion:login` (fluxtion-maven-plugin 1.3.1 or later, with `fluxtion-builder` 1.0.82 or later)
+  stores a credential for this machine; in CI set `FLUXTION_API_TOKEN` from the secret store, with
+  `FLUXTION_COMPILER_URL`; the [playground](https://fluxtion-playground.dev) generates for a signed-in browser.
+  Step by step, including JBang:
+  [Sign in to the compiler](https://telaminai.github.io/fluxtion/home/quickstart-aot/#1-sign-in-to-the-compiler).
+  A credential is never accepted from a POM or other committed file.
+- **The API-key route is retired.** The earlier marketplace API key, kept in a key file under `~/.fluxtion`, was
+  retired on 2026-11-05; signing in is the only way to generate. From `fluxtion-builder` 1.0.90 key files are no
+  longer read.
 - **Configured node instance field values, private fields included, are sent in clear text in the request
   body.** Each node's configured state is rendered as Java constructor/setter expressions, so a constructor-set
   `private String password` travels to the generator exactly like a threshold. Static, transient, synthetic and
@@ -178,7 +186,8 @@ generated model or Java source back. Nothing is generated on your machine unless
   parent/child wiring, handled event types and filters; exported service signatures; the generation settings
   (package and class name, dispatch options, output directory paths); side-band metadata (model fingerprint,
   target language).
-- **The API key travels only in the `X-RapidAPI-Key` request header** (with `X-RapidAPI-Host`), never in the body.
+- **The credential travels only in the `Authorization` request header** (a bearer token), never in the body, and
+  only over https (or plain http to this machine).
 - **What is not sent:** your source files or method bodies (a string constant inside a handler method stays
   local), compiled classes, the GraphML/PNG renderings, the events you process at runtime, and audit records.
 - **Old clients:** `fluxtion-builder` 1.0.9 on Maven Central (and 1.0.0 to 1.0.8) predates the hosted generator's
