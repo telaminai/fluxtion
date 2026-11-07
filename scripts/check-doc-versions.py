@@ -36,7 +36,8 @@ Checks (exit 1 on any finding):
      API-key route (RETIRED_ROUTE: the marketplace's name, the key-file name, the key property or the
      gateway host). Sign-in is the only route. A compiler.* address other than fluxtion_compiler_url, or
      a Fluxtion coordinate in mkdocs.yml's notes off the pinned version, is also a finding. The generated
-     error pages (docs/troubleshooting/errors, copied from the compiler) are not swept for the route name.
+     error pages (docs/troubleshooting/errors, copied from the compiler) are outside files(), so no check
+     here reads them: their text is what a build prints.
   7. Sign-in rule: no page in that scope gives the pre-1.0.90 token-route instructions (FLUXTION_REMOTE_AUTH,
      fluxtion.remote.auth/host, "cannot yet be issued", "until fluxtion-builder 1.0.90"); the remote-build
      note has no backticks (it is verbatim the playground's) and names FLX-1023; and every FLX-nnnn code the
@@ -142,8 +143,12 @@ def files():
     for p in sorted(ROOT.rglob("README.md")):
         if not skip.intersection(p.relative_to(ROOT).parts):
             yield p
-    yield from sorted((ROOT / "docs").rglob("*.md"))
-    yield from sorted((ROOT / "docs").rglob("*.txt"))
+    # docs/troubleshooting/errors/ holds the compiler's generated error pages, copied verbatim: their text is what a
+    # build prints, so it names the versions of the builder that emits it, not this site's pins.
+    generated = ROOT / "docs" / "troubleshooting" / "errors"
+    for p in sorted((ROOT / "docs").rglob("*.md")) + sorted((ROOT / "docs").rglob("*.txt")):
+        if generated not in p.parents:
+            yield p
 
 
 def check(path, text, truth):
@@ -299,14 +304,11 @@ def check_retired_route(truth):
     pages = {p.stem for p in (ROOT / ERRORS_DIR).glob("FLX-*.md")}
     for path in retired_scope():
         rel = path.relative_to(ROOT).as_posix()
-        generated = rel.startswith(ERRORS_DIR + "/")
         for n, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
-            for code in FLX_CODE.findall(line):
+            for code in sorted(set(FLX_CODE.findall(line))):
                 if code not in pages:
                     findings.append(f"{rel}:{n}: {code} has no page in {ERRORS_DIR} (copy it from the compiler's "
                                     f"generated docs/errors)")
-            if generated:
-                continue
             s = STALE_SIGN_IN.search(line)
             if s:
                 findings.append(f"{rel}:{n}: gives the pre-1.0.90 token-route instructions ({s.group(0)!r}); "
