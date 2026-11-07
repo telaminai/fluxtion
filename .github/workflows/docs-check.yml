@@ -2,7 +2,8 @@ name: docs-check
 
 # Fails a push or pull request when a doc or README names a Fluxtion version other than the
 # source of truth in mkdocs.yml (extra: fluxtion_*_version), shows a dependency without the
-# Fluxtion repository, or uses an undefined fluxtion_* macro. Fix with
+# Fluxtion repository, uses an undefined fluxtion_* macro, names the retired API-key route, or loses the
+# sign-in anchors (in the source and in the built quickstart page). Fix with
 # `python3 scripts/check-doc-versions.py --write` or by editing mkdocs.yml.
 on:
   push:
@@ -22,6 +23,13 @@ jobs:
           python-version: '3.11'
       - name: Check Fluxtion versions in docs and READMEs
         run: python3 scripts/check-doc-versions.py
+      # The built quickstart page must carry the sign-in anchor and the retired #1-getting-an-api-key one,
+      # which released builders print in their missing-key message.
+      - name: Build the site and check its anchors
+        run: |
+          pip install mkdocs mkdocs-macros-plugin mkdocs-material mkdocs-mermaid2-plugin mkdocs-awesome-pages-plugin
+          mkdocs build -d site
+          python3 scripts/check-doc-versions.py --site=site
       # Network: every pinned version must exist (Repsy for the runtime/builder line, Maven Central for
       # the plugin) - a pin that does not resolve is the failure the 2026-10-25 stranger trial hit.
       # Comparing with the deployed playground llms.txt only warns: the two sites deploy separately.
