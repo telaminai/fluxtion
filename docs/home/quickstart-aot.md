@@ -34,7 +34,8 @@ More details: [https://www.jbang.dev](https://www.jbang.dev)
 The hosted Fluxtion compiler generates your processor for a signed-in account. A new account starts with a
 one-time allowance of compile and interpret credits.
 
-**Sign in once, on your machine.** From any directory:
+**Sign in once, on your machine.** Install Apache Maven and check that `mvn --version` works first,
+even if you run the application with JBang or Gradle. From any directory:
 
 ```bash
 mvn com.telamin.fluxtion:fluxtion-maven-plugin:{{fluxtion_maven_plugin_version}}:login
