@@ -32,52 +32,45 @@ More details: [https://www.jbang.dev](https://www.jbang.dev)
     {{fluxtion_remote_build_note}} {{fluxtion_sign_in_line}}
 
 The hosted Fluxtion compiler generates your processor for a signed-in account. A new account starts with a
-one-time allowance of compile and interpret credits. There are three ways to sign in:
+one-time allowance of compile and interpret credits.
 
-**On your machine, with Maven.** Sign in once with the Fluxtion Maven plugin (1.3.1 or later), giving it the
-compiler's address. This command works from any directory:
+**Sign in once, on your machine.** From any directory:
 
 ```bash
-mvn com.telamin.fluxtion:fluxtion-maven-plugin:{{fluxtion_maven_plugin_version}}:login -Dfluxtion.compilerUrl={{fluxtion_compiler_url}}
+mvn com.telamin.fluxtion:fluxtion-maven-plugin:{{fluxtion_maven_plugin_version}}:login
 ```
 
-The goal prints a short code and an address. Open the address, enter the code and approve; the plugin stores a
-credential for this machine and prints your plan and remaining credits. Inside a project that declares the
-plugin, `mvn fluxtion:login -Dfluxtion.compilerUrl={{fluxtion_compiler_url}}` is the short form.
-`mvn fluxtion:logout` revokes and removes the credential. Maven builds that run the plugin's generation goals
-(see [Quick start (Maven)](quickstart-maven.md)) then use it; they need `fluxtion-builder` 1.0.82 or later on
-the build classpath.
+The goal prints a short code and an address. Open the address, enter the code and approve in your browser
+(Google, Microsoft or GitHub); the plugin saves the sign-in for this machine and prints your plan and remaining
+credits. Maven, Gradle, JBang and a plain `main` (the examples on this page) then find the saved sign-in, with no
+flags or environment variables. This needs `fluxtion-builder` {{fluxtion_builder_version}} or later and, for Maven
+builds, `fluxtion-maven-plugin` {{fluxtion_maven_plugin_version}} or later. Inside a project that declares the plugin,
+`mvn fluxtion:login` is the short form; `mvn fluxtion:logout` revokes and removes the saved sign-in.
 
-**In CI (Maven plugin builds).** CI never signs in interactively, and `fluxtion:login` refuses to run there. An account administrator
-creates an automation credential; store it in the CI secret store and expose it to the build as
-`FLUXTION_API_TOKEN`, with the compiler's address in `FLUXTION_COMPILER_URL`:
+**In CI.** CI never signs in interactively, and the login goal refuses to run there. Store an automation credential
+created for the account in the CI secret store and expose it to the build as `FLUXTION_API_TOKEN`. This works for
+Maven, Gradle, JBang and plain-JVM builds alike:
 
 ```yaml
 # GitHub Actions
 env:
   FLUXTION_API_TOKEN: ${{ '{{' }} secrets.FLUXTION_API_TOKEN {{ '}}' }}
-  FLUXTION_COMPILER_URL: {{fluxtion_compiler_url}}
 ```
 
-`FLUXTION_COMPILER_URL` is read by the Maven plugin only; the builder on its own does not read it.
-
-Never put a credential in a POM or a committed file: the plugin refuses a build that does.
+Set `FLUXTION_COMPILER_URL` only when the account is on a compiler other than the managed one,
+{{fluxtion_compiler_url}}. Never put a credential in a POM or a committed file: the plugin refuses a build that does.
 
 **In the browser.** The [Fluxtion playground](https://fluxtion-playground.dev) builds and runs graphs for a
-signed-in account (Google, Microsoft or GitHub), with nothing to install.
+signed-in account, with nothing to install.
 
-**JBang and plain `main` programs** (the examples on this page) call the builder directly, without the Maven
-plugin. With fluxtion-builder 1.0.89 the JBang and plain-`main` examples need a compiler token in
-`FLUXTION_API_TOKEN` (with `FLUXTION_REMOTE_AUTH=token` and
-`-Dfluxtion.remote.host={{fluxtion_compiler_url}}`), because this builder does not read the Maven sign-in. A
-personal token cannot yet be issued self-service, so until fluxtion-builder 1.0.90 use the
-[Maven quick start](quickstart-maven.md) or the playground. A credential is sent only over https, or plain http to
-this machine.
+**Without a sign-in**, a build that must generate stops before sending anything, with
+[FLX-1023](../troubleshooting/errors/FLX-1023.md). A project that commits its generated processor and builds in
+ensure mode needs no sign-in while its compile request is unchanged.
 
 !!! warning "The API-key route is retired"
-    The earlier route, a marketplace API key kept in a key file under `~/.fluxtion`, was retired on
-    2026-11-05. Signing in is the only way to generate. From `fluxtion-builder` 1.0.90 key files are no longer
-    read. Links in older builders' messages still land on this section.
+    The earlier route, a marketplace API key kept in a key file under `~/.fluxtion`, was retired on 2026-11-05.
+    From `fluxtion-builder` 1.0.90 no key file is read, and signing in is the only way to generate. Links in older
+    builders' messages still land on this section.
 
 What a build sends is listed in the README section
 [Cloud generation and your compiler sign-in](https://github.com/telaminai/fluxtion#cloud-generation-and-your-compiler-sign-in).

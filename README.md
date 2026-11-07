@@ -39,7 +39,7 @@ The fastest way to try Fluxtion is using [Jbang](https://www.jbang.dev/). Save t
 
 ```java
 //REPOS fluxtion-public=https://repo.repsy.io/mvn/fluxtion/fluxtion-public
-//DEPS com.telamin.fluxtion:fluxtion-builder:1.0.89
+//DEPS com.telamin.fluxtion:fluxtion-builder:1.0.90
 //JAVA 25
 
 import com.telamin.fluxtion.builder.DataFlowBuilder;
@@ -123,7 +123,7 @@ see [Cloud generation and your compiler sign-in](#cloud-generation-and-your-comp
     <dependency>
       <groupId>com.telamin.fluxtion</groupId>
       <artifactId>fluxtion-bom</artifactId>
-      <version>1.0.89</version>
+      <version>1.0.90</version>
       <type>pom</type>
       <scope>import</scope>
     </dependency>
@@ -144,7 +144,7 @@ repositories {
     maven("https://repo.repsy.io/mvn/fluxtion/fluxtion-public")
 }
 
-implementation(platform("com.telamin.fluxtion:fluxtion-bom:1.0.89"))
+implementation(platform("com.telamin.fluxtion:fluxtion-bom:1.0.90"))
 compileOnly("com.telamin.fluxtion:fluxtion-builder")
 implementation("com.telamin.fluxtion:fluxtion-runtime")
 ```
@@ -156,26 +156,25 @@ implementation("com.telamin.fluxtion:fluxtion-runtime")
 ## Cloud generation and your compiler sign-in
 
 <!-- fluxtion:remote-build-note - generated from mkdocs.yml extra: by scripts/check-doc-versions.py --write; edit there -->
-**Generation is remote.** Building a graph (`DataFlowBuilder...build()`, `interpret()`, `Fluxtion.compile*` / `compileAot` or the `fluxtion-maven-plugin`) sends the graph model - not your source files - to the hosted Fluxtion compiler, and needs a compiler sign-in. Maven plugin builds: sign in once with `mvn com.telamin.fluxtion:fluxtion-maven-plugin:1.3.3:login -Dfluxtion.compilerUrl=https://compiler.fluxtion-playground.dev`, and in CI set `FLUXTION_API_TOKEN` and `FLUXTION_COMPILER_URL`. With fluxtion-builder 1.0.89 the JBang and plain-`main` examples need a compiler token in `FLUXTION_API_TOKEN` (with `FLUXTION_REMOTE_AUTH=token` and `-Dfluxtion.remote.host=https://compiler.fluxtion-playground.dev`); a personal token cannot yet be issued self-service, so until fluxtion-builder 1.0.90 use the Maven quick start or the signed-in playground, https://fluxtion-playground.dev. The API-key route was retired on 2026-11-05 and signing in is the only way to generate; from fluxtion-builder 1.0.90 key files are no longer read. A generated processor runs with `fluxtion-runtime` alone and makes no network call. How to sign in: [Sign in to the compiler](https://telaminai.github.io/fluxtion/home/quickstart-aot/#1-sign-in-to-the-compiler).
+**Generation is remote.** Building a graph (DataFlowBuilder...build(), interpret(), Fluxtion.compile* / compileAot or the fluxtion-maven-plugin) sends the graph model - not your source files - to the hosted Fluxtion compiler, and needs a compiler sign-in. Sign in once with mvn com.telamin.fluxtion:fluxtion-maven-plugin:login and approve in your browser; Maven, Gradle, JBang and a plain main then find the saved sign-in. In CI, set FLUXTION_API_TOKEN. Without a sign-in, a build that must generate stops before sending anything (FLX-1023). A generated processor runs with fluxtion-runtime alone and makes no network call. How to sign in: [Sign in to the compiler](https://telaminai.github.io/fluxtion/home/quickstart-aot/#1-sign-in-to-the-compiler).
 <!-- /fluxtion:remote-build-note -->
 
 The published `fluxtion-builder` ships only a remote generator: `DataFlowBuilder...build()`, `Fluxtion.compile(...)`,
-`Fluxtion.interpret(...)`, `compileAot(...)` and the Maven/Spring generation paths POST the graph model, when
-signed in, to the hosted Fluxtion compiler's `/v1` routes and receive the generated model or Java source back. Nothing is generated on
+`Fluxtion.interpret(...)`, `compileAot(...)` and the Maven/Spring generation paths POST the graph model, under
+your compiler sign-in, to the hosted Fluxtion compiler's `/v1` routes and receive the generated model or Java source back. Nothing is generated on
 your machine unless a local generator is on the classpath.
 
-- **Sign-in (Maven plugin builds):**
-  `mvn com.telamin.fluxtion:fluxtion-maven-plugin:1.3.3:login -Dfluxtion.compilerUrl=https://compiler.fluxtion-playground.dev`
-  (plugin 1.3.1 or later, with `fluxtion-builder` 1.0.82 or later) stores a credential for this machine; in CI set
-  `FLUXTION_API_TOKEN` from the secret store and `FLUXTION_COMPILER_URL=https://compiler.fluxtion-playground.dev`. The
-  [playground](https://fluxtion-playground.dev) generates for a signed-in browser. Gradle, JBang and plain-JVM builds
-  also need `FLUXTION_REMOTE_AUTH=token` and `-Dfluxtion.remote.host=https://compiler.fluxtion-playground.dev` until fluxtion-builder 1.0.90, and a
-  token in `FLUXTION_API_TOKEN`, which cannot yet be issued self-service. Step by step:
+- **Sign-in:** run `mvn com.telamin.fluxtion:fluxtion-maven-plugin:1.3.4:login` once on your machine and approve in
+  your browser; Maven, Gradle, JBang and a plain `main` then find the saved sign-in (`fluxtion-builder` 1.0.90 or
+  later). In CI set `FLUXTION_API_TOKEN` from the secret store; `FLUXTION_COMPILER_URL` is needed only for a compiler
+  other than the managed one, https://compiler.fluxtion-playground.dev. The [playground](https://fluxtion-playground.dev) generates for
+  a signed-in browser. Without a sign-in a build that must generate stops before sending anything, with
+  [FLX-1023](https://telaminai.github.io/fluxtion/troubleshooting/errors/FLX-1023/). Step by step:
   [Sign in to the compiler](https://telaminai.github.io/fluxtion/home/quickstart-aot/#1-sign-in-to-the-compiler).
   A credential is never accepted from a POM or other committed file.
 - **The API-key route is retired.** The earlier marketplace API key, kept in a key file under `~/.fluxtion`, was
-  retired on 2026-11-05; signing in is the only way to generate. From `fluxtion-builder` 1.0.90 key files are no
-  longer read.
+  retired on 2026-11-05. From `fluxtion-builder` 1.0.90 no key file is read, and signing in is the only way to
+  generate.
 - **Configured node instance field values, private fields included, are sent in clear text in the request
   body.** Each node's configured state is rendered as Java constructor/setter expressions, so a constructor-set
   `private String password` travels to the generator exactly like a threshold. Static, transient, synthetic and
