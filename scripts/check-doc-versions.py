@@ -7,6 +7,7 @@ The source of truth is the `extra:` block of mkdocs.yml:
     fluxtion_builder_version        fluxtion-builder, fluxtion-bom, fluxtion-starter-core
     fluxtion_maven_plugin_version   fluxtion-maven-plugin
     fluxtion_repository             the Maven repository that serves the releases
+    fluxtion_compiler_url           the hosted compiler's public address (sign-in, CI, token route)
     fluxtion_repository_note        which artifacts are where (Repsy vs Maven Central)
     fluxtion_remote_build_note      what a build sends, and the compiler sign-in it needs
     fluxtion_sign_in_line           where to learn to sign in
@@ -29,9 +30,12 @@ Checks (exit 1 on any finding):
      repository (`<url>...</url>` / `maven("...")`).
   4. README.md or docs/claude.txt lacks a note block, or its text differs from mkdocs.yml.
   5. The anchor of fluxtion_sign_in_how_to is not an id in docs/home/quickstart-aot.md, or that page
-     lost the retired anchor #1-getting-an-api-key that released builders still print.
-  6. README.md, docs/claude.txt, a page under docs/home/ or mkdocs.yml names the retired API-key route
-     (RETIRED_ROUTE: the marketplace's name or the key-file name). Sign-in is the only route.
+     lost the retired anchor #1-getting-an-api-key, or README.md lost #cloud-generation-and-your-api-key;
+     builders before the managed-only release print both. Ids inside HTML comments do not count.
+  6. A README.md, a docs page or text file (docs/not-used excepted) or mkdocs.yml names the retired
+     API-key route (RETIRED_ROUTE: the marketplace's name, the key-file name, the key property or the
+     gateway host). Sign-in is the only route. A compiler.* address other than fluxtion_compiler_url, or
+     a Fluxtion coordinate in mkdocs.yml's notes off the pinned version, is also a finding.
 
 --site=<dir> additionally (after `mkdocs build -d <dir>`):
   7. The built quickstart page carries both the sign-in anchor and the retired one as element ids.
@@ -75,7 +79,7 @@ PROPERTY_KEY = {
 NOTE_BLOCKS = ("repository-note", "remote-build-note")
 NOTE_FILES = ("README.md", "docs/claude.txt")
 REQUIRED = ("fluxtion_runtime_version", "fluxtion_builder_version", "fluxtion_maven_plugin_version",
-            "fluxtion_repository", "fluxtion_repository_note", "fluxtion_remote_build_note",
+            "fluxtion_repository", "fluxtion_compiler_url", "fluxtion_repository_note", "fluxtion_remote_build_note",
             "fluxtion_sign_in_line", "fluxtion_sign_in_how_to")
 
 VERSION = r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"
@@ -232,16 +236,22 @@ def slug(heading):
 
 QUICKSTART_AOT = "docs/home/quickstart-aot.md"
 QUICKSTART_AOT_URL = "https://telaminai.github.io/fluxtion/home/quickstart-aot/"
-# Released builders (1.0.89 and earlier) print this link in their missing-key message: it must keep landing on
-# the sign-in explanation, not a 404, for as long as those builders are in use.
+# Builders before the managed-only release print these two links in their missing-key message: they must keep
+# landing on the sign-in explanation, not a 404, for as long as those builders are in use.
 LEGACY_ANCHOR = "1-getting-an-api-key"
-# The API-key route retired on 2026-11-05. Spelled in pieces so this file does not match its own sweep.
-RETIRED_ROUTE = re.compile("rapid" + "api|apikey" + "file", re.I)
-RETIRED_SCOPE = ("README.md", "docs/claude.txt", "mkdocs.yml")
+LEGACY_README_ANCHOR = "cloud-generation-and-your-api-key"
+# The API-key route retired on 2026-11-05: the marketplace's name (any spacing), the key-file name (any
+# separators), the key system property and the gateway host. Spelled in pieces so this file does not match itself.
+RETIRED_ROUTE = re.compile(r"rapid[\s_-]*" + r"api|api[\s_.-]*key[\s_.-]*" + r"file|fluxtion\.api" + r"key\b"
+                           r"|source[\s-]*" + r"gen\.p\.", re.I)
+COMPILER_URL = re.compile(r"https?://compiler[\w.-]*", re.I)
+HTML_COMMENT = re.compile(r"<!--.*?-->", re.S)
 
 
 def page_ids(text):
-    """Ids a reader can link to: heading slugs, explicit `{#id}` attributes and `<a id="...">` anchors."""
+    """Ids a reader can link to: heading slugs, explicit `{#id}` attributes and `<a id="...">` anchors.
+    Commented-out markup is not an anchor."""
+    text = HTML_COMMENT.sub("", text)
     ids = set()
     for h in re.findall(r"^#+\s+(.*)$", text, re.M):
         explicit = re.search(r"\{\s*#([\w-]+)[^}]*\}\s*$", h)
@@ -260,20 +270,37 @@ def check_anchor(truth):
         findings.append(f"mkdocs.yml: fluxtion_sign_in_how_to {url} does not match an id in {QUICKSTART_AOT}")
     if LEGACY_ANCHOR not in ids:
         findings.append(f"{QUICKSTART_AOT}: lost the retired anchor #{LEGACY_ANCHOR}; released builders link to it")
+    if LEGACY_README_ANCHOR not in page_ids((ROOT / "README.md").read_text(encoding="utf-8")):
+        findings.append(f"README.md: lost the anchor #{LEGACY_README_ANCHOR}; released builders link to it")
     return findings
 
 
-def check_retired_route():
-    paths = [ROOT / p for p in RETIRED_SCOPE] + sorted((ROOT / "docs/home").rglob("*"))
+def retired_scope():
+    yield ROOT / "mkdocs.yml"
+    for p in files():
+        if not p.relative_to(ROOT).as_posix().startswith("docs/not-used/"):
+            yield p
+
+
+def check_retired_route(truth):
     findings = []
-    for path in paths:
-        if not path.is_file():
-            continue
+    for path in retired_scope():
+        rel = path.relative_to(ROOT).as_posix()
         for n, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
             m = RETIRED_ROUTE.search(line)
             if m:
-                findings.append(f"{path.relative_to(ROOT).as_posix()}:{n}: names the retired API-key route "
-                                f"({m.group(0)!r}); describe compiler sign-in instead")
+                findings.append(f"{rel}:{n}: names the retired API-key route ({m.group(0)!r}); "
+                                f"describe compiler sign-in instead")
+            for u in COMPILER_URL.findall(line):
+                if u.rstrip(".") != truth["fluxtion_compiler_url"]:
+                    findings.append(f"{rel}:{n}: compiler address {u} is not fluxtion_compiler_url "
+                                    f"{truth['fluxtion_compiler_url']}")
+    # mkdocs.yml's notes are rendered verbatim, so a coordinate in them must name the pinned version
+    extra = (ROOT / "mkdocs.yml").read_text(encoding="utf-8").split("\nextra:", 1)[1]
+    for m in COORDINATE.finditer(extra):
+        key = ARTIFACT_KEY.get(m.group(2))
+        if key and truth[key] != m.group(4):
+            findings.append(f"mkdocs.yml: {m.group(2)}:{m.group(4)} in extra: is not the pinned {truth[key]}")
     return findings
 
 
@@ -281,7 +308,7 @@ def check_site(site, truth):
     page = pathlib.Path(site) / "home/quickstart-aot/index.html"
     if not page.is_file():
         return [f"--site: {page} not found (run mkdocs build -d {site} first)"]
-    html = page.read_text(encoding="utf-8")
+    html = HTML_COMMENT.sub("", page.read_text(encoding="utf-8"))
     want = [truth["fluxtion_sign_in_how_to"].split("#", 1)[1], LEGACY_ANCHOR]
     return [f"{page}: no element with id=\"{a}\"" for a in want
             if not re.search(r"""\bid=["']""" + re.escape(a) + r"""["']""", html)]
@@ -333,7 +360,7 @@ def main():
     args = sys.argv[1:]
     write, net = "--write" in args, "--online" in args
     truth = load_truth()
-    all_findings = check_anchor(truth) + check_retired_route()
+    all_findings = check_anchor(truth) + check_retired_route(truth)
     site = next((a.split("=", 1)[1] for a in args if a.startswith("--site=")), None)
     if site:
         all_findings += check_site(site, truth)

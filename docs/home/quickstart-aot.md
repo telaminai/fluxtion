@@ -35,20 +35,20 @@ The hosted Fluxtion compiler generates your processor for a signed-in account. A
 one-time allowance of compile and interpret credits. There are three ways to sign in:
 
 **On your machine, with Maven.** Sign in once with the Fluxtion Maven plugin (1.3.1 or later), giving it the
-compiler's address:
+compiler's address. This command works from any directory:
 
 ```bash
-mvn fluxtion:login -Dfluxtion.compilerUrl=<compiler address>
+mvn com.telamin.fluxtion:fluxtion-maven-plugin:{{fluxtion_maven_plugin_version}}:login -Dfluxtion.compilerUrl={{fluxtion_compiler_url}}
 ```
 
 The goal prints a short code and an address. Open the address, enter the code and approve; the plugin stores a
-credential for this machine and prints your plan and remaining credits. Outside a project that declares the
-plugin, use its full coordinates (`mvn com.telamin.fluxtion:fluxtion-maven-plugin:<version>:login`).
+credential for this machine and prints your plan and remaining credits. Inside a project that declares the
+plugin, `mvn fluxtion:login -Dfluxtion.compilerUrl={{fluxtion_compiler_url}}` is the short form.
 `mvn fluxtion:logout` revokes and removes the credential. Maven builds that run the plugin's generation goals
 (see [Quick start (Maven)](quickstart-maven.md)) then use it; they need `fluxtion-builder` 1.0.82 or later on
 the build classpath.
 
-**In CI.** CI never signs in interactively, and `fluxtion:login` refuses to run there. An account administrator
+**In CI (Maven plugin builds).** CI never signs in interactively, and `fluxtion:login` refuses to run there. An account administrator
 creates an automation credential; store it in the CI secret store and expose it to the build as
 `FLUXTION_API_TOKEN`, with the compiler's address in `FLUXTION_COMPILER_URL`:
 
@@ -56,8 +56,10 @@ creates an automation credential; store it in the CI secret store and expose it 
 # GitHub Actions
 env:
   FLUXTION_API_TOKEN: ${{ '{{' }} secrets.FLUXTION_API_TOKEN {{ '}}' }}
-  FLUXTION_COMPILER_URL: <compiler address>
+  FLUXTION_COMPILER_URL: {{fluxtion_compiler_url}}
 ```
+
+`FLUXTION_COMPILER_URL` is read by the Maven plugin only; the builder on its own does not read it.
 
 Never put a credential in a POM or a committed file: the plugin refuses a build that does.
 
@@ -65,10 +67,12 @@ Never put a credential in a POM or a committed file: the plugin refuses a build 
 signed-in account (Google, Microsoft or GitHub), with nothing to install.
 
 **JBang and plain `main` programs** (the examples on this page) call the builder directly, without the Maven
-plugin, and do not read the plugin's stored sign-in. Select the token route explicitly: set
-`FLUXTION_REMOTE_AUTH=token` and `FLUXTION_API_TOKEN` in the environment, and pass the compiler's host as
-`-Dfluxtion.remote.host=<compiler host>` (for example `jbang -Dfluxtion.remote.host=<compiler host> Ex1.java`).
-A credential is sent only over https, or plain http to this machine.
+plugin. With fluxtion-builder 1.0.89 the JBang and plain-`main` examples need a compiler token in
+`FLUXTION_API_TOKEN` (with `FLUXTION_REMOTE_AUTH=token` and
+`-Dfluxtion.remote.host={{fluxtion_compiler_url}}`), because this builder does not read the Maven sign-in. A
+personal token cannot yet be issued self-service, so until fluxtion-builder 1.0.90 use the
+[Maven quick start](quickstart-maven.md) or the playground. A credential is sent only over https, or plain http to
+this machine.
 
 !!! warning "The API-key route is retired"
     The earlier route, a marketplace API key kept in a key file under `~/.fluxtion`, was retired on

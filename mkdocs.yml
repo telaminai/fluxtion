@@ -71,6 +71,9 @@ extra:
   fluxtion_builder_version: 1.0.89  # fluxtion-builder, fluxtion-bom, fluxtion-starter-core
   fluxtion_maven_plugin_version: 1.3.3   # com.telamin.fluxtion:fluxtion-maven-plugin (Maven Central)
   fluxtion_repository: https://repo.repsy.io/mvn/fluxtion/fluxtion-public
+  # The hosted compiler's public address. Pages use the fluxtion_compiler_url macro; README.md files and
+  # claude.txt carry it literally, and check-doc-versions.py fails on any other compiler.* address.
+  fluxtion_compiler_url: https://compiler.fluxtion-playground.dev
   # Where a reader learns to sign in. The quickstart page also keeps the retired anchor
   # #1-getting-an-api-key, because released builders print it; check-doc-versions.py checks both.
   fluxtion_sign_in_how_to: https://telaminai.github.io/fluxtion/home/quickstart-aot/#1-sign-in-to-the-compiler
@@ -86,11 +89,15 @@ extra:
   fluxtion_remote_build_note: >-
     Building a graph (`DataFlowBuilder...build()`, `interpret()`, `Fluxtion.compile*` / `compileAot`
     or the `fluxtion-maven-plugin`) sends the graph model - not your source files - to the hosted
-    Fluxtion compiler, and needs a compiler sign-in. On your machine run `mvn fluxtion:login`
-    (fluxtion-maven-plugin 1.3.1 or later); in CI set `FLUXTION_API_TOKEN` from the secret store; or
-    build in the browser, signed in, at https://fluxtion-playground.dev. The API-key route was retired on
-    2026-11-05 and signing in is the only way to generate; from fluxtion-builder 1.0.90 key files are
-    no longer read. A generated processor runs with `fluxtion-runtime` alone and makes no network call.
+    Fluxtion compiler, and needs a compiler sign-in. Maven plugin builds: sign in once with
+    `mvn com.telamin.fluxtion:fluxtion-maven-plugin:1.3.3:login -Dfluxtion.compilerUrl=https://compiler.fluxtion-playground.dev`,
+    and in CI set `FLUXTION_API_TOKEN` and `FLUXTION_COMPILER_URL`. With fluxtion-builder 1.0.89 the JBang
+    and plain-`main` examples need a compiler token in `FLUXTION_API_TOKEN` (with `FLUXTION_REMOTE_AUTH=token`
+    and `-Dfluxtion.remote.host=https://compiler.fluxtion-playground.dev`); a personal token cannot yet be issued self-service, so until
+    fluxtion-builder 1.0.90 use the Maven quick start or the signed-in playground, https://fluxtion-playground.dev.
+    The API-key route was retired on 2026-11-05 and signing in is the only way to generate; from
+    fluxtion-builder 1.0.90 key files are no longer read. A generated processor runs with `fluxtion-runtime`
+    alone and makes no network call.
   fluxtion_javadoc: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-runtime/latest/index.html
   release_date: "2026-06-16"
 
