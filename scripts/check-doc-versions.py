@@ -125,8 +125,12 @@ def files():
     for p in sorted(ROOT.rglob("README.md")):
         if not skip.intersection(p.relative_to(ROOT).parts):
             yield p
-    yield from sorted((ROOT / "docs").rglob("*.md"))
-    yield from sorted((ROOT / "docs").rglob("*.txt"))
+    # docs/troubleshooting/errors/ holds the compiler's generated error pages, copied verbatim: their text is what a
+    # build prints, so it names the versions of the builder that emits it, not this site's pins.
+    generated = ROOT / "docs" / "troubleshooting" / "errors"
+    for p in sorted((ROOT / "docs").rglob("*.md")) + sorted((ROOT / "docs").rglob("*.txt")):
+        if generated not in p.parents:
+            yield p
 
 
 def check(path, text, truth):
