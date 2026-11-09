@@ -388,6 +388,15 @@ public final class BinaryLogRecord extends LogRecord {
     }
 
     /**
+     * Text the producer declared to be a String. The CHARSEQ tag already says "string" on the wire, so
+     * this is the CharSequence entry unchanged; text renderers (AuditLogTool) type CHARSEQ as a String.
+     */
+    @Override
+    public void addTextRecord(String sourceId, String propertyKey, CharSequence value) {
+        addRecord(sourceId, propertyKey, value);
+    }
+
+    /**
      * An arbitrary object, rendered once and interned. Same fix, same reason as the CharSequence
      * overload above: the byte-buffer form was invisible to every reader.
      *

@@ -42,6 +42,43 @@ import java.util.function.ObjLongConsumer;
  * The key of a node is the instance name in the java code, followed by a set of key/value properties the node logs.
  * </ul>
  *
+ * <h2>Text encoding marker</h2>
+ * String-valued fields are written through {@link YamlScalar}: plain when that reads back as the same
+ * string, YAML double-quoted otherwise. nodeLogs values sit in a flow map and use the flow rule
+ * ({@link YamlScalar#append}); the header's groupingId, event, eventToString, thread and eventFilter
+ * run to the end of their line and use the narrower block rule ({@link YamlScalar#appendBlock}), so a
+ * typical {@code toString()} such as {@code Trade[id=1, px=2.0]} stays plain.
+ * Typed-looking strings ({@code 5000}, {@code true}, {@code null}, {@code 0x1F}, a date) are written
+ * bare and read with YAML/Analyser typing, as before; only structurally unsafe text is quoted. A record holding <b>at least one</b> double-quoted scalar carries one
+ * extra line, always the first line of its {@code eventLogRecord} mapping:
+ *
+ * <pre>
+ * eventLogRecord:
+ *     textEncoding: QUOTED_SCALARS
+ *     eventTime: 1578236915413
+ *     ...
+ *     nodeLogs:
+ *         - gate: { reason: "not active, balance due 30.0"}
+ * </pre>
+ *
+ * It tells a reader whose legacy grammar treats quote marks as literal characters that this record's
+ * quoted scalars must be decoded. A reader honours it only in that first position, so a logged value
+ * (always quoted if it contains a line break, whose escape keeps it on one line) can never forge it. A record
+ * with no quoted value is byte-for-byte what earlier releases wrote: no marker.
+ *
+ * <p><b>Placement cost.</b> The header is written by {@code triggerEvent}/{@code triggerObject}
+ * before any value is known, so the marker is inserted at the header's recorded offset by
+ * {@link #terminateRecord()} — one {@code StringBuilder.insert} of a constant, done only on a record
+ * that needs it. The common path pays one boolean OR per string value and allocates nothing extra.
+ * A subclass writing its own header should call {@link #markRecordStart()} before the key; one that
+ * does not is found by a backward search for the key at a line start, again only on a marked record.
+ *
+ * <p><b>Escapes.</b> Inside a double-quoted scalar exactly these are emitted: {@code \\},
+ * {@code \x22} (the double quote; never {@code \"}), {@code \n}, {@code \r}, {@code \t}, {@code \0},
+ * and {@code \}{@code uXXXX} (BMP, lowercase hex) for any other non-printable character. A valid
+ * surrogate pair is written as-is; an unpaired surrogate is written as {@code \}{@code ufffd}. See
+ * {@link YamlScalar}.
+ *
  * @author Greg Higgins (greg.higgins@v12technology.com)
  */
 public class LogRecord {
@@ -58,6 +95,14 @@ public class LogRecord {
     protected boolean firstProp;
     protected boolean terminated;
     protected boolean terminatedWithProperties;
+    /** The header line every text record starts with; the marker is inserted directly after it. */
+    static final String RECORD_KEY = "eventLogRecord: ";
+    /** The marker line, written only on a record holding at least one double-quoted scalar. */
+    public static final String TEXT_ENCODING_MARKER = "\n    textEncoding: QUOTED_SCALARS";
+    /** True once the current record has written a value in double-quoted form. */
+    protected boolean quotedScalars;
+    /** Offset in {@link #sb} of the current record's {@code eventLogRecord:} key; -1 when no header. */
+    protected int recordStart = -1;
     /**
      * Whether to take a second clock reading for {@code endTime}. <b>On by default.</b>
      *
@@ -127,6 +172,7 @@ public class LogRecord {
         if (!loggingEnabled()) {
             sb.setLength(0);
             resetTermination();
+            resetRecordState();
         }
     }
 
@@ -143,6 +189,36 @@ public class LogRecord {
         sb.setLength(0);
         sb.append(newBuffer);
         resetTermination();
+        resetRecordState();
+    }
+
+    /**
+     * Carries the in-progress record's marker state from {@code previous}, whose buffer this record
+     * has just taken with {@link #replaceBuffer}, so a quoted value written before the swap still
+     * marks the record.
+     */
+    void adoptRecordState(LogRecord previous) {
+        this.quotedScalars = previous.quotedScalars;
+        this.recordStart = previous.recordStart;
+        // The open node entry too: without these the next value opened a second "- node: {" with the
+        // first never closed, or wrote a key-less entry.
+        this.sourceId = previous.sourceId;
+        this.firstProp = previous.firstProp;
+    }
+
+    /**
+     * Records that the current record's {@code eventLogRecord: } key starts at the buffer's current
+     * end. A subclass that writes its own header calls this immediately before appending the key, so
+     * the {@code textEncoding} marker is inserted directly after it. A subclass that does not is
+     * still marked: {@link #terminateRecord()} then searches back for the last key at a line start.
+     */
+    protected void markRecordStart() {
+        recordStart = sb.length();
+    }
+
+    private void resetRecordState() {
+        quotedScalars = false;
+        recordStart = -1;
     }
 
     /**
@@ -218,12 +294,34 @@ public class LogRecord {
 
     public void addRecord(String sourceId, String propertyKey, char value) {
         addSourceId(sourceId, propertyKey);
-        sb.append(value);
+        quotedScalars |= YamlScalar.append(sb, value);
     }
 
+    /**
+     * A string value is written as runtime 1.1.3 wrote it - bare - unless that would break the record's
+     * structure, and then YAML double-quoted - see {@link YamlScalar}. Written bare,
+     * {@code "not active, balance due 30.0"} was cut at the comma by every YAML reader. Only structural
+     * breakage is prevented: typed-looking text such as {@code 123}, {@code true} or {@code 12:30:00}
+     * stays bare and reads with YAML typing, as before. For a value that must read back as a String,
+     * use {@link #addTextRecord} ({@link EventLogger#infoText} and friends).
+     */
     public void addRecord(String sourceId, String propertyKey, CharSequence value) {
         addSourceId(sourceId, propertyKey);
-        sb.append(value);
+        quotedScalars |= YamlScalar.append(sb, value);
+    }
+
+    /**
+     * A value the producer declared to be <b>text</b>: written so every reader types it as a String,
+     * even when it looks like a number, boolean or null ({@code 472.1}, {@code 5000}, {@code true},
+     * the empty string) - see {@link YamlScalar#appendText}. A quoted value marks the record as usual.
+     * {@link #addRecord(String, String, CharSequence)} keeps the 1.1.3 rule: typed-looking text bare.
+     *
+     * <p>A subclass that overrides {@link #addRecord(String, String, CharSequence)} to write somewhere
+     * other than this record's YAML buffer must override this too, as {@code BinaryLogRecord} does.
+     */
+    public void addTextRecord(String sourceId, String propertyKey, CharSequence value) {
+        addSourceId(sourceId, propertyKey);
+        quotedScalars |= YamlScalar.appendText(sb, value);
     }
 
     public void addRecord(String sourceId, String propertyKey, Object value) {
@@ -233,7 +331,18 @@ public class LogRecord {
         // CharSequence overload already wrote lowercase, so the two null paths disagreed with each other
         // as well as with the reader. Existing logs carrying "NULL" are unchanged and still parse as the
         // String they always parsed as; only new output moves.
-        sb.append(value == null ? "null" : value);
+        if (value == null) {
+            sb.append("null");
+        } else if (value instanceof Number || value instanceof Boolean) {
+            // logged as a number or boolean: stays an unquoted YAML number/boolean
+            sb.append(value);
+        } else if (value instanceof Character) {
+            quotedScalars |= YamlScalar.append(sb, (char) (Character) value);
+        } else if (value instanceof CharSequence) {
+            quotedScalars |= YamlScalar.append(sb, (CharSequence) value);
+        } else {
+            quotedScalars |= YamlScalar.append(sb, value.toString());
+        }
     }
 
     public void addRecord(String sourceId, String propertyKey, boolean value) {
@@ -308,6 +417,7 @@ public class LogRecord {
         firstProp = true;
         sourceId = null;
         sb.setLength(0);
+        resetRecordState();
     }
 
     public CharSequence asCharSequence() {
@@ -318,23 +428,18 @@ public class LogRecord {
         resetTermination();
         if (loggingEnabled()) {
             Class<? extends Event> aClass = event.getClass();
-            sb.append("eventLogRecord: ");
+            markRecordStart();
+            sb.append(RECORD_KEY);
             sb.append("\n    eventTime: ");
             timeFormatter.accept(sb, clock.getEventTime());
 
             sb.append("\n    logTime: ");
             timeFormatter.accept(sb, logTime());
 
-            sb.append("\n    groupingId: ").append(groupingId);
-            sb.append("\n    event: ").append(aClass.getSimpleName());
-            if (printEventToString) {
-                sb.append("\n    eventToString: ").append(event.toString());
-            }
-            if (printThreadName) {
-                sb.append("\n    thread: ").append(Thread.currentThread().getName());
-            }
+            appendHeaderFields(event, aClass);
             if (event.filterString() != null && !event.filterString().isEmpty()) {
-                sb.append("\n    eventFilter: ").append(event.filterString());
+                sb.append("\n    eventFilter: ");
+                quotedScalars |= YamlScalar.appendBlock(sb, event.filterString());
             }
             sb.append("\n    nodeLogs: ");
         }
@@ -347,24 +452,41 @@ public class LogRecord {
                 triggerEvent((Event) event);
             } else {
                 Class<?> aClass = event.getClass();
-                sb.append("eventLogRecord: ");
+                markRecordStart();
+                sb.append(RECORD_KEY);
                 sb.append("\n    eventTime: ");
                 timeFormatter.accept(sb, clock.getEventTime());
 
                 sb.append("\n    logTime: ");
                 timeFormatter.accept(sb, logTime());
 
-                sb.append("\n    groupingId: ").append(groupingId);
-
-                sb.append("\n    event: ").append(aClass.getSimpleName());
-                if (printEventToString) {
-                    sb.append("\n    eventToString: ").append(event.toString());
-                }
-                if (printThreadName) {
-                    sb.append("\n    thread: ").append(Thread.currentThread().getName());
-                }
+                appendHeaderFields(event, aClass);
                 sb.append("\n    nodeLogs: ");
             }
+        }
+    }
+
+    /**
+     * groupingId, event, eventToString and thread, each written through
+     * {@link YamlScalar#appendBlock}: a header field runs to the end of its line, so only what would
+     * break or re-type it there is quoted, and a typical {@code toString()} stays plain.
+     */
+    private void appendHeaderFields(Object event, Class<?> aClass) {
+        sb.append("\n    groupingId: ");
+        quotedScalars |= YamlScalar.appendBlock(sb, groupingId);
+        sb.append("\n    event: ");
+        String simpleName = aClass.getSimpleName();
+        if (!simpleName.isEmpty()) {
+            // an anonymous class has no simple name: left bare, as every release wrote it
+            quotedScalars |= YamlScalar.appendBlock(sb, simpleName);
+        }
+        if (printEventToString) {
+            sb.append("\n    eventToString: ");
+            quotedScalars |= YamlScalar.appendBlock(sb, event.toString());
+        }
+        if (printThreadName) {
+            sb.append("\n    thread: ");
+            quotedScalars |= YamlScalar.appendBlock(sb, Thread.currentThread().getName());
         }
     }
 
@@ -389,12 +511,34 @@ public class LogRecord {
                 sb.append("\n    endTime: ");
                 timeFormatter.accept(sb, clock.getWallClockTime());
             }
+            if (quotedScalars) {
+                // Rare path only: the header was written before any value was known, so the marker
+                // goes in at its offset now. Records with no quoted value never reach here.
+                int start = recordStart >= 0 ? recordStart : lastRecordKeyAtLineStart();
+                if (start >= 0) {
+                    sb.insert(start + RECORD_KEY.length(), TEXT_ENCODING_MARKER);
+                }
+            }
         }
         firstProp = true;
         sourceId = null;
+        resetRecordState();
         terminatedWithProperties = logged;
         terminated = true;
         return logged;
+    }
+
+    /**
+     * The offset of the last {@code eventLogRecord: } key that starts a line, or -1: the fallback for a
+     * subclass header that did not call {@link #markRecordStart()}. A logged value can contain the key
+     * text, but never at a line start - a line break inside a value is always escaped.
+     */
+    private int lastRecordKeyAtLineStart() {
+        int i = sb.lastIndexOf(RECORD_KEY);
+        while (i > 0 && sb.charAt(i - 1) != '\n') {
+            i = sb.lastIndexOf(RECORD_KEY, i - 1);
+        }
+        return i;
     }
 
     /** Whether anything has been written since the record was last cleared. */

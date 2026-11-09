@@ -30,6 +30,11 @@ public final class NullEventLogger extends EventLogger {
     }
 
     @Override
+    public EventLogger logText(String key, CharSequence value, LogLevel logLevel) {
+        return null;
+    }
+
+    @Override
     public EventLogger log(String key, int value, LogLevel logLevel) {
         return this;
     }
