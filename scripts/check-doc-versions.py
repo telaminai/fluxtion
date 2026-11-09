@@ -10,7 +10,7 @@ The source of truth is the `extra:` block of mkdocs.yml:
     fluxtion_compiler_url           the hosted compiler's public address (sign-in, CI, token route)
     fluxtion_repository_note        which artifacts are where (Repsy vs Maven Central)
     fluxtion_remote_build_note      what a build sends, and the compiler sign-in it needs
-    fluxtion_assistant_note         for a coding assistant: sign-in is the build's next step, not a blocker
+    fluxtion_first_build_note       what the starter's first build needs: hosted generation, the one-time sign-in
     fluxtion_sign_in_line           where to learn to sign in
     fluxtion_sign_in_how_to         the public how-to URL (its #anchor must exist)
 
@@ -88,7 +88,7 @@ NOTE_BLOCKS = ("repository-note", "remote-build-note")
 NOTE_FILES = ("README.md", "docs/claude.txt")
 REQUIRED = ("fluxtion_runtime_version", "fluxtion_builder_version", "fluxtion_maven_plugin_version",
             "fluxtion_repository", "fluxtion_compiler_url", "fluxtion_repository_note", "fluxtion_remote_build_note",
-            "fluxtion_assistant_note", "fluxtion_sign_in_line", "fluxtion_sign_in_how_to")
+            "fluxtion_first_build_note", "fluxtion_sign_in_line", "fluxtion_sign_in_how_to")
 
 VERSION = r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"
 COORDINATE = re.compile(r"(com\.telamin\.fluxtion:)([a-z0-9-]+)(:)(" + VERSION + r")")
@@ -132,7 +132,7 @@ def note_text(name, truth):
     if name == "repository-note":
         return truth["fluxtion_repository_note"]
     return (f"**Generation is remote.** {truth['fluxtion_remote_build_note']} {truth['fluxtion_sign_in_line']}\n\n"
-            f"**For coding assistants:** {truth['fluxtion_assistant_note']}")
+            f"**First build:** {truth['fluxtion_first_build_note']}")
 
 
 def render_block(name, truth):
@@ -387,7 +387,7 @@ def online(truth, llms_file=None):
         want = truth[ARTIFACT_KEY[artifact]]
         if not m or m.group(1) != want:
             warnings.append(f"online: {PLAYGROUND_LLMS} shows {artifact} {m.group(1) if m else 'nothing'}, docs pin {want}")
-    for key in ("fluxtion_remote_build_note", "fluxtion_assistant_note", "fluxtion_repository_note"):
+    for key in ("fluxtion_remote_build_note", "fluxtion_first_build_note", "fluxtion_repository_note"):
         if norm(truth[key]) not in norm(llms):
             warnings.append(f"online: {PLAYGROUND_LLMS} does not carry {key} verbatim (update both sites together)")
     return findings, warnings
