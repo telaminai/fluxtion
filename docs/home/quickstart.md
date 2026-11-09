@@ -29,6 +29,10 @@ More details: [https://www.jbang.dev](https://www.jbang.dev)
 !!! note "Generation is remote and needs a compiler sign-in"
     {{fluxtion_remote_build_note}} {{fluxtion_sign_in_line}}
 
+    *Interpreted* means no Java source is generated: the hosted compiler returns the processor's model and the
+    processor runs in your JVM. The graph is still built on the hosted compiler, under your sign-in, each time
+    `build()` runs. The [AOT quickstart](quickstart-aot.md) generates source once instead.
+
 ## 1. Hello world
 
 Create a simple event pipeline.
