@@ -250,6 +250,154 @@ public class AuditCloseRetryTest {
         }
     }
 
+    /**
+     * Review of #53, finding 2: a close that does not clear the record (clearAfterPublish=false) left
+     * it terminated, so a later write was never closed or published.
+     */
+    @Test
+    public void textWriteAfterAnUnclearedCloseIsClosedAndPublished() {
+        List<String> records = new ArrayList<>();
+        EventLogManager manager = new EventLogManager(record -> records.add(record.toString())).logLevel(LogLevel.INFO);
+        manager.clock = new Time().clock;
+        manager.init();
+        manager.setClearAfterPublish(false);
+        Source source = new Source();
+        manager.nodeRegistered(source, "source");
+        manager.eventReceived("DEMO one");
+        source.logger.info("value", 1);
+        manager.processingComplete();
+        source.logger.info("after", 2);
+        manager.processingComplete();
+
+        assertEquals("the late write is published", 2, records.size());
+        assertTrue("the published bytes are kept, the late write follows them", records.get(1).startsWith(records.get(0)));
+        assertTrue("the late write's node map is closed: " + records.get(1), records.get(1).contains("after: 2}"));
+        manager.processingComplete();
+        assertEquals("nothing new, nothing published", 2, records.size());
+    }
+
+    @Test
+    public void binaryWriteAfterAnUnclearedCloseIsClosedAndPublished() throws Exception {
+        Time time = new Time();
+        List<long[]> records = new ArrayList<>();
+        EventLogManager manager = new EventLogManager(record -> {
+            BinaryLogRecord binary = (BinaryLogRecord) record;
+            records.add(new long[]{binary.length(), binary.endTime()});
+        }).logLevel(LogLevel.INFO).binaryRecord(true);
+        manager.clock = time.clock;
+        manager.init();
+        manager.setClearAfterPublish(false);
+        Source source = new Source();
+        manager.nodeRegistered(source, "source");
+        manager.eventReceived("DEMO one");
+        source.logger.info("value", 1);
+        manager.processingComplete();
+        time.now = 2000;
+        source.logger.info("after", 2);
+        manager.processingComplete();
+
+        assertEquals("the late write is published", 2, records.size());
+        assertTrue("the late entry is in the record", records.get(1)[0] > records.get(0)[0]);
+        assertEquals("the reopened record is closed again", 2000, records.get(1)[1]);
+    }
+
+    /**
+     * Finding 2, second shape: publishLastRecord's sink throws, so nothing clears the record, and a node
+     * then writes. The cycle's own close must close that write, not return the earlier verdict.
+     */
+    @Test
+    public void writeAfterAThrowingExplicitPublicationIsClosedByTheCycle() {
+        for (boolean binary : new boolean[]{false, true}) {
+            Time time = new Time();
+            List<String> texts = new ArrayList<>();
+            List<Long> endTimes = new ArrayList<>();
+            IllegalStateException failure = new IllegalStateException("DEMO listener failure");
+            EventLogManager manager = new EventLogManager(record -> {
+                texts.add(binary ? "" : record.toString());
+                endTimes.add(binary ? ((BinaryLogRecord) record).endTime() : 0L);
+                if (texts.size() == 1) throw failure;
+            }).logLevel(LogLevel.INFO).binaryRecord(binary);
+            manager.clock = time.clock;
+            manager.init();
+            Source source = new Source();
+            manager.nodeRegistered(source, "source");
+            manager.eventReceived("DEMO one");
+            source.logger.info("value", 1);
+            assertSame(failure, assertThrows(IllegalStateException.class, manager::publishLastRecord));
+            time.now = 2000;
+            source.logger.info("after", 2);
+            manager.processingComplete();
+
+            assertEquals("binary=" + binary, 2, texts.size());
+            if (binary) {
+                assertEquals("the cycle's close takes a new endTime", 2000L, endTimes.get(1).longValue());
+            } else {
+                assertTrue("the late write's node map is closed: " + texts.get(1), texts.get(1).contains("after: 2}"));
+                assertEquals("the cycle's close adds its own endTime", 2, endTimes(texts.get(1)));
+            }
+            manager.eventReceived("DEMO two");
+            source.logger.info("value", 3);
+            manager.processingComplete();
+            assertEquals("binary=" + binary, 3, texts.size());
+            if (!binary) {
+                assertFalse(texts.get(2).contains("after"));
+            }
+        }
+    }
+
+    @Test
+    public void quotedScalarRecordRetriesWithOneMarker() {
+        List<String> attempts = new ArrayList<>();
+        IllegalStateException failure = new IllegalStateException("DEMO listener failure");
+        EventLogManager manager = new EventLogManager(record -> {
+            attempts.add(record.toString());
+            if (attempts.size() == 1) throw failure;
+        }).logLevel(LogLevel.INFO);
+        manager.clock = new Time().clock;
+        manager.init();
+        Source source = new Source();
+        manager.nodeRegistered(source, "source");
+        manager.eventReceived("DEMO one");
+        source.logger.info("text", "DEMO\nline");
+        assertSame(failure, assertThrows(IllegalStateException.class, manager::processingComplete));
+        manager.processingComplete();
+
+        assertEquals(2, attempts.size());
+        assertEquals("a retry re-sends the same bytes", attempts.get(0), attempts.get(1));
+        assertEquals(attempts.get(1), 1, markers(attempts.get(1)));
+        assertTrue(attempts.get(1).startsWith("eventLogRecord: " + LogRecord.TEXT_ENCODING_MARKER));
+
+        manager.eventReceived("DEMO two");
+        source.logger.info("value", 3);
+        manager.processingComplete();
+        assertEquals(3, attempts.size());
+        assertEquals("a plain record after a quoted one has no marker", 0, markers(attempts.get(2)));
+    }
+
+    @Test
+    public void quotedLateWriteAfterAnUnclearedCloseKeepsOneMarker() {
+        List<String> records = new ArrayList<>();
+        EventLogManager manager = new EventLogManager(record -> records.add(record.toString())).logLevel(LogLevel.INFO);
+        manager.clock = new Time().clock;
+        manager.init();
+        manager.setClearAfterPublish(false);
+        Source source = new Source();
+        manager.nodeRegistered(source, "source");
+        manager.eventReceived("DEMO one");
+        source.logger.info("text", "DEMO\nline");
+        manager.processingComplete();
+        source.logger.info("more", "DEMO\nmore");
+        manager.processingComplete();
+
+        assertEquals(2, records.size());
+        assertEquals(records.get(1), 1, markers(records.get(1)));
+        assertTrue(records.get(1).contains("more: \"DEMO\\nmore\"}"));
+    }
+
+    private static int markers(String text) {
+        return text.split(LogRecord.TEXT_ENCODING_MARKER, -1).length - 1;
+    }
+
     /** The close sequence a generated processor emits: {@code afterEvent}, and {@code failedCycle} on a throw. */
     private static final class GeneratedShapeProcessor {
         private final EventLogManager auditor;
