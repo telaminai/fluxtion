@@ -91,11 +91,19 @@ extra:
   # backticks, so the two sites stay identical. check-doc-versions.py --online compares them.
   fluxtion_remote_build_note: >-
     Building a graph (DataFlowBuilder...build(), interpret(), Fluxtion.compile* / compileAot or the
-    fluxtion-maven-plugin) sends the graph model - not your source files - to the hosted Fluxtion compiler, and
-    needs a compiler sign-in. Sign in once with mvn com.telamin.fluxtion:fluxtion-maven-plugin:login and approve
+    fluxtion-maven-plugin) uses the hosted Fluxtion compiler under your own compiler sign-in; the published
+    builder has no local generator. It sends the graph model, including node configuration values, but not your
+    source files or event data. Sign in once with mvn com.telamin.fluxtion:fluxtion-maven-plugin:login and approve
     in your browser; Maven, Gradle, JBang and a plain main then find the saved sign-in. In CI, set
     FLUXTION_API_TOKEN. Without a sign-in, a build that must generate stops before sending anything (FLX-1023).
     A generated processor runs with fluxtion-runtime alone and makes no network call.
+  # Verbatim the playground's ASSISTANT_NOTE (fluxtion-web scripts/fluxtion-coordinates.mjs), for a coding assistant
+  # acting for a user. Its last sentence is shared with the starter guidance; change them together.
+  fluxtion_assistant_note: >-
+    A request to build with Fluxtion includes this build step; it needs no separate consent. The first build
+    needs a browser sign-in that only the user can complete: run the login goal and relay the address and code
+    it prints. Sign-in is the expected next step, not a blocker: do not switch template, delete or replace the
+    project, or use -DskipFluxtion to avoid it; if the user declines, stop and say so.
   fluxtion_javadoc: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-runtime/latest/index.html
   release_date: "2026-06-16"
 
