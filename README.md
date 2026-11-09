@@ -108,7 +108,7 @@ Current runtime, builder-api, builder, BOM and starter releases are published to
 
 Import the Fluxtion BOM, then declare the
 artifacts you need. Generated processors only need `fluxtion-runtime` at runtime. The
-`fluxtion-builder` build-time artifact builds graphs (by default through the hosted generator,
+`fluxtion-builder` build-time artifact builds graphs (through the hosted Fluxtion compiler,
 see [Cloud generation and your compiler sign-in](#cloud-generation-and-your-compiler-sign-in)); authoring APIs live in `fluxtion-builder-api`.
 
 ```xml
