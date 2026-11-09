@@ -112,13 +112,21 @@ unregisters from the previous dispatcher, so a node reused by another processor 
 
 A completed text or binary audit record keeps its first end time and close result
 when publication is retried after a listener throws. `EventLogManager.processingComplete()`
-can retry that failed publication; after a successful completion it does nothing until
-the next `eventReceived` call. This also prevents cleanup after a later callback failure
+can retry that failed publication, including the retry that failed-cycle cleanup makes;
+after a successful completion it does nothing until something new is written or the next
+`eventReceived` call. This also prevents cleanup after a later callback failure
 from publishing an empty record containing only an end marker. `publishLastRecord()`
 remains an explicit publication request, including for callers outside an event cycle.
 If a node writes to the record after a `publishLastRecord()` call inside a cycle, the
 cycle's completion closes and publishes those entries as their own record, so they are
-neither lost nor carried into the next event's record.
+neither lost nor carried into the next event's record, even when that completion's
+listener throws and failed-cycle cleanup retries it.
+
+A write after a close that kept the record (`setClearAfterPublish(false)`, or a
+`publishLastRecord()` whose listener threw) reopens it: the next completion closes and
+publishes the record with that write, as runtime 1.1.4 did. The kept bytes are not
+rewritten, so the reopened text record carries a second `endTime` line after the late
+entries. A record keeps at most one `textEncoding` marker.
 
 These are close/retry guarantees, not exactly-once delivery: a listener that writes the
 record and then throws may write it again on retry. Starting a new record or clearing

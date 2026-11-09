@@ -273,6 +273,10 @@ public final class BinaryLogRecord extends LogRecord {
 
     /** Two aligned stores: the packed header, then the raw value bits. */
     private void writeSlots(int sourceRef, int keyRef, byte tag, long bits) {
+        if (terminated) {
+            // a write after a close that kept the record reopens it; see LogRecord#terminateRecord
+            resetTermination();
+        }
         if (slot + 2 <= slots.length) {
             slots[slot] = ((long) sourceRef << 48) | ((long) (keyRef & 0xFFFF) << 32) | (tag & 0xFFL);
             slots[slot + 1] = bits;

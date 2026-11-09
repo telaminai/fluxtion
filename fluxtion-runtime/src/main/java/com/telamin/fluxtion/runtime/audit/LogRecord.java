@@ -364,6 +364,11 @@ public class LogRecord {
     }
 
     protected void addSourceId(String sourceId, String propertyKey) {
+        if (terminated) {
+            // A write after a close that kept the record (clearAfterPublish=false, or a throwing sink)
+            // reopens it, so the next close closes and publishes this write.
+            resetTermination();
+        }
         if (loggingEnabled()) {
             if (this.sourceId == null) {
                 sb.append("\n        - ").append(sourceId).append(": {");
@@ -494,7 +499,8 @@ public class LogRecord {
      * complete record processing, the return value indicates if any log values
      * were written. Retrying a completed close leaves the record unchanged and returns
      * the original result, so a failed listener can retry publication without losing data.
-     * A new event, {@link #clear()} or {@link #replaceBuffer(CharSequence)} starts a new close.
+     * A new event, {@link #clear()} or {@link #replaceBuffer(CharSequence)} starts a new close, and so
+     * does a write after a close that kept the record, which reopens it.
      *
      * @return flag to indicate properties were logged
      */
@@ -515,7 +521,8 @@ public class LogRecord {
                 // Rare path only: the header was written before any value was known, so the marker
                 // goes in at its offset now. Records with no quoted value never reach here.
                 int start = recordStart >= 0 ? recordStart : lastRecordKeyAtLineStart();
-                if (start >= 0) {
+                // A record reopened by a late write may already carry the marker from its first close.
+                if (start >= 0 && !markerAt(start + RECORD_KEY.length())) {
                     sb.insert(start + RECORD_KEY.length(), TEXT_ENCODING_MARKER);
                 }
             }
@@ -539,6 +546,19 @@ public class LogRecord {
             i = sb.lastIndexOf(RECORD_KEY, i - 1);
         }
         return i;
+    }
+
+    private boolean markerAt(int offset) {
+        int length = TEXT_ENCODING_MARKER.length();
+        if (offset + length > sb.length()) {
+            return false;
+        }
+        for (int i = 0; i < length; i++) {
+            if (sb.charAt(offset + i) != TEXT_ENCODING_MARKER.charAt(i)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** Whether anything has been written since the record was last cleared. */
