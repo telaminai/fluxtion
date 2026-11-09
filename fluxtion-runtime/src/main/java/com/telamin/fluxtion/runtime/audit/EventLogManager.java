@@ -42,6 +42,12 @@ public class EventLogManager implements Auditor {
     private Map<String, EventLogger> node2Logger;
     private Map<String, EventLogSource> name2LogSourceMap;
     private boolean clearAfterPublish;
+    private boolean cycleComplete;
+    /**
+     * True while an explicit {@link #publishLastRecord()} has not reached the sink: its retry from
+     * failed-cycle cleanup then publishes and clears as the explicit publication would have.
+     */
+    private boolean explicitPublicationPending;
     public boolean trace = false;
     public boolean printEventToString = true;
     public boolean printThreadName = true;
@@ -310,9 +316,16 @@ public class EventLogManager implements Auditor {
      * if an exception is thrown
      */
     public void publishLastRecord() {
+        // Until this publication reaches the sink and the record is cleared, the cycle is open: if the
+        // listener throws, failed-cycle cleanup (processingComplete) must retry the closed record, even
+        // when an earlier publication in the same cycle had already completed it.
+        cycleComplete = false;
+        explicitPublicationPending = true;
         logRecord.terminateRecord();
         sink.processLogRecord(logRecord);
         logRecord.clear();
+        explicitPublicationPending = false;
+        cycleComplete = true;
     }
 
     /**
@@ -327,12 +340,26 @@ public class EventLogManager implements Auditor {
 
     @Override
     public void processingComplete() {
-        if (canTrace | logRecord.terminateRecord()) {
+        if (cycleComplete && (logRecord.terminated || !logRecord.hasContent())) {
+            return;
+        }
+        // Content written after a publication (publishLastRecord mid-cycle, or a record kept by
+        // clearAfterPublish=false) reopens the cycle: until this close reaches the sink, a retry
+        // from failed-cycle cleanup must publish it, not take the early return above.
+        cycleComplete = false;
+        // A retry of a failed explicit publication publishes and clears as that publication would have.
+        boolean explicitRetry = explicitPublicationPending;
+        if (canTrace | logRecord.terminateRecord() | explicitRetry) {
             sink.processLogRecord(logRecord);
         }
-        if (clearAfterPublish) {
+        if (clearAfterPublish | explicitRetry) {
             logRecord.clear();
         }
+        explicitPublicationPending = false;
+        // A throwing listener leaves this false so failed-cycle cleanup can retry it.
+        // Once published, a later cleanup call must not close/publish the cleared buffer;
+        // anything written after publication (publishLastRecord mid-cycle) is still closed here.
+        cycleComplete = true;
     }
 
     /**
@@ -362,6 +389,7 @@ public class EventLogManager implements Auditor {
 
     @Override
     public void init() {
+        cycleComplete = false;
         logRecord = binaryRecord ? new BinaryLogRecord(clock) : new LogRecord(clock);
         logRecord.printEventToString(printEventToString);
         logRecord.setPrintThreadName(printThreadName);
@@ -373,11 +401,15 @@ public class EventLogManager implements Auditor {
 
     @Override
     public void eventReceived(Event triggerEvent) {
+        cycleComplete = false;
+        explicitPublicationPending = false;
         logRecord.triggerEvent(triggerEvent);
     }
 
     @Override
     public void eventReceived(Object triggerEvent) {
+        cycleComplete = false;
+        explicitPublicationPending = false;
         logRecord.triggerObject(triggerEvent);
     }
 

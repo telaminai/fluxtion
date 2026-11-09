@@ -93,6 +93,8 @@ public class LogRecord {
     protected final StringBuilder sb;
     protected String sourceId;
     protected boolean firstProp;
+    protected boolean terminated;
+    protected boolean terminatedWithProperties;
     /** The header line every text record starts with; the marker is inserted directly after it. */
     static final String RECORD_KEY = "eventLogRecord: ";
     /** The marker line, written only on a record holding at least one double-quoted scalar. */
@@ -169,6 +171,7 @@ public class LogRecord {
         this.logLevel = newLogLevel == null ? EventLogControlEvent.LogLevel.NONE : newLogLevel;
         if (!loggingEnabled()) {
             sb.setLength(0);
+            resetTermination();
             resetRecordState();
         }
     }
@@ -185,6 +188,7 @@ public class LogRecord {
     public void replaceBuffer(CharSequence newBuffer) {
         sb.setLength(0);
         sb.append(newBuffer);
+        resetTermination();
         resetRecordState();
     }
 
@@ -192,6 +196,12 @@ public class LogRecord {
      * Carries the in-progress record's marker state from {@code previous}, whose buffer this record
      * has just taken with {@link #replaceBuffer}, so a quoted value written before the swap still
      * marks the record.
+     *
+     * <p>This is a migration of the same text record, not new content: a completed close is carried
+     * too, so its publication verdict and closed bytes survive the swap and a failed publication is
+     * retried unchanged. {@link #replaceBuffer} on its own is a content replacement and resets the
+     * close. Only text-to-text adoption carries the close; a binary record's close describes its
+     * slots, not the text buffer.
      */
     void adoptRecordState(LogRecord previous) {
         this.quotedScalars = previous.quotedScalars;
@@ -200,6 +210,10 @@ public class LogRecord {
         // first never closed, or wrote a key-less entry.
         this.sourceId = previous.sourceId;
         this.firstProp = previous.firstProp;
+        if (!(previous instanceof BinaryLogRecord) && !(this instanceof BinaryLogRecord)) {
+            this.terminated = previous.terminated;
+            this.terminatedWithProperties = previous.terminatedWithProperties;
+        }
     }
 
     /**
@@ -360,6 +374,11 @@ public class LogRecord {
     }
 
     protected void addSourceId(String sourceId, String propertyKey) {
+        if (terminated) {
+            // A write after a close that kept the record (clearAfterPublish=false, or a throwing sink)
+            // reopens it, so the next close closes and publishes this write.
+            resetTermination();
+        }
         if (loggingEnabled()) {
             if (this.sourceId == null) {
                 sb.append("\n        - ").append(sourceId).append(": {");
@@ -409,6 +428,7 @@ public class LogRecord {
     }
 
     public void clear() {
+        resetTermination();
         firstProp = true;
         sourceId = null;
         sb.setLength(0);
@@ -420,6 +440,7 @@ public class LogRecord {
     }
 
     public void triggerEvent(Event event) {
+        resetTermination();
         if (loggingEnabled()) {
             Class<? extends Event> aClass = event.getClass();
             markRecordStart();
@@ -440,6 +461,7 @@ public class LogRecord {
     }
 
     public void triggerObject(Object event) {
+        resetTermination();
         if (loggingEnabled()) {
             if (event instanceof Event) {
                 triggerEvent((Event) event);
@@ -485,11 +507,17 @@ public class LogRecord {
 
     /**
      * complete record processing, the return value indicates if any log values
-     * were written.
+     * were written. Retrying a completed close leaves the record unchanged and returns
+     * the original result, so a failed listener can retry publication without losing data.
+     * A new event, {@link #clear()} or {@link #replaceBuffer(CharSequence)} starts a new close, and so
+     * does a write after a close that kept the record, which reopens it.
      *
      * @return flag to indicate properties were logged
      */
     public boolean terminateRecord() {
+        if (terminated) {
+            return terminatedWithProperties;
+        }
         boolean logged = !firstProp;
         if (loggingEnabled()) {
             if (this.sourceId != null) {
@@ -503,7 +531,8 @@ public class LogRecord {
                 // Rare path only: the header was written before any value was known, so the marker
                 // goes in at its offset now. Records with no quoted value never reach here.
                 int start = recordStart >= 0 ? recordStart : lastRecordKeyAtLineStart();
-                if (start >= 0) {
+                // A record reopened by a late write may already carry the marker from its first close.
+                if (start >= 0 && !markerAt(start + RECORD_KEY.length())) {
                     sb.insert(start + RECORD_KEY.length(), TEXT_ENCODING_MARKER);
                 }
             }
@@ -511,6 +540,8 @@ public class LogRecord {
         firstProp = true;
         sourceId = null;
         resetRecordState();
+        terminatedWithProperties = logged;
+        terminated = true;
         return logged;
     }
 
@@ -525,6 +556,30 @@ public class LogRecord {
             i = sb.lastIndexOf(RECORD_KEY, i - 1);
         }
         return i;
+    }
+
+    private boolean markerAt(int offset) {
+        int length = TEXT_ENCODING_MARKER.length();
+        if (offset + length > sb.length()) {
+            return false;
+        }
+        for (int i = 0; i < length; i++) {
+            if (sb.charAt(offset + i) != TEXT_ENCODING_MARKER.charAt(i)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Whether anything has been written since the record was last cleared. */
+    boolean hasContent() {
+        return sb.length() > 0;
+    }
+
+    /** Reset by record implementations when starting or replacing their content. */
+    protected final void resetTermination() {
+        terminated = false;
+        terminatedWithProperties = false;
     }
 
     @Override

@@ -273,6 +273,10 @@ public final class BinaryLogRecord extends LogRecord {
 
     /** Two aligned stores: the packed header, then the raw value bits. */
     private void writeSlots(int sourceRef, int keyRef, byte tag, long bits) {
+        if (terminated) {
+            // a write after a close that kept the record reopens it; see LogRecord#terminateRecord
+            resetTermination();
+        }
         if (slot + 2 <= slots.length) {
             slots[slot] = ((long) sourceRef << 48) | ((long) (keyRef & 0xFFFF) << 32) | (tag & 0xFFL);
             slots[slot + 1] = bits;
@@ -436,6 +440,7 @@ public final class BinaryLogRecord extends LogRecord {
     public void triggerObject(Object event) { header(event.getClass()); }
 
     private void header(Class<?> type) {
+        resetTermination();
         pos = 0;
         slot = 0;
         overflow = false;
@@ -528,17 +533,28 @@ public final class BinaryLogRecord extends LogRecord {
 
     @Override
     public boolean terminateRecord() {
+        if (terminated) {
+            return terminatedWithProperties;
+        }
         // slot > 0 covers the id path, where writeSlots no longer touches firstProp; !firstProp
         // covers the String and trace paths, which still do.
         boolean logged = slot > 0 || !firstProp;
         endTime = recordEndTime ? endTimeNow() : 0L;
         firstProp = true;
         sourceId = null;
+        terminatedWithProperties = logged;
+        terminated = true;
         return logged;
     }
 
     @Override
+    boolean hasContent() {
+        return slot > 0 || pos > 0 || !firstProp;
+    }
+
+    @Override
     public void clear() {
+        resetTermination();
         firstProp = true;
         sourceId = null;
         pos = 0;
