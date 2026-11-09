@@ -33,6 +33,9 @@ jobs:
       - name: Build site
         run: mkdocs build
 
+      - name: Check the built site's anchors
+        run: python3 scripts/check-doc-versions.py --site=site
+
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

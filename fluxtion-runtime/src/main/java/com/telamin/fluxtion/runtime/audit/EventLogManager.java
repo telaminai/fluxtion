@@ -218,7 +218,7 @@ public class EventLogManager implements Auditor {
             logger.log("thread", Thread.currentThread().getName(), traceLevel);
         }
         if (node instanceof ForkedTrigger) {
-            logger.log("forkedExecution", "true", traceLevel);
+            logger.log("forkedExecution", true, traceLevel);
             logger.log("asyncMethod", methodName, traceLevel);
         } else {
             logger.log("method", methodName, traceLevel);
@@ -253,6 +253,7 @@ public class EventLogManager implements Auditor {
         if (newLogRecord != null) {
             newLogRecord.updateLogLevel(logRecord.getLogLevel());
             newLogRecord.replaceBuffer(logRecord.sb);
+            newLogRecord.adoptRecordState(logRecord);
             this.logRecord = newLogRecord;
             this.logRecord.setClock(clock);
             // PRECEDENCE: the manager's recordEndTime governs the records the MANAGER builds; a record

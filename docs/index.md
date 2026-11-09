@@ -227,8 +227,8 @@ example (Java 25):
 
 You define the transformations. Fluxtion builds the execution path.
 
-!!! note "Generation is remote and needs an API key"
-    {{fluxtion_remote_build_note}} {{fluxtion_api_key_line}}
+!!! note "Generation is remote and needs a compiler sign-in"
+    {{fluxtion_remote_build_note}} {{fluxtion_sign_in_line}}
 
 ```java
 //REPOS mavencentral,fluxtion={{fluxtion_repository}}

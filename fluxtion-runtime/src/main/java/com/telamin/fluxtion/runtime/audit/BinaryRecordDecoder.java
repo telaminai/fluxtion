@@ -52,6 +52,15 @@ public final class BinaryRecordDecoder {
         return (int) (header & 0xFF);
     }
 
+    /**
+     * {@code true} when the value was logged as text - a {@code CharSequence}, an {@code Object}
+     * (written as its {@code toString()}) or a {@code char} - so a YAML renderer must write it as a
+     * string scalar. A null CharSequence/Object (id 0) renders as the YAML null and is not text.
+     */
+    public static boolean isTextValue(int tag, long rawBits) {
+        return tag == TAG_CHAR || ((tag == TAG_CHARSEQ || tag == TAG_OBJECT) && rawBits != 0);
+    }
+
     /** {@code true} if the tag is one this decoder understands. */
     public static boolean knownTag(int tag) {
         return tag >= TAG_DOUBLE && tag <= TAG_TRACE;

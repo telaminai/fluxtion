@@ -5,6 +5,9 @@
 package com.telamin.fluxtion.runtime.audit.tools;
 
 import com.telamin.fluxtion.runtime.audit.BinaryLogReader;
+import com.telamin.fluxtion.runtime.audit.BinaryRecordDecoder;
+import com.telamin.fluxtion.runtime.audit.LogRecord;
+import com.telamin.fluxtion.runtime.audit.YamlScalar;
 
 import java.io.IOException;
 import java.io.PrintStream;
@@ -34,11 +37,11 @@ import java.nio.file.Paths;
  * header first and scales the bounds to the file's unit; a file whose header states no unit, or an
  * undefined one, refuses a time query rather than compare milliseconds to something else.
  *
- * <p><b>Output is for people and {@code grep}, not for the analyser.</b> It has the YAML shape the text
- * {@code LogRecord} produces, with every value written bare - which is exactly what the analyser's
- * text grammar cannot type: a logged String {@code "ok, invented: 42.0"} parses back as a second,
- * numeric entry. Open the {@code .flxa} file in the analyser instead; its binary reader keeps the
- * wire's types, identity and units. This tool is raw inspection.
+ * <p><b>Output is for people and {@code grep}; prefer the {@code .flxa} file for the analyser.</b> It
+ * has the YAML shape the text {@code LogRecord} produces, including its quoting: a value logged as
+ * text is written as a YAML string scalar (double-quoted when bare would misread, e.g.
+ * {@code "ok, invented: 42.0"}), and such a record carries the {@code textEncoding: QUOTED_SCALARS}
+ * marker. The analyser's binary reader still keeps more - the wire's types, identity and units.
  *
  * <p><b>{@code --stats} reports the two silent data-loss conditions</b> — ids the dictionary never
  * described, and a tail too damaged to parse. A reader that hides those is worse than one that refuses
@@ -53,14 +56,31 @@ public final class AuditLogTool {
      * eagerly means a {@code --node} pattern matching nothing still prints a header per record, so a
      * filter that excluded everything looks like a log full of empty events. Entry-level filters are
      * the common case, and this is what makes their output readable.
+     *
+     * <p>Values logged as text are written through {@link YamlScalar}, and a record holding
+     * a quoted value carries the same {@code textEncoding: QUOTED_SCALARS} first line. A record is
+     * therefore buffered until it closes, since the marker precedes entries not yet seen. Numbers,
+     * booleans and nulls stay bare. The binary tag decides how text is typed:
+     * <ul>
+     * <li>CHARSEQ is a String on the wire, so it is written to read back as a String
+     * ({@link YamlScalar#appendText}): {@code 472.1} or {@code 5000} logged as a CharSequence is
+     * quoted. The wire does not record whether it came through {@code infoText} or {@code info}, and
+     * a String is a String; this is where the inspection output differs from the text record, which
+     * writes an {@code info} value of {@code 5000} bare as 1.1.3 did.
+     * <li>OBJECT (a {@code toString()}, which may be a boxed number) and CHAR are written as the text
+     * record writes them: bare unless structurally unsafe.
+     * </ul>
      */
     static final class TextSink implements AuditLogFilter.Sink {
         private final PrintStream out;
         private String pending;
         private boolean anyPrinted;
         private long pendingEndTime;
-        /** A record whose header was printed and whose endTime line has not been. */
+        /** A record whose header was started and whose endTime line has not been written. */
         private boolean recordOpen;
+        /** The open record's text, written out when it closes. */
+        private final StringBuilder record = new StringBuilder();
+        private boolean quoted;
 
         TextSink(PrintStream out) {
             this.out = out;
@@ -72,32 +92,54 @@ public final class AuditLogTool {
             // it and this output claimed the text record's shape while dropping it.
             closeRecord();
             pendingEndTime = endTime;
-            pending = "eventLogRecord: \n"
-                    + "    eventTime: " + eventTime + "\n"
-                    + "    logTime: " + logTime + "\n"
-                    + "    event: " + eventType + "\n"
-                    + "    nodeLogs: ";
+            StringBuilder header = new StringBuilder("eventLogRecord: \n")
+                    .append("    eventTime: ").append(eventTime).append('\n')
+                    .append("    logTime: ").append(logTime).append('\n')
+                    .append("    event: ");
+            quoted = YamlScalar.append(header, eventType);
+            pending = header.append("\n    nodeLogs: ").toString();
         }
 
         @Override
         public void entry(String node, String key, String value) {
+            entry(node, key, value, 0, 0L);
+        }
+
+        @Override
+        public void entry(String node, String key, String value, int tag, long rawBits) {
             if (pending != null) {
+                record.setLength(0);
+                record.append(pending).append('\n');
+                pending = null;
+                recordOpen = true;
+            }
+            record.append("        - ").append(node).append(": { ").append(key).append(": ");
+            if (tag == BinaryRecordDecoder.TAG_CHARSEQ && rawBits != 0) {
+                // the wire says String: typed as one even when it looks like a number
+                quoted |= YamlScalar.appendText(record, value);
+            } else if (BinaryRecordDecoder.isTextValue(tag, rawBits)) {
+                // OBJECT (a toString, possibly of a boxed number) and CHAR: as the text record writes them
+                quoted |= YamlScalar.append(record, value);
+            } else {
+                record.append(value);
+            }
+            record.append("}\n");
+        }
+
+        /** Writes the open record, with its endTime line and, if needed, the encoding marker. */
+        private void closeRecord() {
+            if (recordOpen) {
+                record.append("    endTime: ").append(pendingEndTime).append('\n');
+                if (quoted) {
+                    record.insert("eventLogRecord: ".length(), LogRecord.TEXT_ENCODING_MARKER);
+                }
                 if (anyPrinted) {
                     out.println();
                 }
-                out.println(pending);
-                pending = null;
+                out.print(record.toString().replace("\n", System.lineSeparator()));
                 anyPrinted = true;
-                recordOpen = true;
-            }
-            out.println("        - " + node + ": { " + key + ": " + value + "}");
-        }
-
-        /** Prints the deferred {@code endTime} line for a record whose header was printed. */
-        private void closeRecord() {
-            if (recordOpen) {
-                out.println("    endTime: " + pendingEndTime);
                 recordOpen = false;
+                record.setLength(0);
             }
         }
 
@@ -276,7 +318,7 @@ public final class AuditLogTool {
     }
 
     private static void usage(PrintStream out) {
-        out.println("audit-log [options] <file>          raw inspection: values are printed bare; open the .flxa in the analyser for typed reading");
+        out.println("audit-log [options] <file>          raw inspection: text values are YAML-quoted as the text log does; open the .flxa in the analyser for typed reading");
         out.println("  --from <millis>   --to <millis>     logTime bounds (scaled to the file's declared unit)");
         out.println("  --event <glob>    --node <glob>     --key <glob>");
         out.println("  --limit <n>       --sink text|null  --stats");

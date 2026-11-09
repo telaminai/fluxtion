@@ -4,7 +4,7 @@
 
 [![fluxtion-runtime](https://img.shields.io/maven-metadata/v?metadataUrl=https%3A%2F%2Frepo.repsy.io%2Fmvn%2Ffluxtion%2Ffluxtion-public%2Fcom%2Ftelamin%2Ffluxtion%2Ffluxtion-runtime%2Fmaven-metadata.xml&label=fluxtion-runtime)](https://repo.repsy.io/mvn/fluxtion/fluxtion-public/com/telamin/fluxtion/fluxtion-runtime/)
 ![Java](https://img.shields.io/badge/java-21+-blue)
-[![License](https://img.shields.io/badge/license-AGPL%2FSSPL-important)](./LICENSE)
+[![License](https://img.shields.io/badge/license-AGPL--3.0%20%7C%20commercial-important)](./LICENSE)
 [![Docs](https://img.shields.io/badge/docs-website-blue)](https://telaminai.github.io/fluxtion/)
 
 Fluxtion replaces reactive pipelines and event wiring with a compiled, deterministic execution engine. Instead of interpreting a runtime graph, Fluxtion:
@@ -39,7 +39,7 @@ The fastest way to try Fluxtion is using [Jbang](https://www.jbang.dev/). Save t
 
 ```java
 //REPOS fluxtion-public=https://repo.repsy.io/mvn/fluxtion/fluxtion-public
-//DEPS com.telamin.fluxtion:fluxtion-builder:1.0.81
+//DEPS com.telamin.fluxtion:fluxtion-builder:1.0.91
 //JAVA 25
 
 import com.telamin.fluxtion.builder.DataFlowBuilder;
@@ -63,8 +63,8 @@ void main() {
 
 **Run:** `jbang TradeFilter.java`
 
-Building the graph needs an API key and sends the graph model to a hosted generator — see
-[Cloud generation and your API key](#cloud-generation-and-your-api-key).
+Building the graph needs a compiler sign-in and sends the graph model to a hosted generator — see
+[Cloud generation and your compiler sign-in](#cloud-generation-and-your-compiler-sign-in).
 
 ---
 
@@ -108,7 +108,7 @@ Current runtime, builder-api, builder, BOM and starter releases are published to
 Import the Fluxtion BOM, then declare the
 artifacts you need. Generated processors only need `fluxtion-runtime` at runtime. The
 `fluxtion-builder` build-time artifact builds graphs (by default through the hosted generator,
-see [Cloud generation and your API key](#cloud-generation-and-your-api-key)); authoring APIs live in `fluxtion-builder-api`.
+see [Cloud generation and your compiler sign-in](#cloud-generation-and-your-compiler-sign-in)); authoring APIs live in `fluxtion-builder-api`.
 
 ```xml
 <repositories>
@@ -123,7 +123,7 @@ see [Cloud generation and your API key](#cloud-generation-and-your-api-key)); au
     <dependency>
       <groupId>com.telamin.fluxtion</groupId>
       <artifactId>fluxtion-bom</artifactId>
-      <version>1.0.81</version>
+      <version>1.0.91</version>
       <type>pom</type>
       <scope>import</scope>
     </dependency>
@@ -144,27 +144,37 @@ repositories {
     maven("https://repo.repsy.io/mvn/fluxtion/fluxtion-public")
 }
 
-implementation(platform("com.telamin.fluxtion:fluxtion-bom:1.0.81"))
+implementation(platform("com.telamin.fluxtion:fluxtion-bom:1.0.91"))
 compileOnly("com.telamin.fluxtion:fluxtion-builder")
 implementation("com.telamin.fluxtion:fluxtion-runtime")
 ```
 
 ---
 
-## Cloud generation and your API key
+<a id="cloud-generation-and-your-api-key"></a>
+
+## Cloud generation and your compiler sign-in
 
 <!-- fluxtion:remote-build-note - generated from mkdocs.yml extra: by scripts/check-doc-versions.py --write; edit there -->
-**Generation is remote.** Building a graph (`DataFlowBuilder...build()`, `interpret()`, `Fluxtion.compile*` / `compileAot` or the `fluxtion-maven-plugin`) sends the graph model - not your source files - to the hosted Fluxtion generator by default, and needs an API key. Without a key the build stops before sending anything ("Fluxtion API key is not configured"); a rejected key fails with HTTP 401/403. Put the key in `~/.fluxtion/fluxtion.apiKeyFile` as `apiKey=YOUR_KEY` (the first build creates the file). A generated processor runs with `fluxtion-runtime` alone and makes no network call. How to get a key: [Getting an API key](https://telaminai.github.io/fluxtion/home/quickstart-aot/#1-getting-an-api-key) (subscribe to "Fluxtion Source Generator" on [RapidAPI](https://rapidapi.com/hub)).
+**Generation is remote.** Building a graph (DataFlowBuilder...build(), interpret(), Fluxtion.compile* / compileAot or the fluxtion-maven-plugin) sends the graph model - not your source files - to the hosted Fluxtion compiler, and needs a compiler sign-in. Sign in once with mvn com.telamin.fluxtion:fluxtion-maven-plugin:login and approve in your browser; Maven, Gradle, JBang and a plain main then find the saved sign-in. In CI, set FLUXTION_API_TOKEN. Without a sign-in, a build that must generate stops before sending anything (FLX-1023). A generated processor runs with fluxtion-runtime alone and makes no network call. How to sign in: [Sign in to the compiler](https://telaminai.github.io/fluxtion/home/quickstart-aot/#1-sign-in-to-the-compiler).
 <!-- /fluxtion:remote-build-note -->
 
 The published `fluxtion-builder` ships only a remote generator: `DataFlowBuilder...build()`, `Fluxtion.compile(...)`,
-`Fluxtion.interpret(...)`, `compileAot(...)` and the Maven/Spring generation paths POST the graph model to
-`https://fluxtion-source-gen.p.rapidapi.com` (a RapidAPI gateway in front of the Fluxtion generator) and receive the
-generated model or Java source back. Nothing is generated on your machine unless a local generator is on the classpath.
+`Fluxtion.interpret(...)`, `compileAot(...)` and the Maven/Spring generation paths POST the graph model, under
+your compiler sign-in, to the hosted Fluxtion compiler's `/v1` routes and receive the generated model or Java source back. Nothing is generated on
+your machine unless a local generator is on the classpath.
 
-- **Key:** `apiKey=` in `~/.fluxtion/fluxtion.apiKeyFile` (created with a placeholder on first use), or
-  `-Dfluxtion.apiKey=...`. Without a key the build stops with "Fluxtion API key is not configured" before
-  anything is sent.
+- **Sign-in:** run `mvn com.telamin.fluxtion:fluxtion-maven-plugin:1.3.4:login` once on your machine and approve in
+  your browser; Maven, Gradle, JBang and a plain `main` then find the saved sign-in (`fluxtion-builder` 1.0.90 or
+  later). In CI set `FLUXTION_API_TOKEN` from the secret store; `FLUXTION_COMPILER_URL` is needed only for a compiler
+  other than the managed one, https://compiler.fluxtion-playground.dev. The [playground](https://fluxtion-playground.dev) generates for
+  a signed-in browser. Without a sign-in a build that must generate stops before sending anything, with
+  [FLX-1023](https://telaminai.github.io/fluxtion/troubleshooting/errors/FLX-1023/). Step by step:
+  [Sign in to the compiler](https://telaminai.github.io/fluxtion/home/quickstart-aot/#1-sign-in-to-the-compiler).
+  A credential is never accepted from a POM or other committed file.
+- **The API-key route is retired.** The earlier marketplace API key, kept in a key file under `~/.fluxtion`, was
+  retired on 2026-11-05. From `fluxtion-builder` 1.0.90 no key file is read, and signing in is the only way to
+  generate.
 - **Configured node instance field values, private fields included, are sent in clear text in the request
   body.** Each node's configured state is rendered as Java constructor/setter expressions, so a constructor-set
   `private String password` travels to the generator exactly like a threshold. Static, transient, synthetic and
@@ -178,7 +188,8 @@ generated model or Java source back. Nothing is generated on your machine unless
   parent/child wiring, handled event types and filters; exported service signatures; the generation settings
   (package and class name, dispatch options, output directory paths); side-band metadata (model fingerprint,
   target language).
-- **The API key travels only in the `X-RapidAPI-Key` request header** (with `X-RapidAPI-Host`), never in the body.
+- **The credential travels only in the `Authorization` request header** (a bearer token), never in the body, and
+  only over https (or plain http to this machine).
 - **What is not sent:** your source files or method bodies (a string constant inside a handler method stays
   local), compiled classes, the GraphML/PNG renderings, the events you process at runtime, and audit records.
 - **Old clients:** `fluxtion-builder` 1.0.9 on Maven Central (and 1.0.0 to 1.0.8) predates the hosted generator's
@@ -206,4 +217,4 @@ Three open public artifacts:
 
 ## License
 
-Fluxtion is dual-licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](./LICENSE) and the [Server Side Public License (SSPL)](./LICENSE). Commercial licenses and support are available for enterprise use.
+Fluxtion is dual-licensed: under the [GNU Affero General Public License v3.0 (AGPL-3.0)](./LICENSE), or under a commercial licence from Telamin, which lets you use it on Telamin's terms instead of the AGPL's. Commercial licences and support: see [telamin.com/licensing](https://telamin.com/licensing/).

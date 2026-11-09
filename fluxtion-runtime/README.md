@@ -22,7 +22,7 @@ Releases are published to the Fluxtion public repository; declare it:
 <dependency>
     <groupId>com.telamin.fluxtion</groupId>
     <artifactId>fluxtion-runtime</artifactId>
-    <version>1.1.3</version>
+    <version>1.1.4</version>
 </dependency>
 ```
 
@@ -55,7 +55,7 @@ CheerpJ, you need agrona 1.21.2 (the last class file 52 release of agrona):
 <dependency>
     <groupId>com.telamin.fluxtion</groupId>
     <artifactId>fluxtion-runtime</artifactId>
-    <version>1.1.3</version>
+    <version>1.1.4</version>
     <exclusions>
         <exclusion>
             <groupId>org.agrona</groupId>

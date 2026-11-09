@@ -15,6 +15,29 @@ import com.telamin.fluxtion.runtime.audit.EventLogControlEvent.LogLevel;
  * The generated {@code LogRecord} is a structure that can be read by machines
  * and humans.
  *
+ * <h2>Logging a value as text</h2>
+ * A String value logged with {@code info(key, value)} is written as runtime 1.1.3 wrote it: bare
+ * unless that would break the record's structure, so {@code "5000"} reads back as the number 5000 -
+ * which is what charts and exports of such values rely on. When a value is an identifier that only
+ * happens to look numeric - an op id {@code 472.1}, which as a number equals {@code 472.10} - log it
+ * with {@code infoText(key, value)} (or {@link #errorText}, {@link #warnText}, {@link #debugText},
+ * {@link #traceText}, {@link #logText}). It is then written so every reader types it as a String:
+ * double-quoted when it looks like a number, boolean or null, or is empty, as well as for every
+ * structural reason; the record carries the usual {@code textEncoding: QUOTED_SCALARS} marker. Do not
+ * pre-quote the value yourself: a {@code "} in a value is escaped, so pre-quoting adds characters.
+ *
+ * <p><b>Detecting the API on an older runtime.</b> These methods were added after 1.1.3. A library
+ * that must run on both checks for the method once, e.g.
+ * <pre>
+ * boolean hasText;
+ * try {
+ *     EventLogger.class.getMethod("infoText", String.class, CharSequence.class);
+ *     hasText = true;
+ * } catch (NoSuchMethodException e) {
+ *     hasText = false;
+ * }
+ * </pre>
+ *
  * @author Greg Higgins (greg.higgins@v12technology.com)
  */
 public class EventLogger {
@@ -353,6 +376,47 @@ public class EventLogger {
 
     public EventLogger trace(String key, char value) {
         log(key, value, LogLevel.TRACE);
+        return this;
+    }
+
+    /** Logs {@code value} as a String in every reader - see the class javadoc. */
+    public EventLogger errorText(String key, CharSequence value) {
+        logText(key, value, LogLevel.ERROR);
+        return this;
+    }
+
+    /** Logs {@code value} as a String in every reader - see the class javadoc. */
+    public EventLogger warnText(String key, CharSequence value) {
+        logText(key, value, LogLevel.WARN);
+        return this;
+    }
+
+    /** Logs {@code value} as a String in every reader - see the class javadoc. */
+    public EventLogger infoText(String key, CharSequence value) {
+        logText(key, value, LogLevel.INFO);
+        return this;
+    }
+
+    /** Logs {@code value} as a String in every reader - see the class javadoc. */
+    public EventLogger debugText(String key, CharSequence value) {
+        logText(key, value, LogLevel.DEBUG);
+        return this;
+    }
+
+    /** Logs {@code value} as a String in every reader - see the class javadoc. */
+    public EventLogger traceText(String key, CharSequence value) {
+        logText(key, value, LogLevel.TRACE);
+        return this;
+    }
+
+    /**
+     * Logs {@code value} as a String in every reader, even when it looks like a number, boolean or
+     * null - see the class javadoc. A {@code null} reference is logged as the YAML null.
+     */
+    public EventLogger logText(String key, CharSequence value, LogLevel logLevel) {
+        if (canLog(logLevel)) {
+            logrecord.addTextRecord(logSourceId, key, value);
+        }
         return this;
     }
 
