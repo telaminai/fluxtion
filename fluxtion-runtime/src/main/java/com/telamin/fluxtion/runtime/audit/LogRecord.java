@@ -196,6 +196,12 @@ public class LogRecord {
      * Carries the in-progress record's marker state from {@code previous}, whose buffer this record
      * has just taken with {@link #replaceBuffer}, so a quoted value written before the swap still
      * marks the record.
+     *
+     * <p>This is a migration of the same text record, not new content: a completed close is carried
+     * too, so its publication verdict and closed bytes survive the swap and a failed publication is
+     * retried unchanged. {@link #replaceBuffer} on its own is a content replacement and resets the
+     * close. Only text-to-text adoption carries the close; a binary record's close describes its
+     * slots, not the text buffer.
      */
     void adoptRecordState(LogRecord previous) {
         this.quotedScalars = previous.quotedScalars;
@@ -204,6 +210,10 @@ public class LogRecord {
         // first never closed, or wrote a key-less entry.
         this.sourceId = previous.sourceId;
         this.firstProp = previous.firstProp;
+        if (!(previous instanceof BinaryLogRecord) && !(this instanceof BinaryLogRecord)) {
+            this.terminated = previous.terminated;
+            this.terminatedWithProperties = previous.terminatedWithProperties;
+        }
     }
 
     /**
