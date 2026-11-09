@@ -108,7 +108,7 @@ unregisters from the previous dispatcher, so a node reused by another processor 
 - **Callback payloads:** `CallBackNode` and `AbstractCallbackNode` payloads are discarded with a failed cycle
   (`QueuedPayloadOwner` / `QueuedPayloadRegistry`).
 
-## Retrying audit publication (unreleased)
+## Retrying audit publication (runtime 1.1.5, unreleased)
 
 A completed text or binary audit record keeps its first end time and close result
 when publication is retried after a listener throws. `EventLogManager.processingComplete()`
@@ -122,15 +122,56 @@ cycle's completion closes and publishes those entries as their own record, so th
 neither lost nor carried into the next event's record, even when that completion's
 listener throws and failed-cycle cleanup retries it.
 
+An explicit `publishLastRecord()` whose listener throws leaves the cycle open, even when an
+earlier publication in the same cycle succeeded. The exception reaches the caller, and
+failed-cycle cleanup re-sends the same closed record, then clears it as the explicit
+publication would have (also with `setClearAfterPublish(false)`), so the next event's
+record is its own.
+
 A write after a close that kept the record (`setClearAfterPublish(false)`, or a
 `publishLastRecord()` whose listener threw) reopens it: the next completion closes and
 publishes the record with that write, as runtime 1.1.4 did. The kept bytes are not
 rewritten, so the reopened text record carries a second `endTime` line after the late
 entries. A record keeps at most one `textEncoding` marker.
 
+Swapping in a new text `LogRecord` with an `EventLogControlEvent` adopts the current record,
+including a completed close: a publication that failed before the swap is retried with the
+same closed bytes and no second `endTime`. Replacing a record's content
+(`LogRecord.replaceBuffer`) starts a new close. This covers text-to-text adoption only;
+swapping between a text and a binary record is not covered.
+
 These are close/retry guarantees, not exactly-once delivery: a listener that writes the
 record and then throws may write it again on retry. Starting a new record or clearing
 or replacing its contents resets the close state.
+
+### Late audit entries: what 1.1.5 guarantees
+
+"Late" entries are those a node writes after its record was closed in the same cycle: after
+a mid-cycle `publishLastRecord()`, or after a close that kept the record
+(`setClearAfterPublish(false)`). Runtime 1.1.5 keeps them and publishes them; it does **not**
+publish them as a well-formed record that the Fluxtion Analyser reads.
+
+- **Text.** Entries written after a record has closed are kept, but they appear after the
+  record's trailer or as a separately framed block without event context:
+  - after a mid-cycle `publishLastRecord()`, the late entries are published as a block holding
+    only the node entries and an `endTime` line. It has no `eventLogRecord` header, event
+    fields or `nodeLogs` key, and no `textEncoding` marker even when a value in it is quoted;
+  - after a close that kept the record, the republished record carries the late node entries
+    after its first `endTime` line, followed by a second `endTime` line.
+
+  The Analyser does not read either shape as a record (checked with Analyser 1.42.1): it finds
+  no node entries in the separate block, and it rejects the reopened record, including the
+  entries written before the first close. Do not rely on the Analyser to show late entries.
+- **Binary.** Late entries are published in a well-formed record frame that keeps the event's
+  type, event time and log time, with a new end time. After a mid-cycle `publishLastRecord()`,
+  that frame holds only the late entries, so one event produces two frames. After a close that
+  kept the record, the new frame holds the earlier entries again, followed by the late ones, so
+  the earlier entries appear in both frames. The format does not mark a frame as a
+  continuation, and a reader is not told to merge or deduplicate them.
+
+To keep an event's entries in one readable record, write them before the record is closed. A
+defined continuation format for late text output, with Analyser support, is planned as
+follow-up work.
 
 ## Not covered
 
