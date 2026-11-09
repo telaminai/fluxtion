@@ -530,6 +530,53 @@ public class AuditCloseRetryTest {
         }
     }
 
+    /** An explicit publication is unconditional, so its retry is too, even with no business entry. */
+    @Test
+    public void throwingExplicitPublicationWithoutEntriesIsStillRetried() throws Exception {
+        for (boolean binary : new boolean[]{false, true}) {
+            List<String> attempts = new ArrayList<>();
+            IllegalStateException failure = new IllegalStateException("DEMO listener failure");
+            EventLogManager manager = new EventLogManager(record -> {
+                attempts.add(capture(record));
+                if (attempts.size() == 1) throw failure;
+            }).logLevel(LogLevel.INFO).binaryRecord(binary);
+            manager.clock = new Time().clock;
+            manager.init();
+            manager.nodeRegistered(new Source(), "source");
+            manager.eventReceived("DEMO event");
+            assertSame(failure, assertThrows(IllegalStateException.class, manager::publishLastRecord));
+            manager.processingComplete();
+            assertEquals("binary=" + binary + ": the explicit publication is retried", 2, attempts.size());
+            assertEquals("binary=" + binary, attempts.get(0), attempts.get(1));
+            manager.processingComplete();
+            assertEquals("binary=" + binary, 2, attempts.size());
+        }
+    }
+
+    /** A failed explicit publication that is never retried does not change how the next event is kept. */
+    @Test
+    public void anUnretriedExplicitPublicationDoesNotChangeTheNextEventsRetention() {
+        List<String> attempts = new ArrayList<>();
+        IllegalStateException failure = new IllegalStateException("DEMO listener failure");
+        EventLogManager manager = new EventLogManager(record -> {
+            attempts.add(record.toString());
+            if (attempts.size() == 1) throw failure;
+        }).logLevel(LogLevel.INFO);
+        manager.clock = new Time().clock;
+        manager.init();
+        manager.setClearAfterPublish(false);
+        Source source = new Source();
+        manager.nodeRegistered(source, "source");
+        manager.eventReceived("DEMO one");
+        source.logger.info("value", 1);
+        assertSame(failure, assertThrows(IllegalStateException.class, manager::publishLastRecord));
+        manager.eventReceived("DEMO two");
+        source.logger.info("value", 2);
+        manager.processingComplete();
+        assertEquals(2, attempts.size());
+        assertEquals("clearAfterPublish=false still keeps the next record", attempts.get(1), manager.lastRecordAsString());
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Review of #53 (2026-11-09), F2: adopting the same text record keeps its completed close.
     // ---------------------------------------------------------------------------------------------
