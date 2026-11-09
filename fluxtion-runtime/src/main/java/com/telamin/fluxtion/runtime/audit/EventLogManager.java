@@ -332,6 +332,10 @@ public class EventLogManager implements Auditor {
         if (cycleComplete && (logRecord.terminated || !logRecord.hasContent())) {
             return;
         }
+        // Content written after a publication (publishLastRecord mid-cycle, or a record kept by
+        // clearAfterPublish=false) reopens the cycle: until this close reaches the sink, a retry
+        // from failed-cycle cleanup must publish it, not take the early return above.
+        cycleComplete = false;
         if (canTrace | logRecord.terminateRecord()) {
             sink.processLogRecord(logRecord);
         }
