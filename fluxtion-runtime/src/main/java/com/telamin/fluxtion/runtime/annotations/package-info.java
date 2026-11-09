@@ -1,6 +1,6 @@
 /*
  * Copyright: © 2025. Gregory Higgins <greg.higgins@v12technology.com>
- * SPDX-License-Identifier: AGPL-3.0-only OR SSPL-1.0
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 /**
  * This package contains a set of annotations providing meta-data to the Fluxtion
