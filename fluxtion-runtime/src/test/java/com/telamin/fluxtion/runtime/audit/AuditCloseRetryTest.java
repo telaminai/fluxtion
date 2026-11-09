@@ -123,6 +123,165 @@ public class AuditCloseRetryTest {
         assertEquals("the next record holds only its own entry", sizes.get(0), sizes.get(2));
     }
 
+    /**
+     * Review of #53: a mid-cycle {@code publishLastRecord} completed the cycle, so when the close of a
+     * late write then threw, the failed-cycle retry took the early return. Text leaked the late entries
+     * into the next event's record; binary lost them.
+     */
+    @Test
+    public void lateWriteAfterMidCyclePublicationSurvivesAThrowingCloseInText() {
+        List<String> attempts = new ArrayList<>();
+        IllegalStateException failure = new IllegalStateException("DEMO listener failure");
+        EventLogManager manager = new EventLogManager(record -> {
+            attempts.add(record.toString());
+            if (attempts.size() == 2) throw failure;
+        }).logLevel(LogLevel.INFO);
+        manager.clock = new Time().clock;
+        manager.init();
+        Source source = new Source();
+        manager.nodeRegistered(source, "source");
+        manager.eventReceived("DEMO one");
+        source.logger.info("value", 1);
+        manager.publishLastRecord();
+        source.logger.info("after", 2);
+
+        assertSame(failure, assertThrows(IllegalStateException.class, manager::processingComplete));
+        manager.processingComplete();
+        assertEquals("the retry publishes the late write", 3, attempts.size());
+        assertEquals(attempts.get(1), attempts.get(2));
+        assertTrue(attempts.get(2).contains("after: 2}"));
+
+        manager.eventReceived("DEMO two");
+        source.logger.info("value", 3);
+        manager.processingComplete();
+        assertEquals(4, attempts.size());
+        String next = attempts.get(3);
+        assertTrue("the next record starts with its own header: " + next, next.startsWith("eventLogRecord: "));
+        assertFalse("a late write must not leak into the next record: " + next, next.contains("after"));
+        assertEquals(1, endTimes(next));
+    }
+
+    @Test
+    public void lateWriteAfterMidCyclePublicationSurvivesAThrowingCloseInBinary() throws Exception {
+        List<Integer> sizes = new ArrayList<>();
+        IllegalStateException failure = new IllegalStateException("DEMO listener failure");
+        EventLogManager manager = new EventLogManager(record -> {
+            sizes.add(((BinaryLogRecord) record).length());
+            if (sizes.size() == 2) throw failure;
+        }).logLevel(LogLevel.INFO).binaryRecord(true);
+        manager.clock = new Time().clock;
+        manager.init();
+        Source source = new Source();
+        manager.nodeRegistered(source, "source");
+        manager.eventReceived("DEMO one");
+        source.logger.info("value", 1);
+        manager.publishLastRecord();
+        source.logger.info("after", 2);
+
+        assertSame(failure, assertThrows(IllegalStateException.class, manager::processingComplete));
+        manager.processingComplete();
+        assertEquals("the retry publishes the late write, not drop it", 3, sizes.size());
+        assertEquals(sizes.get(1), sizes.get(2));
+
+        manager.eventReceived("DEMO two");
+        source.logger.info("value", 3);
+        manager.processingComplete();
+        assertEquals(4, sizes.size());
+        assertEquals("the next record holds only its own entry", sizes.get(0), sizes.get(3));
+    }
+
+    /**
+     * The same sequence driven the way a generated processor drives it: the normal close throws, and
+     * {@code failedCycle} closes the record again. The sink's exception reaches the caller, and the
+     * retry inside {@code failedCycle} is the one that publishes.
+     */
+    @Test
+    public void failedCycleRetryPublishesTheLateWriteAndKeepsTheNextRecordClean() {
+        for (boolean binary : new boolean[]{false, true}) {
+            List<String> published = new ArrayList<>();
+            List<Integer> sizes = new ArrayList<>();
+            IllegalStateException failure = new IllegalStateException("DEMO listener failure");
+            int[] calls = {0};
+            EventLogManager manager = new EventLogManager(record -> {
+                calls[0]++;
+                if (calls[0] == 2) throw failure;
+                published.add(binary ? "" : record.toString());
+                sizes.add(binary ? ((BinaryLogRecord) record).length() : record.toString().length());
+            }).logLevel(LogLevel.INFO).binaryRecord(binary);
+            manager.clock = new Time().clock;
+            manager.init();
+            Source source = new Source();
+            manager.nodeRegistered(source, "source");
+            GeneratedShapeProcessor processor = new GeneratedShapeProcessor(manager, event -> {
+                source.logger.info("value", 1);
+                if ("DEMO error handled".equals(event)) {
+                    manager.publishLastRecord();
+                    source.logger.info("after", 2);
+                }
+                if ("DEMO node throws".equals(event)) {
+                    throw new IllegalArgumentException("DEMO node failure");
+                }
+            });
+
+            RuntimeException thrown = assertThrows(RuntimeException.class, () -> processor.onEvent("DEMO error handled"));
+            assertSame("binary=" + binary, failure, thrown);
+            assertEquals("binary=" + binary + ": failedCycle's close succeeded", 0, thrown.getSuppressed().length);
+            assertEquals("binary=" + binary + ": explicit record plus the late write", 2, published.size());
+            if (!binary) {
+                assertTrue(published.get(1).contains("after: 2}"));
+            }
+
+            IllegalArgumentException nodeFailure = assertThrows(IllegalArgumentException.class,
+                    () -> processor.onEvent("DEMO node throws"));
+            assertEquals(0, nodeFailure.getSuppressed().length);
+            assertEquals("binary=" + binary + ": failedCycle closed the failed record", 3, published.size());
+
+            processor.onEvent("DEMO plain");
+            assertEquals(4, published.size());
+            if (binary) {
+                assertEquals("records after the failures hold only their own entry", sizes.get(2), sizes.get(3));
+            } else {
+                String next = published.get(3);
+                assertTrue(next, next.startsWith("eventLogRecord: "));
+                assertFalse("a late write must not leak into a later record: " + next, next.contains("after"));
+                assertEquals(next, 1, next.split("value: 1}", -1).length - 1);
+                assertEquals(1, endTimes(next));
+            }
+        }
+    }
+
+    /** The close sequence a generated processor emits: {@code afterEvent}, and {@code failedCycle} on a throw. */
+    private static final class GeneratedShapeProcessor {
+        private final EventLogManager auditor;
+        private final java.util.function.Consumer<Object> node;
+
+        private GeneratedShapeProcessor(EventLogManager auditor, java.util.function.Consumer<Object> node) {
+            this.auditor = auditor;
+            this.node = node;
+        }
+
+        void onEvent(Object event) {
+            auditor.eventReceived(event);
+            try {
+                node.accept(event);
+                auditor.processingComplete();
+            } catch (Throwable t) {
+                failedCycle(t);
+                throw t;
+            }
+        }
+
+        private void failedCycle(Throwable cause) {
+            try {
+                auditor.processingComplete();
+            } catch (Throwable t) {
+                if (t != cause) {
+                    cause.addSuppressed(t);
+                }
+            }
+        }
+    }
+
     private static void assertListenerRetry(boolean trace, boolean clear, boolean endTime,
                                            boolean explicitPublication, boolean logValues) {
         List<String> attempts = new ArrayList<>();
