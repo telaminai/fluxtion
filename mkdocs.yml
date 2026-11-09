@@ -67,14 +67,19 @@ extra:
   # use the macros; README.md files and docs/claude.txt carry literal versions and generated note
   # blocks stamped by `python3 scripts/check-doc-versions.py --write`. CI runs it without --write,
   # so drift fails the build. Keep single-line values on one line (the script parses this block).
-  fluxtion_runtime_version: 1.1.3   # fluxtion-runtime, fluxtion-builder-api
-  fluxtion_builder_version: 1.0.81  # fluxtion-builder, fluxtion-bom, fluxtion-starter-core
-  fluxtion_maven_plugin_version: 1.3.0   # com.telamin.fluxtion:fluxtion-maven-plugin (Maven Central)
+  fluxtion_runtime_version: 1.1.4   # fluxtion-runtime, fluxtion-builder-api
+  fluxtion_builder_version: 1.0.91  # fluxtion-builder, fluxtion-bom, fluxtion-starter-core
+  fluxtion_maven_plugin_version: 1.3.5   # com.telamin.fluxtion:fluxtion-maven-plugin (Maven Central)
   fluxtion_repository: https://repo.repsy.io/mvn/fluxtion/fluxtion-public
-  fluxtion_api_key_how_to: https://telaminai.github.io/fluxtion/home/quickstart-aot/#1-getting-an-api-key
-  fluxtion_api_key_line: >-
-    How to get a key: [Getting an API key](https://telaminai.github.io/fluxtion/home/quickstart-aot/#1-getting-an-api-key)
-    (subscribe to "Fluxtion Source Generator" on [RapidAPI](https://rapidapi.com/hub)).
+  # The managed compiler's public address: the default for sign-in and builds, so the docs name it only where a
+  # different compiler is discussed. Pages use the macro; README.md files and claude.txt carry it literally, and
+  # check-doc-versions.py fails on any other compiler.* address.
+  fluxtion_compiler_url: https://compiler.fluxtion-playground.dev
+  # Where a reader learns to sign in. The quickstart page also keeps the retired anchor
+  # #1-getting-an-api-key, because released builders print it; check-doc-versions.py checks both.
+  fluxtion_sign_in_how_to: https://telaminai.github.io/fluxtion/home/quickstart-aot/#1-sign-in-to-the-compiler
+  fluxtion_sign_in_line: >-
+    How to sign in: [Sign in to the compiler](https://telaminai.github.io/fluxtion/home/quickstart-aot/#1-sign-in-to-the-compiler).
   # The two notes below are the same text the playground site shows (there without backticks);
   # `check-doc-versions.py --online` compares them with the deployed llms.txt.
   fluxtion_repository_note: >-
@@ -82,13 +87,26 @@ extra:
     public repository, https://repo.repsy.io/mvn/fluxtion/fluxtion-public - declare it. Maven Central
     has only an outdated 1.0.9 runtime and builder and no BOM; the `fluxtion-maven-plugin` is
     published to Maven Central.
+  # Verbatim the playground's REMOTE_BUILD_NOTE (fluxtion-web scripts/fluxtion-coordinates.mjs): plain text, no
+  # backticks, so the two sites stay identical. check-doc-versions.py --online compares them.
   fluxtion_remote_build_note: >-
-    Building a graph (`DataFlowBuilder...build()`, `interpret()`, `Fluxtion.compile*` / `compileAot`
-    or the `fluxtion-maven-plugin`) sends the graph model - not your source files - to the hosted
-    Fluxtion generator by default, and needs an API key. Without a key the build stops before sending
-    anything ("Fluxtion API key is not configured"); a rejected key fails with HTTP 401/403. Put the
-    key in `~/.fluxtion/fluxtion.apiKeyFile` as `apiKey=YOUR_KEY` (the first build creates the file).
-    A generated processor runs with `fluxtion-runtime` alone and makes no network call.
+    Building a graph (DataFlowBuilder...build(), interpret(), Fluxtion.compile* / compileAot or the
+    fluxtion-maven-plugin) uses the hosted Fluxtion compiler under your own compiler sign-in; the published
+    builder has no local generator. It sends the graph model, including node configuration values, but not your
+    source files or event data. Sign in once with mvn com.telamin.fluxtion:fluxtion-maven-plugin:login and approve
+    in your browser; Maven, Gradle, JBang and a plain main then find the saved sign-in. In CI, set
+    FLUXTION_API_TOKEN. Without a sign-in, a build that must generate stops before sending anything (FLX-1023).
+    A generated processor runs with fluxtion-runtime alone and makes no network call.
+  # Verbatim the playground's firstBuildNote (fluxtion-web scripts/fluxtion-coordinates.mjs): what the Java-authoring
+  # starter's first build needs, as plain third-person facts (no backticks). The login version is the starters' plugin
+  # pin, which is fluxtion_maven_plugin_version here; change both sites together.
+  fluxtion_first_build_note: >-
+    Building the Java-authoring starter generates its processor on the hosted Fluxtion compiler; every Fluxtion graph
+    is generated there at least once. The first build needs a one-time compiler sign-in that the user approves in a
+    browser: mvn com.telamin.fluxtion:fluxtion-maven-plugin:1.3.5:login prints a link and a code to approve, then
+    waits. Without a sign-in the build stops before sending anything, with FLX-1022 (FLX-1023 for a direct
+    DataFlowBuilder build). Other templates and -DskipFluxtion do not avoid this: the embedded starter builds its
+    graph on the hosted compiler at every start, and -DskipFluxtion skips generation, leaving no processor to run.
   fluxtion_javadoc: https://javadoc.io/doc/com.telamin.fluxtion/fluxtion-runtime/latest/index.html
   release_date: "2026-06-16"
 

@@ -227,8 +227,10 @@ example (Java 25):
 
 You define the transformations. Fluxtion builds the execution path.
 
-!!! note "Generation is remote and needs an API key"
-    {{fluxtion_remote_build_note}} {{fluxtion_api_key_line}}
+!!! note "Generation is remote and needs a compiler sign-in"
+    {{fluxtion_remote_build_note}} {{fluxtion_sign_in_line}}
+
+    **First build:** {{fluxtion_first_build_note}}
 
 ```java
 //REPOS mavencentral,fluxtion={{fluxtion_repository}}
@@ -255,8 +257,8 @@ void main() {
 }
 ```
 
-This looks like a stream pipeline, but Fluxtion compiles it into a flat, deterministic execution path — it is not
-interpreted at runtime.
+This looks like a stream pipeline, but `build()` has the hosted compiler work out a fixed, deterministic execution
+path once; the processor then runs that path in your JVM, with no operator chain to walk per event.
 
 Run: `jbang tradeFilter.java`
 
@@ -292,6 +294,12 @@ Stop writing orchestration code and start building logic.
 
 * Read the **[Quickstart Guide](home/quickstart.md)**
 * Explore the **[Why Fluxtion](home/why-fluxtion.md)** guide
+* Building an application? Start from the
+  [Java-authoring starter](https://fluxtion-playground.dev/start/scaffold?template=java-authoring), the blank Java
+  project: a Maven project with an empty graph to author in plain Java, whose processor runs in
+  [Mongoose](https://telaminai.github.io/mongoose/), the event server that supplies feeds, sinks, threads and admin.
+  Download it with `curl -L -o java-authoring.zip "https://fluxtion-playground.dev/start/scaffold?template=java-authoring" && unzip java-authoring.zip`
+  (it unpacks to `java-authoring/`). The JBang quickstarts here run single-file examples to explore the API.
 * Learn about **[Running Fluxtion with Mongoose](home/fluxtion-with-mongoose.md)**
 * Start the **[Run Fluxtion in Mongoose](getting-started/run-fluxtion-in-mongoose.md)** tutorial
 * View the project on **[GitHub](https://github.com/telaminai/fluxtion)**

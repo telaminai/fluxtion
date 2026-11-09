@@ -7,10 +7,12 @@ The source of truth is the `extra:` block of mkdocs.yml:
     fluxtion_builder_version        fluxtion-builder, fluxtion-bom, fluxtion-starter-core
     fluxtion_maven_plugin_version   fluxtion-maven-plugin
     fluxtion_repository             the Maven repository that serves the releases
+    fluxtion_compiler_url           the hosted compiler's public address (sign-in, CI, token route)
     fluxtion_repository_note        which artifacts are where (Repsy vs Maven Central)
-    fluxtion_remote_build_note      what a build sends, and the API key it needs
-    fluxtion_api_key_line           where to get a key
-    fluxtion_api_key_how_to         the public how-to URL (its #anchor must exist)
+    fluxtion_remote_build_note      what a build sends, and the compiler sign-in it needs
+    fluxtion_first_build_note       what the starter's first build needs: hosted generation, the one-time sign-in
+    fluxtion_sign_in_line           where to learn to sign in
+    fluxtion_sign_in_how_to         the public how-to URL (its #anchor must exist)
 
 Pages rendered by mkdocs use the macros directly ({{fluxtion_builder_version}}). Files mkdocs does
 not render - README.md files on GitHub and docs/claude.txt - carry literal versions and generated
@@ -28,15 +30,32 @@ Checks (exit 1 on any finding):
      repository above it, or a file showing a Fluxtion Maven/Gradle dependency never declares the
      repository (`<url>...</url>` / `maven("...")`).
   4. README.md or docs/claude.txt lacks a note block, or its text differs from mkdocs.yml.
-  5. The anchor of fluxtion_api_key_how_to is not a heading in docs/home/quickstart-aot.md.
+  5. The anchor of fluxtion_sign_in_how_to is not an id in docs/home/quickstart-aot.md, or that page
+     lost the retired anchor #1-getting-an-api-key, or README.md lost #cloud-generation-and-your-api-key;
+     builders before the managed-only release print both. Ids inside HTML comments do not count.
+  6. A README.md, a docs page or text file (docs/not-used excepted) or mkdocs.yml names the retired
+     API-key route (RETIRED_ROUTE: the marketplace's name, the key-file name, the key property or the
+     gateway host). Sign-in is the only route. A compiler.* address other than fluxtion_compiler_url, or
+     a Fluxtion coordinate in mkdocs.yml's notes off the pinned version, is also a finding. The generated
+     error pages (docs/troubleshooting/errors, copied from the compiler) are outside files(), so no check
+     here reads them: their text is what a build prints.
+  7. Sign-in rule: no page in that scope gives the pre-1.0.90 token-route instructions (FLUXTION_REMOTE_AUTH,
+     fluxtion.remote.auth/host, "cannot yet be issued", "until fluxtion-builder 1.0.90"); the remote-build
+     note has no backticks (it is verbatim the playground's) and names FLX-1023; and every FLX-nnnn code the
+     docs mention has its page under docs/troubleshooting/errors.
+
+--site=<dir> additionally (after `mkdocs build -d <dir>`):
+  8. The built quickstart page carries both the sign-in anchor and the retired one as element ids, and the
+     FLX-1023 error page is built (every builder from 1.0.90 links to it).
 
 --online additionally (network):
-  6. Each pinned version exists: Repsy for the runtime/builder line, Maven Central for the plugin.
+  9. Each pinned version exists: Repsy for the runtime/builder line, Maven Central for the plugin.
      A missing version fails.
-  7. Compares versions and notes with the deployed playground llms.txt; a mismatch is a warning
+  10. Compares versions and notes with the deployed playground llms.txt; a mismatch is a warning
      only, because the two sites deploy independently.
 
-Usage: python3 scripts/check-doc-versions.py [--write] [--online [--llms=<local llms.txt instead of the site>]]
+Usage: python3 scripts/check-doc-versions.py [--write] [--site=<built site dir>]
+       [--online [--llms=<local llms.txt instead of the site>]]
 Standard library only; run from anywhere.
 """
 import pathlib
@@ -68,8 +87,8 @@ PROPERTY_KEY = {
 NOTE_BLOCKS = ("repository-note", "remote-build-note")
 NOTE_FILES = ("README.md", "docs/claude.txt")
 REQUIRED = ("fluxtion_runtime_version", "fluxtion_builder_version", "fluxtion_maven_plugin_version",
-            "fluxtion_repository", "fluxtion_repository_note", "fluxtion_remote_build_note",
-            "fluxtion_api_key_line", "fluxtion_api_key_how_to")
+            "fluxtion_repository", "fluxtion_compiler_url", "fluxtion_repository_note", "fluxtion_remote_build_note",
+            "fluxtion_first_build_note", "fluxtion_sign_in_line", "fluxtion_sign_in_how_to")
 
 VERSION = r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"
 COORDINATE = re.compile(r"(com\.telamin\.fluxtion:)([a-z0-9-]+)(:)(" + VERSION + r")")
@@ -112,7 +131,8 @@ def load_truth():
 def note_text(name, truth):
     if name == "repository-note":
         return truth["fluxtion_repository_note"]
-    return f"**Generation is remote.** {truth['fluxtion_remote_build_note']} {truth['fluxtion_api_key_line']}"
+    return (f"**Generation is remote.** {truth['fluxtion_remote_build_note']} {truth['fluxtion_sign_in_line']}\n\n"
+            f"**First build:** {truth['fluxtion_first_build_note']}")
 
 
 def render_block(name, truth):
@@ -125,8 +145,12 @@ def files():
     for p in sorted(ROOT.rglob("README.md")):
         if not skip.intersection(p.relative_to(ROOT).parts):
             yield p
-    yield from sorted((ROOT / "docs").rglob("*.md"))
-    yield from sorted((ROOT / "docs").rglob("*.txt"))
+    # docs/troubleshooting/errors/ holds the compiler's generated error pages, copied verbatim: their text is what a
+    # build prints, so it names the versions of the builder that emits it, not this site's pins.
+    generated = ROOT / "docs" / "troubleshooting" / "errors"
+    for p in sorted((ROOT / "docs").rglob("*.md")) + sorted((ROOT / "docs").rglob("*.txt")):
+        if generated not in p.parents:
+            yield p
 
 
 def check(path, text, truth):
@@ -223,14 +247,108 @@ def slug(heading):
     return re.sub(r"[\s]+", "-", s)
 
 
+QUICKSTART_AOT = "docs/home/quickstart-aot.md"
+QUICKSTART_AOT_URL = "https://telaminai.github.io/fluxtion/home/quickstart-aot/"
+# Builders before the managed-only release print these two links in their missing-key message: they must keep
+# landing on the sign-in explanation, not a 404, for as long as those builders are in use.
+LEGACY_ANCHOR = "1-getting-an-api-key"
+LEGACY_README_ANCHOR = "cloud-generation-and-your-api-key"
+# The API-key route retired on 2026-11-05: the marketplace's name (any spacing), the key-file name (any
+# separators), the key system property and the gateway host. Spelled in pieces so this file does not match itself.
+RETIRED_ROUTE = re.compile(r"rapid[\s_-]*" + r"api|api[\s_.-]*key[\s_.-]*" + r"file|fluxtion\.api" + r"key\b"
+                           r"|source[\s-]*" + r"gen\.p\.", re.I)
+# The interim token-route instructions for builders before 1.0.90; from 1.0.90 one sign-in serves every build.
+STALE_SIGN_IN = re.compile(r"FLUXTION_REMOTE_AUTH|fluxtion\.remote\.(?:auth|host)|cannot yet be issued"
+                           r"|until fluxtion-builder 1\.0\.90", re.I)
+ERRORS_DIR = "docs/troubleshooting/errors"
+FLX_CODE = re.compile(r"\bFLX-\d{4}\b")
+SIGN_IN_ERROR = "FLX-1023"
+COMPILER_URL = re.compile(r"https?://compiler[\w.-]*", re.I)
+HTML_COMMENT = re.compile(r"<!--.*?-->", re.S)
+
+
+def page_ids(text):
+    """Ids a reader can link to: heading slugs, explicit `{#id}` attributes and `<a id="...">` anchors.
+    Commented-out markup is not an anchor."""
+    text = HTML_COMMENT.sub("", text)
+    ids = set()
+    for h in re.findall(r"^#+\s+(.*)$", text, re.M):
+        explicit = re.search(r"\{\s*#([\w-]+)[^}]*\}\s*$", h)
+        ids.add(explicit.group(1) if explicit else slug(h))
+    ids.update(re.findall(r"""<a\s+(?:id|name)=["']([^"']+)["']""", text))
+    return ids
+
+
 def check_anchor(truth):
-    url = truth["fluxtion_api_key_how_to"]
+    url = truth["fluxtion_sign_in_how_to"]
     anchor = url.split("#", 1)[1] if "#" in url else None
-    page = ROOT / "docs/home/quickstart-aot.md"
-    slugs = {slug(h) for h in re.findall(r"^#+\s+(.*)$", page.read_text(encoding="utf-8"), re.M)}
-    if not url.startswith("https://telaminai.github.io/fluxtion/home/quickstart-aot/") or anchor not in slugs:
-        return [f"mkdocs.yml: fluxtion_api_key_how_to {url} does not match a heading in {page.relative_to(ROOT)}"]
-    return []
+    page = ROOT / QUICKSTART_AOT
+    ids = page_ids(page.read_text(encoding="utf-8"))
+    findings = []
+    if not url.startswith(QUICKSTART_AOT_URL) or anchor not in ids:
+        findings.append(f"mkdocs.yml: fluxtion_sign_in_how_to {url} does not match an id in {QUICKSTART_AOT}")
+    if LEGACY_ANCHOR not in ids:
+        findings.append(f"{QUICKSTART_AOT}: lost the retired anchor #{LEGACY_ANCHOR}; released builders link to it")
+    if LEGACY_README_ANCHOR not in page_ids((ROOT / "README.md").read_text(encoding="utf-8")):
+        findings.append(f"README.md: lost the anchor #{LEGACY_README_ANCHOR}; released builders link to it")
+    return findings
+
+
+def retired_scope():
+    yield ROOT / "mkdocs.yml"
+    for p in files():
+        if not p.relative_to(ROOT).as_posix().startswith("docs/not-used/"):
+            yield p
+
+
+def check_retired_route(truth):
+    findings = []
+    pages = {p.stem for p in (ROOT / ERRORS_DIR).glob("FLX-*.md")}
+    for path in retired_scope():
+        rel = path.relative_to(ROOT).as_posix()
+        for n, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
+            for code in sorted(set(FLX_CODE.findall(line))):
+                if code not in pages:
+                    findings.append(f"{rel}:{n}: {code} has no page in {ERRORS_DIR} (copy it from the compiler's "
+                                    f"generated docs/errors)")
+            s = STALE_SIGN_IN.search(line)
+            if s:
+                findings.append(f"{rel}:{n}: gives the pre-1.0.90 token-route instructions ({s.group(0)!r}); "
+                                f"one sign-in serves every build")
+            m = RETIRED_ROUTE.search(line)
+            if m:
+                findings.append(f"{rel}:{n}: names the retired API-key route ({m.group(0)!r}); "
+                                f"describe compiler sign-in instead")
+            for u in COMPILER_URL.findall(line):
+                if u.rstrip(".") != truth["fluxtion_compiler_url"]:
+                    findings.append(f"{rel}:{n}: compiler address {u} is not fluxtion_compiler_url "
+                                    f"{truth['fluxtion_compiler_url']}")
+    note = truth["fluxtion_remote_build_note"]
+    if "`" in note:
+        findings.append("mkdocs.yml: fluxtion_remote_build_note has backticks; keep it verbatim the playground's plain text")
+    if SIGN_IN_ERROR not in note:
+        findings.append(f"mkdocs.yml: fluxtion_remote_build_note does not name {SIGN_IN_ERROR}")
+    # mkdocs.yml's notes are rendered verbatim, so a coordinate in them must name the pinned version
+    extra = (ROOT / "mkdocs.yml").read_text(encoding="utf-8").split("\nextra:", 1)[1]
+    for m in COORDINATE.finditer(extra):
+        key = ARTIFACT_KEY.get(m.group(2))
+        if key and truth[key] != m.group(4):
+            findings.append(f"mkdocs.yml: {m.group(2)}:{m.group(4)} in extra: is not the pinned {truth[key]}")
+    return findings
+
+
+def check_site(site, truth):
+    page = pathlib.Path(site) / "home/quickstart-aot/index.html"
+    if not page.is_file():
+        return [f"--site: {page} not found (run mkdocs build -d {site} first)"]
+    html = HTML_COMMENT.sub("", page.read_text(encoding="utf-8"))
+    want = [truth["fluxtion_sign_in_how_to"].split("#", 1)[1], LEGACY_ANCHOR]
+    findings = [f"{page}: no element with id=\"{a}\"" for a in want
+                if not re.search(r"""\bid=["']""" + re.escape(a) + r"""["']""", html)]
+    error_page = pathlib.Path(site) / "troubleshooting/errors" / SIGN_IN_ERROR / "index.html"
+    if not error_page.is_file():
+        findings.append(f"{error_page}: the {SIGN_IN_ERROR} page was not built; every builder from 1.0.90 links to it")
+    return findings
 
 
 def fetch(url):
@@ -269,7 +387,7 @@ def online(truth, llms_file=None):
         want = truth[ARTIFACT_KEY[artifact]]
         if not m or m.group(1) != want:
             warnings.append(f"online: {PLAYGROUND_LLMS} shows {artifact} {m.group(1) if m else 'nothing'}, docs pin {want}")
-    for key in ("fluxtion_remote_build_note", "fluxtion_repository_note"):
+    for key in ("fluxtion_remote_build_note", "fluxtion_first_build_note", "fluxtion_repository_note"):
         if norm(truth[key]) not in norm(llms):
             warnings.append(f"online: {PLAYGROUND_LLMS} does not carry {key} verbatim (update both sites together)")
     return findings, warnings
@@ -279,7 +397,10 @@ def main():
     args = sys.argv[1:]
     write, net = "--write" in args, "--online" in args
     truth = load_truth()
-    all_findings = check_anchor(truth)
+    all_findings = check_anchor(truth) + check_retired_route(truth)
+    site = next((a.split("=", 1)[1] for a in args if a.startswith("--site=")), None)
+    if site:
+        all_findings += check_site(site, truth)
     for path in files():
         text = path.read_text(encoding="utf-8")
         findings, out = check(path, text, truth)
