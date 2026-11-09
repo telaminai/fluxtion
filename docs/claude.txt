@@ -10,8 +10,8 @@ This file is the canonical author-orientation document maintained by Telamin AI.
 Current runtime, builder-api, builder, BOM and starter releases are published to the Fluxtion public repository, https://repo.repsy.io/mvn/fluxtion/fluxtion-public - declare it. Maven Central has only an outdated 1.0.9 runtime and builder and no BOM; the `fluxtion-maven-plugin` is published to Maven Central.
 <!-- /fluxtion:repository-note -->
 
-- BOM `com.telamin.fluxtion:fluxtion-bom:1.0.90`, builder `com.telamin.fluxtion:fluxtion-builder:1.0.90`, runtime `com.telamin.fluxtion:fluxtion-runtime:1.1.4`.
-- JBang: `//REPOS mavencentral,fluxtion=https://repo.repsy.io/mvn/fluxtion/fluxtion-public` then `//DEPS com.telamin.fluxtion:fluxtion-builder:1.0.90`.
+- BOM `com.telamin.fluxtion:fluxtion-bom:1.0.91`, builder `com.telamin.fluxtion:fluxtion-builder:1.0.91`, runtime `com.telamin.fluxtion:fluxtion-runtime:1.1.4`.
+- JBang: `//REPOS mavencentral,fluxtion=https://repo.repsy.io/mvn/fluxtion/fluxtion-public` then `//DEPS com.telamin.fluxtion:fluxtion-builder:1.0.91`.
 
 <!-- fluxtion:remote-build-note - generated from mkdocs.yml extra: by scripts/check-doc-versions.py --write; edit there -->
 **Generation is remote.** Building a graph (DataFlowBuilder...build(), interpret(), Fluxtion.compile* / compileAot or the fluxtion-maven-plugin) sends the graph model - not your source files - to the hosted Fluxtion compiler, and needs a compiler sign-in. Sign in once with mvn com.telamin.fluxtion:fluxtion-maven-plugin:login and approve in your browser; Maven, Gradle, JBang and a plain main then find the saved sign-in. In CI, set FLUXTION_API_TOKEN. Without a sign-in, a build that must generate stops before sending anything (FLX-1023). A generated processor runs with fluxtion-runtime alone and makes no network call. How to sign in: [Sign in to the compiler](https://telaminai.github.io/fluxtion/home/quickstart-aot/#1-sign-in-to-the-compiler).
@@ -414,7 +414,7 @@ Imperative / AOT, one file (the supported shape — match it):
 
 ```java
 //REPOS central=https://repo1.maven.org/maven2,fluxtion=https://repo.repsy.io/mvn/fluxtion/fluxtion-public
-//DEPS com.telamin.fluxtion:fluxtion-builder:1.0.90
+//DEPS com.telamin.fluxtion:fluxtion-builder:1.0.91
 //JAVA 21
 package demo;                                          // a NAMED package — required
 import com.telamin.fluxtion.Fluxtion;
