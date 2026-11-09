@@ -394,6 +394,286 @@ public class AuditCloseRetryTest {
         assertTrue(records.get(1).contains("more: \"DEMO\\nmore\"}"));
     }
 
+    // ---------------------------------------------------------------------------------------------
+    // Review of #53 (2026-11-09), F1: a second explicit publication that throws stays retryable.
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    public void secondThrowingExplicitPublicationIsRetriedByCleanupInText() throws Exception {
+        assertSecondExplicitPublicationRetried(false);
+    }
+
+    @Test
+    public void secondThrowingExplicitPublicationIsRetriedByCleanupInBinary() throws Exception {
+        assertSecondExplicitPublicationRetried(true);
+    }
+
+    @Test
+    public void throwingExplicitPublicationAfterARetainedCloseIsRetriedInText() throws Exception {
+        assertRetainedExplicitPublicationRetried(false);
+    }
+
+    @Test
+    public void throwingExplicitPublicationAfterARetainedCloseIsRetriedInBinary() throws Exception {
+        assertRetainedExplicitPublicationRetried(true);
+    }
+
+    /** The generated close shape: a node publishes twice, the second publication throws, failedCycle retries. */
+    @Test
+    public void failedCycleRetriesASecondThrowingExplicitPublication() throws Exception {
+        for (boolean binary : new boolean[]{false, true}) {
+            List<String> attempts = new ArrayList<>();
+            IllegalStateException failure = new IllegalStateException("DEMO listener failure");
+            EventLogManager manager = new EventLogManager(record -> {
+                attempts.add(capture(record));
+                if (attempts.size() == 2) throw failure;
+            }).logLevel(LogLevel.INFO).binaryRecord(binary);
+            manager.clock = new Time().clock;
+            manager.init();
+            Source source = new Source();
+            manager.nodeRegistered(source, "source");
+            GeneratedShapeProcessor processor = new GeneratedShapeProcessor(manager, event -> {
+                source.logger.info("value", 1);
+                if ("DEMO publish twice".equals(event)) {
+                    manager.publishLastRecord();
+                    source.logger.info("late", 2);
+                    manager.publishLastRecord();
+                }
+            });
+
+            RuntimeException thrown = assertThrows(RuntimeException.class, () -> processor.onEvent("DEMO publish twice"));
+            assertSame("binary=" + binary + ": the sink's exception reaches the caller", failure, thrown);
+            assertEquals("binary=" + binary + ": failedCycle's retry succeeded", 0, thrown.getSuppressed().length);
+            assertEquals("binary=" + binary + ": failedCycle retried the second publication", 3, attempts.size());
+            assertEquals("binary=" + binary + ": the retry re-sends the same bytes", attempts.get(1), attempts.get(2));
+
+            processor.onEvent("DEMO plain");
+            assertEquals(4, attempts.size());
+            assertCleanNext(binary, attempts.get(0), attempts.get(3), "late");
+        }
+    }
+
+    private static void assertSecondExplicitPublicationRetried(boolean binary) throws Exception {
+        List<String> attempts = new ArrayList<>();
+        IllegalStateException failure = new IllegalStateException("DEMO listener failure");
+        Time time = new Time();
+        EventLogManager manager = new EventLogManager(record -> {
+            attempts.add(capture(record));
+            if (attempts.size() == 2) throw failure;
+        }).logLevel(LogLevel.INFO).binaryRecord(binary);
+        manager.clock = time.clock;
+        manager.init();
+        Source source = new Source();
+        manager.nodeRegistered(source, "source");
+        manager.eventReceived("DEMO one");
+        source.logger.info("value", 1);
+        manager.publishLastRecord();
+        source.logger.info("late", 2);
+
+        assertSame("the sink's exception reaches the caller", failure,
+                assertThrows(IllegalStateException.class, manager::publishLastRecord));
+        time.now = 2000;
+        manager.processingComplete();
+        assertEquals("failed-cycle cleanup retries the throwing second publication", 3, attempts.size());
+        assertEquals("the retry re-sends the same closed bytes", attempts.get(1), attempts.get(2));
+        if (!binary) {
+            assertTrue(attempts.get(2), attempts.get(2).contains("late: 2}"));
+            assertEquals(1, endTimes(attempts.get(2)));
+        }
+        manager.processingComplete();
+        assertEquals("cleanup after the successful retry publishes nothing", 3, attempts.size());
+
+        manager.eventReceived("DEMO two");
+        source.logger.info("value", 3);
+        manager.processingComplete();
+        assertEquals(4, attempts.size());
+        assertCleanNext(binary, attempts.get(0), attempts.get(3), "late");
+    }
+
+    private static void assertRetainedExplicitPublicationRetried(boolean binary) throws Exception {
+        List<String> attempts = new ArrayList<>();
+        IllegalStateException failure = new IllegalStateException("DEMO listener failure");
+        Time time = new Time();
+        EventLogManager manager = new EventLogManager(record -> {
+            attempts.add(capture(record));
+            if (attempts.size() == 2) throw failure;
+        }).logLevel(LogLevel.INFO).binaryRecord(binary);
+        manager.clock = time.clock;
+        manager.init();
+        manager.setClearAfterPublish(false);
+        Source source = new Source();
+        manager.nodeRegistered(source, "source");
+        manager.eventReceived("DEMO one");
+        source.logger.info("value", 1);
+        manager.processingComplete();
+        source.logger.info("late", 2);
+
+        assertSame("the sink's exception reaches the caller", failure,
+                assertThrows(IllegalStateException.class, manager::publishLastRecord));
+        time.now = 2000;
+        manager.processingComplete();
+        assertEquals("failed-cycle cleanup retries the throwing explicit publication", 3, attempts.size());
+        assertEquals("the retry re-sends the same closed bytes", attempts.get(1), attempts.get(2));
+        manager.processingComplete();
+        assertEquals("cleanup after the successful retry publishes nothing", 3, attempts.size());
+
+        manager.eventReceived("DEMO two");
+        source.logger.info("value", 3);
+        manager.processingComplete();
+        assertEquals(4, attempts.size());
+        if (binary) {
+            assertEquals("the next binary record holds only its own entry",
+                    attempts.get(0).length(), attempts.get(3).length());
+        } else {
+            // publishLastRecord always clears, so the retained buffer starts again at the next event.
+            assertCleanNext(false, attempts.get(0), attempts.get(3), "late");
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Review of #53 (2026-11-09), F2: adopting the same text record keeps its completed close.
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    public void adoptingAClosedTextRecordKeepsTheFailedPublicationRetryable() {
+        for (boolean trace : new boolean[]{false, true}) {
+            for (boolean logValue : new boolean[]{false, true}) {
+                if (!trace && !logValue) continue; // nothing to publish: no business entry, no trace
+                List<String> attempts = new ArrayList<>();
+                IllegalStateException failure = new IllegalStateException("DEMO listener failure");
+                Time time = new Time();
+                EventLogManager manager = new EventLogManager(record -> {
+                    attempts.add(record.toString());
+                    if (attempts.size() == 1) throw failure;
+                }).logLevel(LogLevel.INFO);
+                if (trace) manager.tracingOn(LogLevel.INFO);
+                manager.clock = time.clock;
+                manager.init();
+                Source source = new Source();
+                manager.nodeRegistered(source, "source");
+                String label = "trace=" + trace + " logValue=" + logValue + ": ";
+                manager.eventReceived("DEMO one");
+                if (logValue) source.logger.info("value", 1);
+                assertSame(failure, assertThrows(IllegalStateException.class, manager::processingComplete));
+
+                manager.calculationLogConfig(new EventLogControlEvent(new LogRecord(time.clock)));
+                time.now = 2000;
+                manager.processingComplete();
+                assertEquals(label + "the adopted record's failed publication is retried", 2, attempts.size());
+                assertEquals(label + "the retry re-sends the closed bytes", attempts.get(0), attempts.get(1));
+                assertEquals(label, 1, endTimes(attempts.get(1)));
+                manager.processingComplete();
+                assertEquals(label + "nothing more after a successful retry", 2, attempts.size());
+
+                manager.eventReceived("DEMO two");
+                source.logger.info("value", 3);
+                manager.processingComplete();
+                assertEquals(label, 3, attempts.size());
+                String next = attempts.get(2);
+                assertTrue(label + next, next.startsWith("eventLogRecord: "));
+                assertFalse(label + next, next.contains("DEMO one"));
+                assertEquals(label, 1, endTimes(next));
+            }
+        }
+    }
+
+    @Test
+    public void adoptingAnOpenTextRecordClosesItOnceWithAThrowingSink() {
+        for (boolean trace : new boolean[]{false, true}) {
+            List<String> attempts = new ArrayList<>();
+            IllegalStateException failure = new IllegalStateException("DEMO listener failure");
+            Time time = new Time();
+            EventLogManager manager = new EventLogManager(record -> {
+                attempts.add(record.toString());
+                if (attempts.size() == 1) throw failure;
+            }).logLevel(LogLevel.INFO);
+            if (trace) manager.tracingOn(LogLevel.INFO);
+            manager.clock = time.clock;
+            manager.init();
+            Source source = new Source();
+            manager.nodeRegistered(source, "source");
+            manager.eventReceived("DEMO one");
+            source.logger.info("value", 1);
+            manager.calculationLogConfig(new EventLogControlEvent(new LogRecord(time.clock)));
+            source.logger.info("after", 2);
+            assertSame(failure, assertThrows(IllegalStateException.class, manager::processingComplete));
+            time.now = 2000;
+            manager.processingComplete();
+            assertEquals("trace=" + trace, 2, attempts.size());
+            assertEquals("trace=" + trace, attempts.get(0), attempts.get(1));
+            String record = attempts.get(1);
+            assertTrue(record, record.contains("value: 1, after: 2}"));
+            assertEquals(record, 1, endTimes(record));
+            assertTrue(record, record.contains("endTime: 1000"));
+        }
+    }
+
+    @Test
+    public void adoptionCarriesTheCompletedCloseAndReplacementResetsIt() {
+        for (boolean logValue : new boolean[]{false, true}) {
+            Time time = new Time();
+            LogRecord first = new LogRecord(time.clock);
+            first.triggerObject("DEMO event");
+            if (logValue) first.addRecord("source", "value", 1);
+            assertEquals(logValue, first.terminateRecord());
+            String closed = first.toString();
+
+            LogRecord second = new LogRecord(time.clock);
+            second.replaceBuffer(first.asCharSequence());
+            second.adoptRecordState(first);
+            time.now = 2000;
+            assertEquals("adoption keeps the close verdict", logValue, second.terminateRecord());
+            assertEquals("adoption keeps the closed bytes", closed, second.toString());
+
+            // Intentionally replacing the content starts a new close.
+            second.replaceBuffer(closed);
+            second.terminateRecord();
+            assertEquals("replacement resets the close", 2, endTimes(second.toString()));
+        }
+
+        // An open record adopted mid-record is still open: one close, at the adopter.
+        Time time = new Time();
+        LogRecord open = new LogRecord(time.clock);
+        open.triggerObject("DEMO event");
+        open.addRecord("source", "value", 1);
+        LogRecord adopter = new LogRecord(time.clock);
+        adopter.replaceBuffer(open.asCharSequence());
+        adopter.adoptRecordState(open);
+        adopter.addRecord("source", "after", 2);
+        assertTrue(adopter.terminateRecord());
+        assertTrue(adopter.toString(), adopter.toString().contains("value: 1, after: 2}"));
+        assertEquals(1, endTimes(adopter.toString()));
+    }
+
+    /** Text as written; binary as its encoded bytes, hex. */
+    private static String capture(LogRecord record) {
+        if (!(record instanceof BinaryLogRecord)) {
+            return record.toString();
+        }
+        try {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            record.encodeTo(out);
+            StringBuilder hex = new StringBuilder();
+            for (byte b : out.toByteArray()) {
+                hex.append(String.format("%02x", b));
+            }
+            return hex.toString();
+        } catch (java.io.IOException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    /** The next record is clean: its own header and entry only (text), or one entry's size (binary). */
+    private static void assertCleanNext(boolean binary, String firstRecord, String next, String lateKey) {
+        if (binary) {
+            assertEquals("the next binary record holds only its own entry", firstRecord.length(), next.length());
+        } else {
+            assertTrue("the next record starts with its own header: " + next, next.startsWith("eventLogRecord: "));
+            assertFalse("a late write must not leak into the next record: " + next, next.contains(lateKey));
+            assertEquals(next, 1, endTimes(next));
+        }
+    }
+
     private static int markers(String text) {
         return text.split(LogRecord.TEXT_ENCODING_MARKER, -1).length - 1;
     }
